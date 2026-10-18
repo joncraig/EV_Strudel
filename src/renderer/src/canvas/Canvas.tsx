@@ -528,14 +528,33 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       es.some((x) => (x.source === node.id || x.target === node.id) && x.sourceHandle === 'pattern')
     )
       return null
-    const p = 'changedTouches' in e ? e.changedTouches[0] : e
-    for (const el of document.elementsFromPoint(p.clientX, p.clientY)) {
-      const g = el.closest('.react-flow__edge')
-      const id = g?.getAttribute('data-id')
-      const edge = id ? es.find((x) => x.id === id) : undefined
-      if (g && edge?.sourceHandle === 'pattern') return { edgeId: edge.id, el: g }
+    // Like Blender: a wire counts if it passes under any part of the dragged node (a
+    // little margin around it), not just the point under the finger. Nearest to the
+    // node's centre wins.
+    void e
+    const box = document.querySelector(`.react-flow__node[data-id="${node.id}"]`)?.getBoundingClientRect()
+    if (!box) return null
+    const pad = 12
+    const cx = box.left + box.width / 2
+    const cy = box.top + box.height / 2
+    let best: { edgeId: string; el: Element; d: number } | null = null
+    for (const g of document.querySelectorAll('.react-flow__edge')) {
+      const edge = es.find((x) => x.id === g.getAttribute('data-id'))
+      if (edge?.sourceHandle !== 'pattern') continue
+      const path = g.querySelector<SVGPathElement>('.react-flow__edge-path')
+      const ctm = path?.getScreenCTM()
+      if (!path || !ctm) continue
+      const total = path.getTotalLength()
+      const samples = Math.max(8, Math.ceil(total / 12))
+      for (let k = 0; k <= samples; k++) {
+        const q = path.getPointAtLength((total * k) / samples)
+        const s = new DOMPoint(q.x, q.y).matrixTransform(ctm)
+        if (s.x < box.left - pad || s.x > box.right + pad || s.y < box.top - pad || s.y > box.bottom + pad) continue
+        const d = Math.hypot(s.x - cx, s.y - cy)
+        if (!best || d < best.d) best = { edgeId: edge.id, el: g, d }
+      }
     }
-    return null
+    return best && { edgeId: best.edgeId, el: best.el }
   }
 
   const onNodeDrag = (e: MouseEvent | TouchEvent, node: CanvasNode): void => {
