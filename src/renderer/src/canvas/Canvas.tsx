@@ -362,11 +362,12 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
     detachedRef.current = false
     if (handleType !== 'target' || !nodeId) return
     const { nodes: ns, edges: es } = stateRef.current
-    // Only a single wire is picked up; with several, the drag starts a new wire.
+    // Pick up the most recently connected wire (like Blender); others stay put.
     const wired = es.filter((e) => e.target === nodeId && e.targetHandle === handleId)
-    if (wired.length !== 1) return
+    const last = wired[wired.length - 1]
+    if (!last) return
     detachedRef.current = true
-    commit({ nodes: ns, edges: es.filter((e) => !wired.includes(e)) })
+    commit({ nodes: ns, edges: es.filter((e) => e !== last) })
   }
 
   const onConnectEnd: OnConnectEnd = (e, conn) => {
