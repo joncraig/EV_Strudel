@@ -109,7 +109,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     (c: Connection) => {
       const { nodes: ns, edges: es } = stateRef.current
       const kept = es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle))
-      commit({ nodes: ns, edges: addEdge({ ...c, animated: c.sourceHandle === 'mode' || c.sourceHandle === 'key' }, kept) })
+      commit({ nodes: ns, edges: addEdge(c, kept) })
     },
     [commit]
   )
@@ -169,6 +169,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         mode: [{ title: 'Apply to', kinds: [sequencers[0]] }],
         pattern: [
           { title: 'Shape', kinds: [velocity, length] },
+          { title: 'Harmony', kinds: [key, mode] },
           { title: 'Effects', kinds: effects }
         ]
       }[pending.handle]
@@ -194,8 +195,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
             source,
             target,
             sourceHandle: pending.handle,
-            targetHandle: pending.handle,
-            animated: pending.handle === 'mode' || pending.handle === 'key'
+            targetHandle: pending.handle
           })
         }
       }))

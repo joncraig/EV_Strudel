@@ -1,8 +1,6 @@
 // Compile the canvas graph to Strudel code.
 //
-//   sample ──▶ sequencer ──▶ velocity / effects ──▶ (plays)
-//                  ▲
-//              key, mode
+//   sample ──▶ sequencer ──▶ key / mode / length / velocity / effects ──▶ (plays)
 //
 // Each sequencer with a sound connected becomes one layer of a stack(). Steps have a
 // fixed size (resolution, default 1/16) and length sets the loop, so different
@@ -43,12 +41,11 @@ function harmonyPattern(key: KeyData | null, mode: ModeData | null, octave: numb
   return timed(tokens.join(' '), length, STEP_RESOLUTION)
 }
 
-export function sequencerCode(
-  seq: SequencerData,
-  sample: SampleData,
-  key: KeyData | null,
-  mode: ModeData | null
-): string | null {
+// Notes code has a placeholder where the scale goes: Key and Mode are chain nodes,
+// so the scale is only known once the chain has been followed (see compile).
+const SCALE = '__SCALE__'
+
+export function sequencerCode(seq: SequencerData, sample: SampleData): string | null {
   if (seq.steps.every((v) => v === null)) return null
   const sound = quote(sample.s)
   const len = seq.steps.length
@@ -58,7 +55,7 @@ export function sequencerCode(
     case 'degree': {
       // UI degrees are 1-based; Strudel's are 0-based.
       const degrees = timed(stepPattern(seq.steps, (v) => String(v - 1)), len, res)
-      code = `n("${degrees}").scale("${harmonyPattern(key, mode, seq.octave)}").s(${sound})`
+      code = `n("${degrees}")${SCALE}.s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
       if (sample.n) code += `.n(${sample.n})`
       break
@@ -121,22 +118,37 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       .filter((e) => e.target === id)
       .map((e) => byId.get(e.source))
       .find((n) => n?.type === type)
+  const CHAIN = new Set(['velocity', 'length', 'effect', 'key', 'mode'])
   const patternOuts = (id: string): CanvasNode[] =>
     edges
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
       .map((e) => byId.get(e.target))
-      .filter((n): n is CanvasNode => n?.type === 'velocity' || n?.type === 'length' || n?.type === 'effect')
+      .filter((n): n is CanvasNode => !!n && CHAIN.has(n.type))
+
+  // Key and Mode anywhere in a chain set the scale for that chain's Notes.
+  interface Harmony {
+    key: KeyData | null
+    mode: ModeData | null
+    octave: number
+  }
 
   const lines: string[] = []
   const layers: string[] = []
-  const follow = (node: CanvasNode, code: string, seen: Set<string>): void => {
+  const follow = (node: CanvasNode, code: string, seen: Set<string>, harmony: Harmony): void => {
     const outs = patternOuts(node.id).filter((n) => !seen.has(n.id))
     if (!outs.length) {
-      lines.push(code)
+      const scale = `.scale("${harmonyPattern(harmony.key, harmony.mode, harmony.octave)}")`
+      lines.push(code.replace(SCALE, scale))
       layers.push(node.id)
       return
     }
     for (const next of outs) {
+      const h =
+        next.type === 'key'
+          ? { ...harmony, key: next.data }
+          : next.type === 'mode'
+            ? { ...harmony, mode: next.data }
+            : harmony
       const applied =
         next.type === 'velocity'
           ? code + velocityCode(next.data)
@@ -145,7 +157,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
             : next.type === 'effect'
               ? code + effectCode(next.data)
               : code
-      follow(next, applied, new Set(seen).add(next.id))
+      follow(next, applied, new Set(seen).add(next.id), h)
     }
   }
 
@@ -153,15 +165,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (node.type !== 'sequencer' || node.data.muted) continue
     const sample = inputs(node.id, 'sample')
     if (!sample) continue
-    const key = inputs(node.id, 'key')
-    const mode = inputs(node.id, 'mode')
-    const code = sequencerCode(
-      node.data,
-      sample.data as SampleData,
-      key ? (key.data as KeyData) : null,
-      mode ? (mode.data as ModeData) : null
-    )
-    if (code) follow(node, code, new Set([node.id]))
+    const code = sequencerCode(node.data, sample.data as SampleData)
+    if (code) follow(node, code, new Set([node.id]), { key: null, mode: null, octave: node.data.octave })
   }
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
   return { code, layers }

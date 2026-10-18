@@ -269,7 +269,9 @@ export interface DraggedSound {
 
 // Bring older saved canvases up to date. (The Velocity node was briefly called Volume.)
 export function migrateCanvas(state: CanvasState): CanvasState {
-  state = splitLegacyModes(state)
+  state = chainHarmony(splitLegacyModes(state))
+  // Wires are all drawn the same now (key/mode used to be animated).
+  state = { nodes: state.nodes, edges: state.edges.map((e) => (e.animated ? { ...e, animated: false } : e)) }
   return {
     nodes: state.nodes.map((n) => {
       let node = (n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n
@@ -338,7 +340,39 @@ function splitLegacyModes(state: CanvasState): CanvasState {
     nodes.push({ id: keyId, type: 'key', position: { x: n.position.x, y: n.position.y - 300 }, parentId: n.parentId, data: { steps: keySteps, resolution: STEP_RESOLUTION } } as CanvasNode)
     nodes.push({ ...n, data: { steps: modeSteps, resolution: STEP_RESOLUTION } } as CanvasNode)
     for (const e of state.edges.filter((e) => e.source === n.id && e.sourceHandle === 'mode'))
-      edges.push({ ...e, id: `${e.id}-key`, source: keyId, sourceHandle: 'key', targetHandle: 'key', animated: true })
+      edges.push({ ...e, id: `${e.id}-key`, source: keyId, sourceHandle: 'key', targetHandle: 'key' })
   }
   return { nodes, edges }
+}
+
+// Key and Mode used to plug into a Notes sequencer's own key/mode inputs. They're
+// chain nodes now: rewire Notes -> Key -> Mode -> (whatever Notes fed before).
+function chainHarmony(state: CanvasState): CanvasState {
+  const byId = new Map(state.nodes.map((n) => [n.id, n]))
+  const old = state.edges.filter(
+    (e) => (e.targetHandle === 'key' || e.targetHandle === 'mode') && byId.get(e.target)?.type === 'sequencer'
+  )
+  if (!old.length) return state
+  let edges = state.edges.filter((e) => !old.includes(e))
+  for (const seqId of new Set(old.map((e) => e.target))) {
+    const chain = ['key', 'mode']
+      .map((h) => old.find((e) => e.target === seqId && e.targetHandle === h)?.source)
+      .filter((id): id is string => !!id)
+    const outs = edges.filter((e) => e.source === seqId && e.sourceHandle === 'pattern')
+    edges = edges.filter((e) => !outs.includes(e))
+    const link = (source: string, target: string): Edge => ({
+      id: `e-${source}-${target}-pattern`,
+      source,
+      target,
+      sourceHandle: 'pattern',
+      targetHandle: 'pattern'
+    })
+    let prev = seqId
+    for (const id of chain) {
+      edges.push(link(prev, id))
+      prev = id
+    }
+    for (const o of outs) edges.push({ ...o, id: `${o.id}-via-${prev}`, source: prev })
+  }
+  return { nodes: state.nodes, edges }
 }

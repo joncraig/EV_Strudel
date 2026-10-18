@@ -41,11 +41,30 @@ const input = (nodes: CanvasNode[], edges: Edge[], id: string, type: CanvasNode[
     .map((e) => nodes.find((n) => n.id === e.source))
     .find((n) => n?.type === type)
 
+// First node of a type along the chain (pattern outputs) after id: where Key and Mode live.
+function downstream(nodes: CanvasNode[], edges: Edge[], id: string, type: CanvasNode['type']): CanvasNode | undefined {
+  const seen = new Set([id])
+  let frontier = [id]
+  while (frontier.length) {
+    const next: string[] = []
+    for (const from of frontier)
+      for (const e of edges.filter((e) => e.source === from && e.sourceHandle === 'pattern')) {
+        const n = nodes.find((n) => n.id === e.target)
+        if (!n || seen.has(n.id)) continue
+        if (n.type === type) return n
+        seen.add(n.id)
+        next.push(n.id)
+      }
+    frontier = next
+  }
+  return undefined
+}
+
 function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   const sample =
     node.type === 'sequencer' ? (input(nodes, edges, node.id, 'sample')?.data as SampleData | undefined) : undefined
-  const key = node.type === 'sequencer' ? (input(nodes, edges, node.id, 'key')?.data as KeyData | undefined) : undefined
-  const mode = node.type === 'sequencer' ? (input(nodes, edges, node.id, 'mode')?.data as ModeData | undefined) : undefined
+  const key = node.type === 'sequencer' ? (downstream(nodes, edges, node.id, 'key')?.data as KeyData | undefined) : undefined
+  const mode = node.type === 'sequencer' ? (downstream(nodes, edges, node.id, 'mode')?.data as ModeData | undefined) : undefined
 
   // File names for a bank, loaded from the pack's sound list.
   const [files, setFiles] = useState<string[] | null>(null)

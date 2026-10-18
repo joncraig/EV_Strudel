@@ -117,12 +117,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
     <div className={`node sequencer-node ${data.muted ? 'muted' : ''}`}>
       <Handle type="target" position={Position.Left} id="sound" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
-      {data.kind === 'degree' && (
-        <>
-          <Handle type="target" position={Position.Top} id="key" style={{ left: '35%' }} />
-          <Handle type="target" position={Position.Top} id="mode" style={{ left: '65%' }} />
-        </>
-      )}
       <Header
         title={KIND_LABEL[data.kind]}
         right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
@@ -263,7 +257,8 @@ function HarmonyNode({
   const labels = rows.map((v) => (kind === 'key' ? TONICS[v] : MODES[v].label.replace(/ (.*)/, '')))
   return (
     <div className={`node harmony-node ${kind}-node`}>
-      <Handle type="source" position={Position.Right} id={kind} style={{ top: 40 }} />
+      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
+      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
       <Header
         title={kind === 'key' ? 'Key' : 'Mode'}
         right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
