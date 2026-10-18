@@ -354,20 +354,19 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
     setMenu({ type: 'node', x: e.clientX, y: e.clientY, nodeId: node.id })
   }
 
-  // Dragging from an input that already has a wire picks the wire up: it's removed at
-  // once, so letting go on empty canvas just disconnects (no add menu), and letting go
-  // on another output reconnects the input there.
+  // Dragging from a connected input disconnects all its wires at once: letting go on
+  // empty canvas leaves it disconnected (no add menu), letting go on an output wires
+  // the input to that output.
   const detachedRef = useRef(false)
   const onConnectStart: OnConnectStart = (_e, { nodeId, handleId, handleType }) => {
     detachedRef.current = false
     if (handleType !== 'target' || !nodeId) return
     const { nodes: ns, edges: es } = stateRef.current
-    // Pick up the most recently connected wire (like Blender); others stay put.
+    // Dragging off an input disconnects everything wired into it.
     const wired = es.filter((e) => e.target === nodeId && e.targetHandle === handleId)
-    const last = wired[wired.length - 1]
-    if (!last) return
+    if (!wired.length) return
     detachedRef.current = true
-    commit({ nodes: ns, edges: es.filter((e) => e !== last) })
+    commit({ nodes: ns, edges: es.filter((e) => !wired.includes(e)) })
   }
 
   const onConnectEnd: OnConnectEnd = (e, conn) => {
