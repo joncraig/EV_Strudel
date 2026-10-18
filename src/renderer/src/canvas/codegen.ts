@@ -78,6 +78,30 @@ function harmonyPattern(
   return bars === 1 ? body : `[${body}]/${bars}`
 }
 
+// Samples (Slices, or a sound triggered by Key/Mode/...) repitch by playback speed, like a
+// sampler: Key = semitones above C, Octave = 12 semitones per octave away from 3. Speed
+// changes tempo too, so a loop moved up a tone also plays ~12% faster. Follows the Key
+// and Octave steps at their held lengths: "[1@16 1.1225@16]/2".
+function transposePattern(key: Stepped<KeyData> | null, octave: Stepped<OctaveData> | null): string | null {
+  if (!key && !octave) return null
+  const keys = key?.data.steps.length ? perSixteenth(heldValues(key.data.steps, 0), key.lens) : [0]
+  const octs = octave?.data.steps.length
+    ? perSixteenth(heldValues(octave.data.steps, DEFAULT_OCTAVE), octave.lens)
+    : [DEFAULT_OCTAVE]
+  const length = Math.min(MAX_HARMONY_STEPS, (keys.length * octs.length) / gcd(keys.length, octs.length))
+  const runs: [string, number][] = []
+  for (let i = 0; i < length; i++) {
+    const semis = keys[i % keys.length] + 12 * (octs[i % octs.length] - DEFAULT_OCTAVE)
+    const tk = String(+Math.pow(2, semis / 12).toFixed(4))
+    if (runs.length && runs[runs.length - 1][0] === tk) runs[runs.length - 1][1]++
+    else runs.push([tk, 1])
+  }
+  if (runs.length === 1) return runs[0][0] === '1' ? null : runs[0][0]
+  const body = runs.map(([tk, n]) => (n === 1 ? tk : `${tk}@${n}`)).join(' ')
+  const bars = +(length / STEP_RESOLUTION).toFixed(6)
+  return bars === 1 ? body : `[${body}]/${bars}`
+}
+
 // Notes code has a placeholder where the scale goes: Key and Mode are chain nodes,
 // so the scale is only known once the chain has been followed (see compile).
 const SCALE = '__SCALE__'
@@ -195,8 +219,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     // previous hit, so a loop longer than its step restarts instead of stacking. Notes
     // stay polyphonic. One cut group per playing chain.
     const cut = ctx.seq.kind === 'slice' ? `.cut(${++cutGroup})` : ''
+    const speed = ctx.seq.kind === 'slice' ? transposePattern(ctx.key, ctx.octave) : null
+    const pitch = speed ? `.speed("${speed}")` : ''
     const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.octave, ctx.seq.octave ?? DEFAULT_OCTAVE)}")`
-    return code.replace(SCALE, scale) + cut + ctx.mods
+    return code.replace(SCALE, scale) + cut + pitch + ctx.mods
   }
 
   // Parameter nodes set values that hold until something later overrides them.
