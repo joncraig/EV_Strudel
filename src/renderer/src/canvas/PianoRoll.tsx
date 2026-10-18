@@ -7,6 +7,7 @@ import {
   CanvasNode,
   DEGREE_ROWS,
   downstream,
+  sequencerSample,
   degreeName,
   isBank,
   KeyData,
@@ -23,7 +24,6 @@ import {
   MODES,
   TONICS,
   pieceCount,
-  SampleData,
   SequencerNode,
   Step,
   VELOCITY_LEVELS,
@@ -43,7 +43,7 @@ interface Props {
 
 function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   const sample =
-    node.type === 'sequencer' ? (downstream(nodes, edges, node.id, 'sample')?.data as SampleData | undefined) : undefined
+    node.type === 'sequencer' ? sequencerSample(nodes, edges, node.id) : undefined
   const key = node.type === 'sequencer' ? (downstream(nodes, edges, node.id, 'key')?.data as KeyData | undefined) : undefined
   const mode = node.type === 'sequencer' ? (downstream(nodes, edges, node.id, 'mode')?.data as ModeData | undefined) : undefined
 

@@ -495,3 +495,25 @@ function chainSamples(state: CanvasState): CanvasState {
   }
   return { nodes, edges }
 }
+
+// The sound a sequencer plays, as compile() resolves it: a Sample in a parameter
+// chain wired into it comes first; otherwise the first Sample after it.
+export function sequencerSample(nodes: CanvasNode[], edges: Edge[], id: string): SampleData | undefined {
+  const pe = patternEdges(edges)
+  const seen = new Set([id])
+  let frontier = [id]
+  while (frontier.length) {
+    const next: string[] = []
+    for (const to of frontier)
+      for (const e of pe.filter((e) => e.target === to)) {
+        const n = nodes.find((n) => n.id === e.source)
+        // Another sequencer upstream is a separate playing chain, not a parameter.
+        if (!n || seen.has(n.id) || n.type === 'sequencer' || n.type === 'mix') continue
+        if (n.type === 'sample') return n.data
+        seen.add(n.id)
+        next.push(n.id)
+      }
+    frontier = next
+  }
+  return downstream(nodes, edges, id, 'sample')?.data as SampleData | undefined
+}

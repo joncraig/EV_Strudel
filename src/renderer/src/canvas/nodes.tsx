@@ -12,7 +12,7 @@ import {
   EffectNode as EffectNodeT,
   MODES,
   CanvasNode,
-  downstream,
+  sequencerSample,
   KeyNode as KeyNodeT,
   MixNode as MixNodeT,
   upstream,
@@ -23,7 +23,6 @@ import {
   ModeNode as ModeNodeT,
   OCTAVES,
   OctaveNode as OctaveNodeT,
-  SampleData,
   SampleNode as SampleNodeT,
   SequencerKind,
   SequencerNode as SequencerNodeT,
@@ -112,8 +111,8 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
   const { updateNodeData } = useReactFlow()
   const nodes = useNodes()
   const edges = useEdges()
-  // The sound this sequencer plays: the first Sample along its chain.
-  const sample = downstream(nodes as CanvasNode[], edges, id, 'sample')?.data as SampleData | undefined
+  // The sound this sequencer plays (wired in, or after it), as the music resolves it.
+  const sample = sequencerSample(nodes as CanvasNode[], edges, id)
 
   const update = (patch: Partial<SequencerNodeT['data']>): void => updateNodeData(id, patch)
   const setLength = (len: number): void => {
@@ -158,7 +157,7 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
             </button>
           )}
         </div>
-        {!sample && data.kind !== 'degree' && <div className="hint">Wire the output into a Sample.</div>}
+        {!sample && data.kind !== 'degree' && <div className="hint">No sound yet: wire a Sample in or after.</div>}
         {/* Grid, then the gain fader; the right edge drags the step count. */}
         <div className="seq-main">
           {grid}
