@@ -201,3 +201,8 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .fader-fill { position: absolute; left: 0; right: 0; bottom: 0; background: linear-gradient(#8ab4f8, #4a6a9a); }
 .sequencer-node .react-flow__handle, .velocity-node .react-flow__handle { z-index: 2; }
 .width-grip { z-index: 1; }
+
+/* Ports: keep the visible dot small but give it a big touch target. The pseudo-element
+   is part of the handle for hit-testing, so presses anywhere in it start a wire. */
+.react-flow__handle::before { content: ''; position: absolute; width: 44px; height: 44px; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; }
+.react-flow__handle:hover { box-shadow: 0 0 0 4px #8ab4f855; }

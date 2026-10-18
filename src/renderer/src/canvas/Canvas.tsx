@@ -289,6 +289,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         onPaneClick={onPaneClick}
         onNodeClick={onNodeClick}
         isValidConnection={isValidConnection}
+        // How near a dropped wire must land to snap to an input, in screen px (default 20).
+        connectionRadius={44}
         colorMode="dark"
         fitView
         minZoom={0.2}
