@@ -218,3 +218,24 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .width-grip::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
 .width-grip:hover { border-color: #8ab4f8; background: #23344d; }
 .width-grip span { font-size: 11px; color: #ccc; font-weight: 600; }
+
+/* Parameter panel for the selected node, docked under the canvas */
+.panel { flex: none; min-height: 84px; max-height: 40vh; overflow: auto; border-top: 1px solid #333; background: #151515; padding: 8px 14px 10px; display: flex; gap: 18px; align-items: flex-start; }
+.panel.empty { align-items: center; color: #666; font-size: 13px; }
+.ptitle { font-weight: 600; font-size: 13px; color: #ccd; min-width: 130px; padding-top: 6px; }
+.pbody { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; flex: 1; }
+.pfield { display: flex; flex-direction: column; gap: 4px; }
+.plabel { font-size: 11px; color: #888; }
+.pvalue { min-width: 36px; text-align: center; font-size: 13px; color: #ddd; }
+.stepper { display: flex; align-items: center; gap: 4px; }
+.stepper button { width: 36px; height: 34px; padding: 0; font-size: 16px; }
+.pfield.slider { flex-direction: row; align-items: center; gap: 8px; }
+.pfield.slider input[type='range'] { width: 180px; height: 30px; accent-color: #8ab4f8; }
+.ptoggle { height: 34px; padding: 0 14px; }
+.ptoggle.on { background: #23344d; border-color: #8ab4f8; }
+.pinfo { font-size: 13px; color: #aaa; line-height: 1.6; }
+.pinfo b { color: #9d9; }
+.pmodes { display: flex; flex-wrap: wrap; gap: 8px; align-items: center; }
+.pmode { display: flex; gap: 4px; }
+.pmode select, .pname { height: 34px; background: #222; border: 1px solid #444; color: #ddd; border-radius: 3px; padding: 0 6px; }
+.pmode button { width: 30px; height: 34px; padding: 0; }

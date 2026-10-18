@@ -20,6 +20,7 @@ import { GROUP_TOGGLE_EVENT, groupNodes, removeNode, setCollapsed, ungroup } fro
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
+import Panel from './Panel'
 import { useLongPressFence } from './useLongPressFence'
 import {
   CanvasNode,
@@ -358,6 +359,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         />
       )}
       {showCode && <pre className="code-view">{compiled.code}</pre>}
+      <Panel nodes={nodes} />
     </div>
   )
 }

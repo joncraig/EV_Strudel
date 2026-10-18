@@ -197,6 +197,10 @@ function App(): React.JSX.Element {
 
   // ---- Canvas state ----
   const history = useHistory(serialize(canvas))
+  const canvasRef = useRef(canvas)
+  useEffect(() => {
+    canvasRef.current = canvas
+  }, [canvas])
   const { record, undo: popUndo, redo: popRedo } = history
 
   const applyCanvas = useCallback((s: CanvasState): string => {
@@ -212,14 +216,23 @@ function App(): React.JSX.Element {
 
   const onCanvasChange = useCallback((s: CanvasState) => record(applyCanvas(s)), [applyCanvas, record])
 
+  // Snapshots don't store selection; keep what's selected now across undo/redo.
+  const restore = useCallback(
+    (json: string) => {
+      const s = JSON.parse(json) as CanvasState
+      const selected = new Set(canvasRef.current.nodes.filter((n) => n.selected).map((n) => n.id))
+      applyCanvas({ nodes: s.nodes.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n)), edges: s.edges })
+    },
+    [applyCanvas]
+  )
   const undo = useCallback(() => {
     const prev = popUndo()
-    if (prev) applyCanvas(JSON.parse(prev))
-  }, [popUndo, applyCanvas])
+    if (prev) restore(prev)
+  }, [popUndo, restore])
   const redo = useCallback(() => {
     const next = popRedo()
-    if (next) applyCanvas(JSON.parse(next))
-  }, [popRedo, applyCanvas])
+    if (next) restore(next)
+  }, [popRedo, restore])
 
   const onSoundDropped = (sound: DraggedSound): void => {
     if (sound.pack && !loaded.has(sound.pack)) loadPack(sound.pack).catch((e) => setEvalError(String(e)))
