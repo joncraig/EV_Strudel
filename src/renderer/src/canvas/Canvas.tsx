@@ -11,6 +11,7 @@ import {
   IsValidConnection,
   NodeChange,
   OnConnectEnd,
+  OnConnectStart,
   ReactFlow,
   SelectionMode,
   useReactFlow
@@ -327,7 +328,25 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
     setMenu({ type: 'node', x: e.clientX, y: e.clientY, nodeId: node.id })
   }
 
+  // Dragging from an input that already has a wire picks the wire up: it's removed at
+  // once, so letting go on empty canvas just disconnects (no add menu), and letting go
+  // on another output reconnects the input there.
+  const detachedRef = useRef(false)
+  const onConnectStart: OnConnectStart = (_e, { nodeId, handleId, handleType }) => {
+    detachedRef.current = false
+    if (handleType !== 'target' || !nodeId) return
+    const { nodes: ns, edges: es } = stateRef.current
+    const wired = es.filter((e) => e.target === nodeId && e.targetHandle === handleId)
+    if (!wired.length) return
+    detachedRef.current = true
+    commit({ nodes: ns, edges: es.filter((e) => !wired.includes(e)) })
+  }
+
   const onConnectEnd: OnConnectEnd = (e, conn) => {
+    if (detachedRef.current) {
+      detachedRef.current = false
+      return
+    }
     if (conn.isValid || !conn.fromNode || !conn.fromHandle?.id) return
     const p = 'changedTouches' in e ? e.changedTouches[0] : e
     openAdd(p.clientX, p.clientY, {
@@ -377,6 +396,7 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
         onPaneClick={onPaneClick}
         onPaneContextMenu={onPaneContextMenu}
