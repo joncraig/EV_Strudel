@@ -13,6 +13,8 @@ interface Props {
   // Level bars: a cell is lit when its row is at or below the step's value, and a
   // step always has a value (no rests).
   bars?: boolean
+  // Every step always has a value: tapping picks the row, never makes a rest.
+  noRests?: boolean
   // Large piano-roll cells with bar lines (bottom panel).
   roll?: boolean
 }
@@ -20,7 +22,7 @@ interface Props {
 // Press a cell and slide across others to paint. The first cell decides the stroke:
 // turning a cell on paints "on" (that row) along the way; turning one off erases.
 // In bar mode every column touched takes the level under the pointer.
-function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = false }: Props): React.JSX.Element {
+function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = false, noRests = false }: Props): React.JSX.Element {
   // Latest steps for the stroke handlers, which outlive a render.
   const stepsRef = useRef(steps)
   useEffect(() => {
@@ -70,7 +72,7 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
     if (!start) return
     e.preventDefault()
     e.stopPropagation()
-    const erase = !bars && stepsRef.current[start.i] === start.v
+    const erase = !bars && !noRests && stepsRef.current[start.i] === start.v
     const { pointerId } = e
 
     const apply = ({ i, v }: { i: number; v: number }): void => {

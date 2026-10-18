@@ -114,3 +114,25 @@ export function duplicateNodes(state: CanvasState, ids: string[]): CanvasState {
     edges: [...state.edges, ...wires]
   }
 }
+
+// Delete a node without breaking the chain (Blender's dissolve): whatever was wired
+// into it is wired straight to whatever it fed.
+export function dissolveNode(state: CanvasState, id: string): CanvasState {
+  const ins = state.edges.filter((e) => e.target === id && e.sourceHandle === 'pattern')
+  const outs = state.edges.filter((e) => e.source === id && e.sourceHandle === 'pattern')
+  const removed = removeNode(state, id)
+  const gone = new Set(removed.nodes.map((n) => n.id))
+  const bridges = ins.flatMap((i) =>
+    outs
+      .filter((o) => gone.has(i.source) && gone.has(o.target) && i.source !== o.target)
+      .filter((o) => !removed.edges.some((e) => e.source === i.source && e.target === o.target))
+      .map((o) => ({
+        id: `e-${i.source}-${o.target}-pattern`,
+        source: i.source,
+        target: o.target,
+        sourceHandle: 'pattern',
+        targetHandle: 'pattern'
+      }))
+  )
+  return { nodes: removed.nodes, edges: [...removed.edges, ...bridges] }
+}

@@ -120,6 +120,7 @@ export interface LengthData extends Record<string, unknown> {
   resolution: number
   // 2 = note-value table (1/16..1 bar). Older nodes used step fractions (1/4 step..8).
   version?: number
+  folded?: boolean
 }
 
 export type LengthNode = Node<LengthData, 'length'>
@@ -254,7 +255,8 @@ export const newMode = (): ModeData => ({
   resolution: STEP_RESOLUTION
 })
 
-export const newLength = (length = 16): LengthData => ({
+// One length unless it's lengthened into a sequence of them.
+export const newLength = (length = 1): LengthData => ({
   steps: Array(length).fill(LENGTH_FULL_STEP),
   resolution: STEP_RESOLUTION,
   version: 2

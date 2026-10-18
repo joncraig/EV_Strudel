@@ -185,13 +185,15 @@ function LevelNode({
   steps,
   title,
   kind,
-  fill
+  fill,
+  folded = false
 }: {
   id: string
   steps: number[]
   title: string
   kind: 'velocity' | 'length'
   fill: number // value for new or cleared steps
+  folded?: boolean
 }): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
   const lens = useStepLens(id)
@@ -205,11 +207,22 @@ function LevelNode({
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
       <Header title={title} right={<StepWidthGrip steps={steps.length} max={MAX_STEPS} onChange={setLength} />} />
       <div className="node-body">
+        {kind === 'length' && (
+          <div className="seq-controls nodrag">
+            <button className={`fold ${folded ? 'on' : ''}`} onClick={() => updateNodeData(id, { folded: !folded })}>
+              Fold
+            </button>
+          </div>
+        )}
+        {/* Velocity reads as level bars; Length shows just the picked value per step. */}
         <StepGrid
           steps={steps}
-          rows={LEVEL_ROWS}
-          labels={LEVEL_ROWS.map((v) => (kind === 'length' ? lengthLabel(v) : ''))}
-          bars
+          rows={kind === 'length' && folded ? LEVEL_ROWS.filter((v) => steps.includes(v)) : LEVEL_ROWS}
+          labels={(kind === 'length' && folded ? LEVEL_ROWS.filter((v) => steps.includes(v)) : LEVEL_ROWS).map((v) =>
+            kind === 'length' ? lengthLabel(v) : ''
+          )}
+          bars={kind === 'velocity'}
+          noRests
           timing={{ resolution: STEP_RESOLUTION, lens }}
           onChange={(next) => updateNodeData(id, { steps: next.map((v) => v ?? fill) })}
         />
@@ -225,7 +238,9 @@ export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.
 
 // Per-step note length in steps (Strudel clip); rows read ¼ … 8.
 export function LengthNode({ id, data }: NodeProps<LengthNodeT>): React.JSX.Element {
-  return <LevelNode id={id} steps={data.steps} title="Length" kind="length" fill={LENGTH_FULL_STEP} />
+  return (
+    <LevelNode id={id} steps={data.steps} title="Length" kind="length" fill={LENGTH_FULL_STEP} folded={data.folded} />
+  )
 }
 
 // ---- Effect ----

@@ -29,10 +29,10 @@ import {
   VelocityNode
 } from './nodes'
 import {
+  dissolveNode,
   duplicateNodes,
   GROUP_TOGGLE_EVENT,
   groupNodes,
-  removeNode,
   setCollapsed,
   ungroup
 } from './groups'
@@ -163,7 +163,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     onChange({ nodes: [...nodes, node], edges: edge ? [...edges, edge] : edges })
   }
 
-  const remove = (id: string): void => onChange(removeNode(state, id))
+  // Deleting dissolves: the chain is reconnected through the removed node.
+  const remove = (id: string): void => onChange(dissolveNode(state, id))
 
   // ---- Menus: tap empty canvas = add, tap a node = node menu, drop a wire on empty = add + connect ----
   const [menu, setMenu] = useState<Menu | null>(null)
@@ -321,19 +322,29 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     items.push({
       label: targets.length > 1 ? `Delete ${targets.length} nodes` : 'Delete',
       danger: true,
-      onSelect: () => onChange(targets.reduce((s, t) => removeNode(s, t), state))
+      onSelect: () => onChange(targets.reduce((s, t) => dissolveNode(s, t), state))
     })
     return [{ items }]
   }
 
   // Ctrl+D duplicates the selected nodes (not while typing in a field).
+  // Delete/Backspace dissolves the selected nodes (and removes selected wires).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
-      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'd') return
       if ((e.target as HTMLElement).closest?.('input, textarea, select')) return
-      e.preventDefault()
-      const ids = stateRef.current.nodes.filter((n) => n.selected).map((n) => n.id)
-      if (ids.length) commit(duplicateNodes(stateRef.current, ids))
+      const { nodes: ns, edges: es } = stateRef.current
+      if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'd') {
+        e.preventDefault()
+        const ids = ns.filter((n) => n.selected).map((n) => n.id)
+        if (ids.length) commit(duplicateNodes(stateRef.current, ids))
+      } else if (e.key === 'Delete' || e.key === 'Backspace') {
+        const ids = ns.filter((n) => n.selected).map((n) => n.id)
+        const wires = es.filter((x) => x.selected)
+        if (!ids.length && !wires.length) return
+        e.preventDefault()
+        const kept = { nodes: ns, edges: es.filter((x) => !wires.includes(x)) }
+        commit(ids.reduce((s, id) => dissolveNode(s, id), kept))
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -582,7 +593,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
           colorMode="dark"
           fitView
           minZoom={0.2}
-          deleteKeyCode={['Delete', 'Backspace']}
+          // Our own Delete handler dissolves instead of breaking the chain.
+        deleteKeyCode={null}
         >
           <Background gap={24} />
           <Controls />

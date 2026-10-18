@@ -70,7 +70,13 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     labels = rows.map((v) =>
       node.type === 'length' ? lengthLabel(v) : `${Math.round((v / VELOCITY_LEVELS) * 100)}%`
     )
-    bars = true
+    bars = node.type === 'velocity'
+    if (node.type === 'length' && node.data.folded) {
+      const used = new Set(node.data.steps)
+      const keep = rows.map((v, i) => [v, labels[i]] as const).filter(([v]) => used.has(v))
+      rows = keep.map(([v]) => v)
+      labels = keep.map(([, l]) => l)
+    }
   } else if (node.data.kind === 'degree') {
     // Named from the first key and mode set in the wired sequencers (C Ionian if none).
     const tonic = TONICS[key?.steps.find((v) => v !== null) ?? 0]
@@ -98,6 +104,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
           rows={rows}
           labels={labels}
           bars={bars}
+          noRests={node.type === 'velocity' || node.type === 'length'}
           roll
           timing={{ resolution: node.data.resolution, muted, lens }}
           onChange={(steps) =>
