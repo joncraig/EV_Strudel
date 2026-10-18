@@ -77,19 +77,21 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   // Sounds arrive from the Samples tab as window events (see soundDrag.ts).
   const rootRef = useRef<HTMLDivElement>(null)
   const dropRef = useRef<(d: SoundDropDetail) => void>(() => {})
-  dropRef.current = ({ sound, point }) => {
-    if (point) {
-      const r = rootRef.current?.getBoundingClientRect()
-      if (!r || point.x < r.left || point.x > r.right || point.y < r.top || point.y > r.bottom) return
+  useEffect(() => {
+    dropRef.current = ({ sound, point }) => {
+      if (point) {
+        const r = rootRef.current?.getBoundingClientRect()
+        if (!r || point.x < r.left || point.x > r.right || point.y < r.top || point.y > r.bottom) return
+      }
+      onSoundDropped(sound)
+      add({
+        id: nodeId('sample'),
+        type: 'sample',
+        position: point ? screenToFlowPosition(point) : spawnPosition(),
+        data: { s: sound.s, pack: sound.pack, n: sound.n ?? 0, slices: 8 }
+      })
     }
-    onSoundDropped(sound)
-    add({
-      id: nodeId('sample'),
-      type: 'sample',
-      position: point ? screenToFlowPosition(point) : spawnPosition(),
-      data: { s: sound.s, pack: sound.pack, n: sound.n ?? 0, slices: 8 }
-    })
-  }
+  })
   useEffect(() => {
     const listener = (e: Event): void => dropRef.current((e as CustomEvent<SoundDropDetail>).detail)
     window.addEventListener(SOUND_DROP_EVENT, listener)

@@ -130,5 +130,5 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .samples .sound-row .expand, .samples .sound-row .add { min-width: 40px; height: 32px; padding: 0 8px; font-size: 13px; }
 .samples .sound-row .add { color: #8ab4f8; font-size: 18px; }
 .samples .variants { gap: 6px; padding: 6px 0 10px 32px; }
-.samples .variants button { touch-action: pan-y; min-width: 36px; height: 32px; font-size: 13px; }
+.samples .variants button { touch-action: none; min-width: 36px; height: 32px; font-size: 13px; }
 .drag-ghost { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; padding: 8px 14px; background: #233d2a; color: #9d9; border: 1px solid #4a7; border-radius: 6px; font-size: 14px; font-weight: 600; box-shadow: 0 4px 12px #0008; }

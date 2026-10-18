@@ -3,11 +3,8 @@ import { addSound, startSoundDrag, wasDragging } from '../canvas/soundDrag'
 import type { DownloadProgress, PackSounds, PackStatus } from '../../../shared/samplePacks'
 
 interface Props {
-  // Packs that load automatically at startup.
-  pinned: Set<string>
   loaded: Set<string>
   onLoad: (id: string) => Promise<void>
-  onTogglePin: (id: string) => void
   onAudition: (sound: string, n: number) => void
 }
 
@@ -16,11 +13,11 @@ const cleanError = (e: unknown): string =>
 
 const MAX_VARIANTS = 32
 
-function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): React.JSX.Element {
+function Samples({ loaded, onLoad, onAudition }: Props): React.JSX.Element {
   const [packs, setPacks] = useState<PackStatus[]>([])
   const [open, setOpen] = useState<string | null>(null)
   const [sounds, setSounds] = useState<Record<string, PackSounds>>({})
-  const [busy, setBusy] = useState<string | null>(null)
+
   const [progress, setProgress] = useState<Record<string, DownloadProgress>>({})
   const [expanded, setExpanded] = useState<string | null>(null)
   const [query, setQuery] = useState('')
@@ -30,18 +27,19 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
 
   useEffect(() => {
     refresh()
-    return window.api.samples.onProgress((p) => setProgress((m) => ({ ...m, [p.id]: p })))
+    // Loaded packs save themselves to the library in the background; refresh when one finishes.
+    return window.api.samples.onProgress((p) => {
+      setProgress((m) => ({ ...m, [p.id]: p }))
+      if (p.done === p.total) refresh()
+    })
   }, [])
 
-  const run = async (id: string, fn: () => Promise<void>): Promise<void> => {
+  const run = async (fn: () => Promise<void>): Promise<void> => {
     setError(null)
-    setBusy(id)
     try {
       await fn()
     } catch (e) {
       setError(cleanError(e))
-    } finally {
-      setBusy(null)
     }
   }
 
@@ -50,7 +48,7 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
     setOpen(id)
     setExpanded(null)
     if (!sounds[id])
-      run(id, async () => {
+      run(async () => {
         const s = await window.api.samples.sounds(id)
         setSounds((m) => ({ ...m, [id]: s }))
       })
@@ -58,26 +56,12 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
 
   // Auditioning a sound needs its pack registered with Strudel first.
   const audition = (id: string, sound: string, n: number): void => {
-    run(id, async () => {
+    run(async () => {
       if (!loaded.has(id)) await onLoad(id)
       onAudition(sound, n)
     })
   }
 
-  const download = (id: string): Promise<void> =>
-    run(id, async () => {
-      const result = await window.api.samples.download(id)
-      if (result.failed) setError(`${result.failed} of ${result.total} files failed to download.`)
-      await refresh()
-    })
-
-  const removeLocal = (p: PackStatus): void => {
-    if (!confirm(`Delete the downloaded copy of "${p.name}"? It will stream from the web again.`)) return
-    run(p.id, async () => {
-      await window.api.samples.remove(p.id)
-      await refresh()
-    })
-  }
 
   const words = query.toLowerCase().split(/\s+/).filter(Boolean)
   const match = (s: string): boolean => words.every((w) => s.toLowerCase().includes(w))
@@ -102,7 +86,7 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
       <ul className="patch-list">
         {shownPacks.map((p) => {
           const prog = progress[p.id]
-          const downloadingNow = busy === p.id && prog && prog.done < prog.total
+          const saving = prog && prog.done < prog.total
           return (
             <li key={p.id} className="collection-wrap">
               <div className={`collection ${open === p.id ? 'open' : ''}`} onClick={() => toggle(p.id)}>
@@ -110,30 +94,13 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
                   {open === p.id ? '▾' : '▸'} {p.name}
                   {sounds[p.id] && <span className="count"> {Object.keys(sounds[p.id]).length}</span>}
                   {loaded.has(p.id) && <span className="badge">loaded</span>}
-                  {p.downloaded && <span className="badge local">offline</span>}
+                  {saving ? (
+                    <span className="badge local">saving {prog.done}/{prog.total}</span>
+                  ) : (
+                    p.downloaded && <span className="badge local">saved</span>
+                  )}
                 </div>
                 <div className="patch-tags">{p.description}</div>
-                <div className="pack-actions" onClick={(e) => e.stopPropagation()}>
-                  <button
-                    className={pinned.has(p.id) ? 'on' : ''}
-                    title="Load this pack every time the app starts"
-                    onClick={() => onTogglePin(p.id)}
-                  >
-                    {pinned.has(p.id) ? '★ auto-load' : '☆ auto-load'}
-                  </button>
-                  {!loaded.has(p.id) && (
-                    <button disabled={busy === p.id} onClick={() => run(p.id, () => onLoad(p.id))}>
-                      Load now
-                    </button>
-                  )}
-                  {p.downloaded ? (
-                    <button onClick={() => removeLocal(p)}>Delete local</button>
-                  ) : (
-                    <button disabled={busy === p.id} onClick={() => download(p.id)}>
-                      {downloadingNow ? `${prog.done}/${prog.total}` : 'Download'}
-                    </button>
-                  )}
-                </div>
               </div>
               {open === p.id && (
                 <ul className="items">
@@ -174,8 +141,8 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
                           {Array.from({ length: Math.min(count, MAX_VARIANTS) }, (_, n) => (
                             <button
                               key={n}
-                              title="Tap to play, swipe sideways to drag this variant"
-                              onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id, n }, 'x')}
+                              title="Tap to play, drag onto the canvas"
+                              onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id, n })}
                               onClick={() => !wasDragging() && audition(p.id, name, n)}
                             >
                               {n}

@@ -82,6 +82,9 @@ export const newMode = (): ModeData => ({
 
 export const SYNTHS = ['sawtooth', 'square', 'triangle', 'sine', 'piano', 'supersaw']
 
+// Synths that are really sample instruments, and the pack that provides them.
+export const SYNTH_PACKS: Record<string, string> = { piano: 'piano' }
+
 let counter = 0
 export const nodeId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${counter++}`
 

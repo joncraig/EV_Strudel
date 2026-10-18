@@ -27,7 +27,8 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
   strudel.cc. Code-only patches play but can't be edited on the canvas.
 - Audio engine: headless `webaudioRepl` (no StrudelMirror). `@strudel/codemirror` still installed, unused.
 - Testing codegen in Node: stub `@kabelsalat/web` with a loader hook, import @strudel dist, `queryArc` the pattern.
-- Sample packs: catalog in `src/shared/samplePacks.ts`; main side `src/main/samples.ts`. Downloads go to `Library/samples/<id>/` with a rewritten `strudel.json`, served via the `evsamples://pack/<id>/` protocol. Auto-load list is in localStorage (`ev-strudel:auto-load-packs`, default dirt-samples).
+- Sample packs: catalog in `src/shared/samplePacks.ts`; main side `src/main/samples.ts`. No load/save buttons (Jon): a pack loads on demand (tap, drop, Play) and then saves itself to `Library/samples/<id>/` in the background (rewritten `strudel.json`, served via `evsamples://pack/<id>/`); saved packs load locally after that.
+- Touch: Jon is on a Surface touchscreen. HTML5 drag-and-drop does not start from touch in Chromium on Windows, so sounds drag with pointer events (`canvas/soundDrag.ts`). Keep touch targets large.
 - Library folder: `Documents/EV_Strudel Library/*.strudel`. Patch metadata is in leading
   `// @title`, `// @source`, `// @tags` comment lines (`src/shared/patch.ts`), so files stay runnable.
 - Library IPC lives in `src/main/library.ts`. Imports are fetched in main (no CORS). Delete goes to the Recycle Bin.

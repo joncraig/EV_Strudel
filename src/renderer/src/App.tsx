@@ -7,6 +7,7 @@ import Library from './components/Library'
 import Samples from './components/Samples'
 import Canvas from './canvas/Canvas'
 import { compile } from './canvas/codegen'
+import { SYNTH_PACKS } from './canvas/model'
 import type { CanvasState, DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
 
@@ -22,18 +23,7 @@ interface Current {
 }
 
 const EMPTY: CanvasState = { nodes: [], edges: [] }
-const PINNED_KEY = 'ev-strudel:auto-load-packs'
 const AUTOSAVE_KEY = 'ev-strudel:canvas-autosave'
-
-function readPinned(): Set<string> {
-  try {
-    const raw = localStorage.getItem(PINNED_KEY)
-    if (raw) return new Set(JSON.parse(raw))
-  } catch {
-    // Fall through to the default.
-  }
-  return new Set(['dirt-samples'])
-}
 
 function readAutosave(): CanvasState {
   try {
@@ -75,25 +65,26 @@ function App(): React.JSX.Element {
   const readyRef = useRef<Promise<unknown> | null>(null)
 
   // ---- Sample packs ----
-  const [pinned, setPinned] = useState<Set<string>>(readPinned)
+  // Packs load on demand (audition, drop, play); each loads once per session.
   const [loaded, setLoaded] = useState<Set<string>>(new Set())
+  const loadingRef = useRef(new Map<string, Promise<void>>())
 
-  const loadPack = useCallback(async (id: string) => {
-    await samples(await window.api.samples.loadUrl(id))
-    setLoaded((s) => new Set(s).add(id))
-  }, [])
-
-  const togglePin = (id: string): void => {
-    const next = new Set(pinned)
-    if (next.has(id)) next.delete(id)
-    else next.add(id)
-    setPinned(next)
-    try {
-      localStorage.setItem(PINNED_KEY, JSON.stringify([...next]))
-    } catch {
-      // Not fatal: the pin just won't survive a restart.
+  const loadPack = useCallback((id: string): Promise<void> => {
+    let p = loadingRef.current.get(id)
+    if (!p) {
+      p = window.api.samples
+        .loadUrl(id)
+        .then((url) => samples(url))
+        .then(() => {
+          setLoaded((s) => new Set(s).add(id))
+          // Anything loaded also gets saved to the library, so it works offline next time.
+          window.api.samples.download(id).catch((e) => console.warn(`Saving pack ${id} failed`, e))
+        })
+      loadingRef.current.set(id, p)
+      p.catch(() => loadingRef.current.delete(id))
     }
-  }
+    return p
+  }, [])
 
   // ---- Strudel engine (no editor: the canvas compiles to code) ----
   useEffect(() => {
@@ -110,10 +101,9 @@ function App(): React.JSX.Element {
         import('@strudel/tonal'),
         import('@strudel/webaudio')
       ),
-      registerSynthSounds(),
-      ...[...readPinned()].map((id) => loadPack(id).catch(console.error))
+      registerSynthSounds()
     ])
-  }, [loadPack])
+  }, [])
 
   const playSound = (s: string, n: number): void => {
     const ctx = getAudioContext()
@@ -123,11 +113,33 @@ function App(): React.JSX.Element {
 
   const compiled = useMemo(() => current.codeOnly ?? compile(canvas.nodes, canvas.edges).code, [canvas, current.codeOnly])
 
+  // Packs the current music needs. Code-only patches get what strudel.cc preloads.
+  const neededPacks = useMemo(() => {
+    if (current.codeOnly) return ['dirt-samples', 'tidal-drum-machines', 'piano']
+    const ids = new Set<string>()
+    for (const node of canvas.nodes) {
+      if (node.type !== 'sample') continue
+      const pack = node.data.pack ?? SYNTH_PACKS[node.data.s]
+      if (pack) ids.add(pack)
+    }
+    return [...ids]
+  }, [canvas, current.codeOnly])
+
+  // Load what's needed, then (re)evaluate. A failed pack shows an error but
+  // doesn't stop the rest from playing.
+  const evaluate = useCallback(
+    async (code: string) => {
+      await readyRef.current
+      const failed = (await Promise.allSettled(neededPacks.map(loadPack))).filter((r) => r.status === 'rejected')
+      setEvalError(failed.length ? `${failed.length} sample pack(s) failed to load` : null)
+      await replRef.current?.evaluate(code)
+    },
+    [neededPacks, loadPack]
+  )
+
   const play = async (): Promise<void> => {
     await initAudio()
-    await readyRef.current
-    setEvalError(null)
-    await replRef.current?.evaluate(compiled)
+    await evaluate(compiled)
   }
 
   const stop = (): void => replRef.current?.stop()
@@ -139,12 +151,9 @@ function App(): React.JSX.Element {
   }, [playing])
   useEffect(() => {
     if (!playingRef.current) return
-    const t = setTimeout(() => {
-      setEvalError(null)
-      replRef.current?.evaluate(compiled)
-    }, 120)
+    const t = setTimeout(() => evaluate(compiled), 120)
     return () => clearTimeout(t)
-  }, [compiled])
+  }, [compiled, evaluate])
 
   // ---- Canvas state ----
   const onCanvasChange = useCallback((s: CanvasState) => {
@@ -285,10 +294,8 @@ function App(): React.JSX.Element {
           </div>
           {tab === 'samples' ? (
             <Samples
-              pinned={pinned}
               loaded={loaded}
               onLoad={loadPack}
-              onTogglePin={togglePin}
               onAudition={playSound}
             />
           ) : (

@@ -91,12 +91,21 @@ function localRel(fileUrl: URL): string {
   return parts.join('/')
 }
 
-const downloading = new Set<string>()
+// One download per pack at a time; a second request joins the first.
+const downloading = new Map<string, Promise<DownloadProgress>>()
 
-async function download(id: string, sender: WebContents): Promise<DownloadProgress> {
-  if (downloading.has(id)) throw new Error('Already downloading this pack.')
-  downloading.add(id)
-  try {
+function download(id: string, sender: WebContents): Promise<DownloadProgress> {
+  let p = downloading.get(id)
+  if (!p) {
+    p = downloadPack(id, sender).finally(() => downloading.delete(id))
+    downloading.set(id, p)
+  }
+  return p
+}
+
+async function downloadPack(id: string, sender: WebContents): Promise<DownloadProgress> {
+  if (await exists(localMapPath(id))) return { id, done: 0, total: 0, failed: 0 }
+  {
     const pack = findPack(id)
     const map = await remoteMap(pack.url)
     const base = new URL(typeof map._base === 'string' ? map._base : '.', pack.url)
@@ -149,8 +158,6 @@ async function download(id: string, sender: WebContents): Promise<DownloadProgre
     await fs.writeFile(localMapPath(id), JSON.stringify(localMap, null, 1), 'utf8')
     report()
     return progress
-  } finally {
-    downloading.delete(id)
   }
 }
 
