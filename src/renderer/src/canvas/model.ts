@@ -58,8 +58,17 @@ export interface ModeData extends Record<string, unknown> {
 
 export type SampleNode = Node<SampleData, 'sample'>
 export type SequencerNode = Node<SequencerData, 'sequencer'>
+export interface GroupData extends Record<string, unknown> {
+  label: string
+  collapsed: boolean
+  // Frame size while expanded, restored when the group is opened again.
+  width: number
+  height: number
+}
+
 export type ModeNode = Node<ModeData, 'mode'>
-export type CanvasNode = SampleNode | SequencerNode | ModeNode
+export type GroupNode = Node<GroupData, 'group'>
+export type CanvasNode = SampleNode | SequencerNode | ModeNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]

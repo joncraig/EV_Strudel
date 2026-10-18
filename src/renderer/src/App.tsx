@@ -39,7 +39,15 @@ function readAutosave(): CanvasState {
 const serialize = (s: CanvasState): string =>
   // Only what matters for the music and layout, not React Flow's runtime fields.
   JSON.stringify({
-    nodes: s.nodes.map(({ id, type, position, data }) => ({ id, type, position, data })),
+    nodes: s.nodes.map(({ id, type, position, data, parentId, hidden, style }) => ({
+      id,
+      type,
+      position,
+      data,
+      parentId,
+      hidden,
+      style
+    })),
     edges: s.edges.map(({ id, source, target, sourceHandle, targetHandle, animated }) => ({
       id,
       source,

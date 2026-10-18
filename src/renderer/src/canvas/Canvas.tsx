@@ -15,10 +15,11 @@ import {
   useReactFlow
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { ModeNode, SampleNode, SequencerNode } from './nodes'
+import { GroupNode, ModeNode, SampleNode, SequencerNode } from './nodes'
+import { GROUP_TOGGLE_EVENT, groupNodes, removeNode, setCollapsed, ungroup } from './groups'
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
-import ContextMenu, { MenuSection } from './ContextMenu'
+import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import { useLongPressFence } from './useLongPressFence'
 import { CanvasNode, CanvasState, DraggedSound, newMode, newSequencer, nodeId, SequencerKind, SYNTHS } from './model'
 
@@ -29,7 +30,7 @@ interface Props {
   onSoundDropped: (sound: DraggedSound) => void
 }
 
-const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mode: ModeNode }
+const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mode: ModeNode, group: GroupNode }
 
 // Handles only connect to the same-named handle: sound→sound, mode→mode.
 const isValidConnection: IsValidConnection = (c) => c.sourceHandle === c.targetHandle && c.source !== c.target
@@ -53,6 +54,13 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const [showCode, setShowCode] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const { nodes, edges } = state
+  // For window event handlers that outlive a render.
+  const stateRef = useRef(state)
+  const onChangeRef = useRef(onChange)
+  useEffect(() => {
+    stateRef.current = state
+    onChangeRef.current = onChange
+  })
 
   const onNodesChange = useCallback(
     (changes: NodeChange<CanvasNode>[]) => onChange({ nodes: applyNodeChanges(changes, nodes), edges }),
@@ -77,11 +85,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     onChange({ nodes: [...nodes, node], edges: edge ? [...kept, edge] : edges })
   }
 
-  const remove = (id: string): void =>
-    onChange({
-      nodes: nodes.filter((n) => n.id !== id),
-      edges: edges.filter((e) => e.source !== id && e.target !== id)
-    })
+  const remove = (id: string): void => onChange(removeNode(state, id))
 
   // ---- Menus: tap empty canvas = add, tap a node = node menu, drop a wire on empty = add + connect ----
   const [menu, setMenu] = useState<Menu | null>(null)
@@ -145,9 +149,49 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     }))
   }
 
-  const nodeSections = (id: string): MenuSection[] => [
-    { items: [{ label: 'Delete', danger: true, onSelect: () => remove(id) }] }
-  ]
+  const nodeSections = (id: string): MenuSection[] => {
+    const node = nodes.find((n) => n.id === id)
+    if (!node) return []
+    if (node.type === 'group')
+      return [
+        {
+          items: [
+            {
+              label: node.data.collapsed ? 'Expand' : 'Collapse',
+              onSelect: () => onChange(setCollapsed(state, id, !node.data.collapsed))
+            },
+            { label: 'Ungroup', onSelect: () => onChange(ungroup(state, id)) },
+            { label: 'Delete group and contents', danger: true, onSelect: () => remove(id) }
+          ]
+        }
+      ]
+    // Tapping one of several selected nodes acts on the whole selection.
+    const selected = nodes.filter((n) => n.selected && !n.parentId && n.type !== 'group').map((n) => n.id)
+    const targets = node.selected && selected.length > 1 ? selected : [id]
+    const items: MenuItem[] = []
+    if (!node.parentId)
+      items.push({
+        label: targets.length > 1 ? `Group ${targets.length} nodes` : 'Group',
+        onSelect: () => onChange(groupNodes(state, targets))
+      })
+    items.push({
+      label: targets.length > 1 ? `Delete ${targets.length} nodes` : 'Delete',
+      danger: true,
+      onSelect: () => onChange(targets.reduce((s, t) => removeNode(s, t), state))
+    })
+    return [{ items }]
+  }
+
+  // A group's collapse arrow.
+  useEffect(() => {
+    const listener = (e: Event): void => {
+      const id = (e as CustomEvent<string>).detail
+      const group = stateRef.current.nodes.find((n) => n.id === id)
+      if (group?.type === 'group') onChangeRef.current(setCollapsed(stateRef.current, id, !group.data.collapsed))
+    }
+    window.addEventListener(GROUP_TOGGLE_EVENT, listener)
+    return () => window.removeEventListener(GROUP_TOGGLE_EVENT, listener)
+  }, [])
 
   const openAdd = (x: number, y: number, pending?: Pending): void =>
     setMenu({ type: 'add', x, y, flow: screenToFlowPosition({ x, y }), pending })

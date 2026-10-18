@@ -1,5 +1,6 @@
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import StepGrid from './StepGrid'
+import { GROUP_TOGGLE_EVENT } from './groups'
 import {
   DEGREE_ROWS,
   MODES,
@@ -9,6 +10,7 @@ import {
   SequencerKind,
   SequencerNode as SequencerNodeT,
   Step,
+  GroupNode as GroupNodeT,
   TONICS
 } from './model'
 
@@ -160,3 +162,22 @@ export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element 
   )
 }
 
+
+// ---- Group ----
+
+// A frame around grouped nodes. Tap the arrow to collapse it to its title bar.
+export function GroupNode({ id, data }: NodeProps<GroupNodeT>): React.JSX.Element {
+  const toggle = (): void => {
+    window.dispatchEvent(new CustomEvent(GROUP_TOGGLE_EVENT, { detail: id }))
+  }
+  return (
+    <div className={`group-frame ${data.collapsed ? 'collapsed' : ''}`}>
+      <div className="group-header">
+        <button className="group-toggle nodrag" onClick={toggle}>
+          {data.collapsed ? '▸' : '▾'}
+        </button>
+        <span>{data.label}</span>
+      </div>
+    </div>
+  )
+}
