@@ -278,3 +278,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .length-node .cell.on { background: #6ab0e0; border-color: #6ab0e0; }
 .level-node .row-label { width: 12px; font-size: 9px; }
 .react-flow__selection { background: #8ab4f81a; border: 1px dashed #8ab4f8; }
+
+/* Blender-style insert: the wire a dragged node will splice into */
+.react-flow__edge.insert-target .react-flow__edge-path { stroke: #fc6; stroke-width: 3; }

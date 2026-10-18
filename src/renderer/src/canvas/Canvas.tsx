@@ -356,6 +356,57 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
     })
   }
 
+  // ---- Blender-style insert: drag a chain node over a pattern wire to splice it in ----
+  const CHAIN_TYPES = new Set(['velocity', 'length', 'key', 'mode', 'effect'])
+  const insertRef = useRef<{ edgeId: string; el: Element } | null>(null)
+
+  const clearInsert = (): void => {
+    insertRef.current?.el.classList.remove('insert-target')
+    insertRef.current = null
+  }
+
+  // A pattern wire under the pointer, for a free chain node (no pattern wires yet).
+  const wireUnder = (e: MouseEvent | TouchEvent, node: CanvasNode): { edgeId: string; el: Element } | null => {
+    if (!CHAIN_TYPES.has(node.type ?? '')) return null
+    const es = stateRef.current.edges
+    if (es.some((x) => (x.source === node.id || x.target === node.id) && x.sourceHandle === 'pattern')) return null
+    const p = 'changedTouches' in e ? e.changedTouches[0] : e
+    for (const el of document.elementsFromPoint(p.clientX, p.clientY)) {
+      const g = el.closest('.react-flow__edge')
+      const id = g?.getAttribute('data-id')
+      const edge = id ? es.find((x) => x.id === id) : undefined
+      if (g && edge?.sourceHandle === 'pattern') return { edgeId: edge.id, el: g }
+    }
+    return null
+  }
+
+  const onNodeDrag = (e: MouseEvent | TouchEvent, node: CanvasNode): void => {
+    const hit = wireUnder(e, node)
+    if (hit?.edgeId === insertRef.current?.edgeId) return
+    clearInsert()
+    if (hit) {
+      hit.el.classList.add('insert-target')
+      insertRef.current = hit
+    }
+  }
+
+  const onNodeDragStop = (_e: MouseEvent | TouchEvent, node: CanvasNode): void => {
+    const target = insertRef.current
+    clearInsert()
+    if (!target) return
+    const { nodes: ns, edges: es } = stateRef.current
+    const wire = es.find((x) => x.id === target.edgeId)
+    if (!wire) return
+    const link = (source: string, to: string): Edge => ({
+      id: `e-${source}-${to}-pattern`,
+      source,
+      target: to,
+      sourceHandle: 'pattern',
+      targetHandle: 'pattern'
+    })
+    commit({ nodes: ns, edges: [...es.filter((x) => x !== wire), link(wire.source, node.id), link(node.id, wire.target)] })
+  }
+
   // ---- Sounds dragged in from the Samples tab (window events, see soundDrag.ts) ----
   const dropRef = useRef<(d: SoundDropDetail) => void>(() => {})
   useEffect(() => {
@@ -396,6 +447,8 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onNodeDrag={onNodeDrag}
+        onNodeDragStop={onNodeDragStop}
         onConnectStart={onConnectStart}
         onConnectEnd={onConnectEnd}
         onPaneClick={onPaneClick}
