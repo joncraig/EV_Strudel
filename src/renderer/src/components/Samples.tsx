@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { addSound, startSoundDrag } from '../canvas/soundDrag'
+import { addSound, startSoundDrag, wasDragging } from '../canvas/soundDrag'
 import type { DownloadProgress, PackSounds, PackStatus } from '../../../shared/samplePacks'
 
 interface Props {
@@ -139,7 +139,7 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
                 <ul className="items">
                   {!sounds[p.id] && <li className="empty">Loading…</li>}
                   {shownSounds.map(([name, count]) => (
-                    <li key={name} className={expanded === name ? 'active' : ''}>
+                    <li key={name} className={`sound ${expanded === name ? 'active' : ''}`}>
                       <div className="sound-row">
                         <span
                           className="grip"
@@ -148,26 +148,36 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
                         >
                           ⠿
                         </span>
-                        <span className="sound-name" title="Play" onClick={() => audition(p.id, name, 0)}>
+                        {/* Tap to play; swipe sideways to drag onto the canvas. */}
+                        <span
+                          className="sound-name"
+                          onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id }, 'x')}
+                          onClick={() => !wasDragging() && audition(p.id, name, 0)}
+                        >
                           ▶ {name}
                         </span>
                         {count > 1 && (
-                          <span className="count" onClick={() => setExpanded(expanded === name ? null : name)}>
+                          <button
+                            className="expand"
+                            title="Show variants"
+                            onClick={() => setExpanded(expanded === name ? null : name)}
+                          >
                             {count} {expanded === name ? '▾' : '▸'}
-                          </span>
+                          </button>
                         )}
-                        <button
-                          className="keep"
-                          title="Add to the canvas"
-                          onClick={() => addSound({ s: name, pack: p.id })}
-                        >
+                        <button className="add" title="Add to the canvas" onClick={() => addSound({ s: name, pack: p.id })}>
                           +
                         </button>
                       </div>
                       {expanded === name && (
                         <div className="variants">
                           {Array.from({ length: Math.min(count, MAX_VARIANTS) }, (_, n) => (
-                            <button key={n} onClick={() => audition(p.id, name, n)}>
+                            <button
+                              key={n}
+                              title="Tap to play, swipe sideways to drag this variant"
+                              onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id, n }, 'x')}
+                              onClick={() => !wasDragging() && audition(p.id, name, n)}
+                            >
                               {n}
                             </button>
                           ))}

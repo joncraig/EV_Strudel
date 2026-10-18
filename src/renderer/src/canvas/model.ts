@@ -90,4 +90,6 @@ export const nodeId = (prefix: string): string => `${prefix}-${Date.now().toStri
 export interface DraggedSound {
   s: string
   pack?: string
+  // Sample variant; 0 when not given.
+  n?: number
 }

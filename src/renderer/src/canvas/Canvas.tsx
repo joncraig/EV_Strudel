@@ -87,7 +87,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       id: nodeId('sample'),
       type: 'sample',
       position: point ? screenToFlowPosition(point) : spawnPosition(),
-      data: { s: sound.s, pack: sound.pack, n: 0, slices: 8 }
+      data: { s: sound.s, pack: sound.pack, n: sound.n ?? 0, slices: 8 }
     })
   }
   useEffect(() => {
