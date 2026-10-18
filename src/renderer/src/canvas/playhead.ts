@@ -3,7 +3,7 @@
 // selected value (a step index) changes.
 
 import { useSyncExternalStore } from 'react'
-import { stepAt } from './model'
+import { stepAt, stepAtLens } from './model'
 
 // Current cycle position, or -1 when stopped.
 let cycle = -1
@@ -33,10 +33,15 @@ export function usePlayhead<T>(select: (cycle: number) => T): T {
 
 // Outside React: call `onStep` only when the playing step changes (-1 when stopped).
 // For per-frame visuals that update the DOM directly instead of re-rendering.
-export function subscribeStep(length: number, resolution: number, onStep: (step: number) => void): () => void {
+export function subscribeStep(
+  length: number,
+  resolution: number,
+  onStep: (step: number) => void,
+  lens: number[] | null = null
+): () => void {
   let last = Number.NaN
   const check = (): void => {
-    const step = cycle < 0 ? -1 : stepAt(cycle, length, resolution || length)
+    const step = cycle < 0 ? -1 : lens?.length ? stepAtLens(cycle, length, lens) : stepAt(cycle, length, resolution || length)
     if (step !== last) {
       last = step
       onStep(step)

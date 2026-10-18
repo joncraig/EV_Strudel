@@ -12,62 +12,87 @@ import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, SampleData,
 
 const quote = (s: string): string => JSON.stringify(s)
 
-function stepPattern(steps: Step[], toToken: (v: number) => string): string {
-  return steps.map((v) => (v === null ? '~' : toToken(v))).join(' ')
+// Step lengths in 1/16 steps, from the Length in effect (cycling over the steps), or
+// null for plain 1/16 steps. Length sets the length until something changes it.
+export type Lens = number[] | null
+
+const lensAt = (lens: Lens, i: number): number => (lens?.length ? lens[i % lens.length] : 1)
+
+// Tokens as one loop, each step lasting its length: "a@4 b@4 ~@8" (mini-notation
+// weights), stretched so a 1/16 is a 1/16: "[...]/bars".
+function stepped(tokens: string[], lens: Lens): string {
+  // The same value throughout is just that value.
+  if (tokens.length && tokens.every((tk) => tk === tokens[0]) && tokens[0] !== '~') return tokens[0]
+  const weights = tokens.map((_, i) => lensAt(lens, i))
+  const total = weights.reduce((a, b) => a + b, 0)
+  const body = tokens.map((tk, i) => (weights[i] === 1 ? tk : `${tk}@${weights[i]}`)).join(' ')
+  const bars = +(total / STEP_RESOLUTION).toFixed(6)
+  return bars === 1 ? body : `[${body}]/${bars}`
 }
 
-// Steps have a fixed size (1/resolution of a bar), so the pattern spans
-// length/resolution bars: "[a b c]/2" in mini-notation plays over two cycles.
-function timed(pattern: string, length: number, resolution: number): string {
-  const bars = +(length / resolution).toFixed(6)
-  return bars === 1 ? pattern : `[${pattern}]/${bars}`
-}
+const steps = (values: Step[], toToken: (v: number) => string): string[] =>
+  values.map((v) => (v === null ? '~' : toToken(v)))
 
 const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a)
 const MAX_HARMONY_STEPS = 4096
 
-// The scale per step, from the Key and Mode sequencers (C / Ionian when not wired).
-// Their lengths can differ, so the combined loop runs for lcm(lengths) steps, e.g.
-// "[D3:dorian D3:dorian ... E3:phrygian ...]/8". Empty steps hold the last value.
-function harmonyPattern(key: KeyData | null, mode: ModeData | null, octave: number): string {
-  const keys = key?.steps.length ? heldValues(key.steps, 0) : [0]
-  const modes = mode?.steps.length ? heldValues(mode.steps, 0) : [0]
+// A Key or Mode sequencer as it appeared in the chain, with the step lengths then in effect.
+export interface Stepped<T> {
+  data: T
+  lens: Lens
+}
+
+// One value per 1/16: each step's value repeated for its length.
+const perSixteenth = (values: number[], lens: Lens): number[] =>
+  values.flatMap((v, i) => Array(lensAt(lens, i)).fill(v))
+
+// The scale per 1/16, from the Key and Mode sequencers (C / Ionian when not wired).
+// They loop at their own lengths, so the combined loop is lcm of the two, written
+// compactly with weights: "[D3:dorian@16 E3:dorian@16 ...]/2". Empty steps hold.
+function harmonyPattern(key: Stepped<KeyData> | null, mode: Stepped<ModeData> | null, octave: number): string {
+  const keys = key?.data.steps.length ? perSixteenth(heldValues(key.data.steps, 0), key.lens) : [0]
+  const modes = mode?.data.steps.length ? perSixteenth(heldValues(mode.data.steps, 0), mode.lens) : [0]
   const length = Math.min(MAX_HARMONY_STEPS, (keys.length * modes.length) / gcd(keys.length, modes.length))
-  const tokens = Array.from(
-    { length },
-    (_, i) => `${TONICS[keys[i % keys.length]] ?? 'C'}${octave}:${MODES[modes[i % modes.length]]?.id ?? 'major'}`
-  )
-  if (tokens.every((tk) => tk === tokens[0])) return tokens[0]
-  return timed(tokens.join(' '), length, STEP_RESOLUTION)
+  const at = (i: number): string =>
+    `${TONICS[keys[i % keys.length]] ?? 'C'}${octave}:${MODES[modes[i % modes.length]]?.id ?? 'major'}`
+  // Run-length encode: consecutive equal sixteenths become one weighted token.
+  const runs: [string, number][] = []
+  for (let i = 0; i < length; i++) {
+    const tk = at(i)
+    if (runs.length && runs[runs.length - 1][0] === tk) runs[runs.length - 1][1]++
+    else runs.push([tk, 1])
+  }
+  if (runs.length === 1) return runs[0][0]
+  const body = runs.map(([tk, n]) => (n === 1 ? tk : `${tk}@${n}`)).join(' ')
+  const bars = +(length / STEP_RESOLUTION).toFixed(6)
+  return bars === 1 ? body : `[${body}]/${bars}`
 }
 
 // Notes code has a placeholder where the scale goes: Key and Mode are chain nodes,
 // so the scale is only known once the chain has been followed (see compile).
 const SCALE = '__SCALE__'
 
-export function sequencerCode(seq: SequencerData, sample: SampleData): string | null {
+export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens = null): string | null {
   if (seq.steps.every((v) => v === null)) return null
   const sound = quote(sample.s)
-  const len = seq.steps.length
-  const res = seq.resolution || len
   let code: string
   switch (seq.kind) {
     case 'degree': {
       // UI degrees are 1-based; Strudel's are 0-based.
-      const degrees = timed(stepPattern(seq.steps, (v) => String(v - 1)), len, res)
+      const degrees = stepped(steps(seq.steps, (v) => String(v - 1)), lens)
       code = `n("${degrees}")${SCALE}.s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
       if (sample.n) code += `.n(${sample.n})`
       break
     }
     case 'trigger': {
-      code = `s(${sound}).n(${sample.n}).struct("${timed(stepPattern(seq.steps, () => 'x'), len, res)}")`
+      code = `s(${sound}).n(${sample.n}).struct("${stepped(steps(seq.steps, () => 'x'), lens)}")`
       break
     }
     case 'slice': {
       // Steps set before the piece count was lowered wrap around.
       const count = pieceCount(sample)
-      const picks = timed(stepPattern(seq.steps, (v) => String(v % count)), len, res)
+      const picks = stepped(steps(seq.steps, (v) => String(v % count)), lens)
       // A multi-file sound picks files; a single file is cut into equal slices.
       code = isBank(sample)
         ? `n("${picks}").s(${sound})`
@@ -79,19 +104,20 @@ export function sequencerCode(seq: SequencerData, sample: SampleData): string | 
 }
 
 // Strudel's velocity is 0..1 and multiplies with gain, so accents scale the channel level.
-export function velocityCode(data: VelocityData): string {
-  const levels = timed(
-    data.steps.map((v) => +(v / VELOCITY_LEVELS).toFixed(3)).join(' '),
-    data.steps.length,
-    data.resolution || data.steps.length
-  )
-  return `.velocity("${levels}")`
+export function velocityCode(data: VelocityData, lens: Lens = null): string {
+  return `.velocity("${stepped(data.steps.map((v) => String(+(v / VELOCITY_LEVELS).toFixed(3))), lens)}")`
 }
 
 // Strudel's clip multiplies each note's duration and cuts samples at the end.
-export function lengthCode(data: LengthData): string {
-  const factors = data.steps.map((v) => LENGTH_STEPS[v - 1] ?? 1).join(' ')
-  return `.clip("${timed(factors, data.steps.length, data.resolution || data.steps.length)}")`
+// Each step's length in 1/16 steps.
+export const lengthValues = (data: LengthData): number[] => data.steps.map((v) => LENGTH_STEPS[v - 1] ?? 1)
+
+// Note duration relative to the step it sits on (clip = length / step length): a 1/4
+// note on a 1/16 step is clip 4; on a 1/4 step it's clip 1. Clip also cuts samples off.
+export function lengthCode(data: LengthData, noteLens: Lens, lens: Lens = null): string {
+  const values = lengthValues(data)
+  const factors = values.map((v, i) => String(+(v / lensAt(noteLens, i)).toFixed(4)))
+  return `.clip("${stepped(factors, lens)}")`
 }
 
 // Each setting becomes its Strudel control, e.g. .delay(0.5).delaytime(0.25).
@@ -106,8 +132,10 @@ export interface Compiled {
   code: string
   // Ids of the node that ends each playing chain, in stack order.
   layers: string[]
-  // Every node on a playing chain; the rest are shown as not playing.
+  // Every node on a playing chain.
   active: Set<string>
+  // Step lengths (1/16 units) each stepping node plays at, for its playhead; absent = 1/16.
+  stepLens: Map<string, Lens>
 }
 
 // Without a Sample in the chain, Notes play this synth; other sequencers stay silent.
@@ -135,17 +163,24 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     seq: SequencerData | null
     base: string | null
     sample: SampleData | null
-    key: KeyData | null
-    mode: ModeData | null
+    key: Stepped<KeyData> | null
+    mode: Stepped<ModeData> | null
+    // The Length in effect: sequencers after it step at these lengths.
+    length: Lens
+    // Step lengths of the playing sequencer (notes are clipped relative to them).
+    seqLens: Lens
     mods: string // appended controls: .velocity() .clip() .delay() ...
   }
+
+  // Step lengths each stepping node ends up using, for its playhead.
+  const stepLens = new Map<string, Lens>()
 
   const finish = (ctx: Ctx): string | null => {
     if (ctx.base) return ctx.base + ctx.mods
     if (!ctx.seq) return null
     const sample = ctx.sample ?? (ctx.seq.kind === 'degree' ? DEFAULT_NOTE_SOUND : null)
     if (!sample) return null
-    const code = sequencerCode(ctx.seq, sample)
+    const code = sequencerCode(ctx.seq, sample, ctx.seqLens)
     if (!code) return null
     const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.seq.octave)}")`
     return code.replace(SCALE, scale) + ctx.mods
@@ -158,11 +193,21 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       // The first sound sets how the sequencer plays (files, slices); later ones re-voice it.
       if (!c.sample && !c.base) c.sample = n.data
       else c.mods += `.s(${quote(n.data.s)}).n(${n.data.n})`
-    } else if (n.type === 'key') c.key = n.data
-    else if (n.type === 'mode') c.mode = n.data
-    else if (n.type === 'velocity') c.mods += velocityCode(n.data)
-    else if (n.type === 'length') c.mods += lengthCode(n.data)
-    else if (n.type === 'effect') c.mods += effectCode(n.data)
+    } else if (n.type === 'key') {
+      c.key = { data: n.data, lens: c.length }
+      stepLens.set(n.id, c.length)
+    } else if (n.type === 'mode') {
+      c.mode = { data: n.data, lens: c.length }
+      stepLens.set(n.id, c.length)
+    } else if (n.type === 'velocity') {
+      c.mods += velocityCode(n.data, c.length)
+      stepLens.set(n.id, c.length)
+    } else if (n.type === 'length') {
+      // Notes playing through here sound for this length; what steps after steps at it.
+      if (c.seq || c.base) c.mods += lengthCode(n.data, c.seqLens, c.length)
+      stepLens.set(n.id, c.length)
+      c.length = lengthValues(n.data)
+    } else if (n.type === 'effect') c.mods += effectCode(n.data)
     return c
   }
 
@@ -223,10 +268,16 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     }
   }
 
-  const empty = { sample: null, key: null, mode: null, mods: '' }
+  const empty = { sample: null, key: null, mode: null, length: null, seqLens: null, mods: '' }
   for (const node of nodes)
     if (node.type === 'sequencer' && !node.data.muted)
-      follow(node, applySide({ ...empty, seq: node.data, base: null }, node.id, null), new Set([node.id]))
+    {
+      // What's wired into a sequencer applies before it starts: a Length there sets its
+      // step lengths (notes then fill their steps), not a note duration.
+      const start = applySide({ ...empty, seq: null, base: null }, node.id, null)
+      stepLens.set(node.id, start.length)
+      follow(node, { ...start, seq: node.data, seqLens: start.length }, new Set([node.id]))
+    }
 
   // Mixes: once a Mix's inputs are known, it continues as one chain. A Mix that feeds
   // another Mix is done first, so keep going until nothing new arrives.
@@ -247,5 +298,5 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     }
 
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
-  return { code, layers, active }
+  return { code, layers, active, stepLens }
 }

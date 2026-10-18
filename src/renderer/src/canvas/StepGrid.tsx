@@ -9,7 +9,7 @@ interface Props {
   labels?: string[]
   onChange: (steps: Step[]) => void
   // Pattern timing, for the playhead bar. Omit (or muted) for no playhead.
-  timing?: { resolution: number; muted?: boolean }
+  timing?: { resolution: number; muted?: boolean; lens?: number[] | null }
   // Level bars: a cell is lit when its row is at or below the step's value, and a
   // step always has a value (no rests).
   bars?: boolean
@@ -35,6 +35,8 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
   const length = steps.length
   const resolution = timing?.resolution ?? 0
   const muted = !timing || timing.muted
+  const lens = timing?.lens ?? null
+  const lensKey = lens?.join(',') ?? ''
   useEffect(() => {
     const bar = barRef.current
     if (!bar) return
@@ -51,8 +53,10 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
       bar.style.display = 'block'
       bar.style.width = `${cell.offsetWidth}px`
       bar.style.transform = `translateX(${cell.offsetLeft}px)`
-    })
-  }, [length, resolution, muted])
+    }, lens)
+    // lensKey stands in for lens (a new array each render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [length, resolution, muted, lensKey])
 
   const cellAt = (x: number, y: number): { i: number; v: number } | null => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null

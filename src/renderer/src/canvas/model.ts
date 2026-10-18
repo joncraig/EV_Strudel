@@ -219,6 +219,19 @@ export const MAX_STEPS = 128
 export const stepAt = (cycle: number, length: number, resolution: number): number =>
   length > 0 ? ((Math.floor(cycle * resolution) % length) + length) % length : -1
 
+// The playing step when steps have varying lengths (in 1/16 steps, cycling).
+export function stepAtLens(cycle: number, length: number, lens: number[]): number {
+  const w = Array.from({ length }, (_, i) => lens[i % lens.length])
+  const total = w.reduce((a, b) => a + b, 0)
+  if (!total) return -1
+  let pos = Math.floor(cycle * STEP_RESOLUTION) % total
+  for (let i = 0; i < length; i++) {
+    if (pos < w[i]) return i
+    pos -= w[i]
+  }
+  return -1
+}
+
 // Degree rows shown in the grid, top to bottom.
 export const DEGREE_ROWS = [8, 7, 6, 5, 4, 3, 2, 1]
 

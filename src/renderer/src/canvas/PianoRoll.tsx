@@ -1,6 +1,7 @@
 import { useEffect, useState } from 'react'
 import type { Edge } from '@xyflow/react'
 import StepGrid from './StepGrid'
+import { useStepLens } from './stepLens'
 import { packSounds } from './packSounds'
 import {
   CanvasNode,
@@ -88,6 +89,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   }
 
   const muted = node.type === 'sequencer' && node.data.muted
+  const lens = useStepLens(node.id)
   return (
     <div className="piano-roll">
       {rows.length ? (
@@ -97,7 +99,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
           labels={labels}
           bars={bars}
           roll
-          timing={{ resolution: node.data.resolution, muted }}
+          timing={{ resolution: node.data.resolution, muted, lens }}
           onChange={(steps) =>
             onSteps(
               node.type === 'velocity'

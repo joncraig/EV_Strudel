@@ -17,12 +17,30 @@ import {
   useReactFlow
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { EffectNode, GroupNode, KeyNode, LengthNode, MixNode, ModeNode, SampleNode, SequencerNode, VelocityNode } from './nodes'
-import { duplicateNodes, GROUP_TOGGLE_EVENT, groupNodes, removeNode, setCollapsed, ungroup } from './groups'
+import {
+  EffectNode,
+  GroupNode,
+  KeyNode,
+  LengthNode,
+  MixNode,
+  ModeNode,
+  SampleNode,
+  SequencerNode,
+  VelocityNode
+} from './nodes'
+import {
+  duplicateNodes,
+  GROUP_TOGGLE_EVENT,
+  groupNodes,
+  removeNode,
+  setCollapsed,
+  ungroup
+} from './groups'
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import Panel from './Panel'
+import { StepLensContext } from './stepLens'
 import { TOGGLE_CODE_EVENT } from '../events'
 import {
   CanvasNode,
@@ -51,13 +69,32 @@ interface Props {
 // Hold this long without moving to open a node's menu.
 const LONG_PRESS_MS = 500
 
-const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mix: MixNode, key: KeyNode, mode: ModeNode, velocity: VelocityNode, length: LengthNode, effect: EffectNode, group: GroupNode }
+const nodeTypes = {
+  sample: SampleNode,
+  sequencer: SequencerNode,
+  mix: MixNode,
+  key: KeyNode,
+  mode: ModeNode,
+  velocity: VelocityNode,
+  length: LengthNode,
+  effect: EffectNode,
+  group: GroupNode
+}
 
 // Handles only connect to the same-named handle: sound→sound, mode→mode.
-const isValidConnection: IsValidConnection = (c) => c.sourceHandle === c.targetHandle && c.source !== c.target
+const isValidConnection: IsValidConnection = (c) =>
+  c.sourceHandle === c.targetHandle && c.source !== c.target
 
 // What the add menu can create: a sequencer kind, a mode node, or a synth sound.
-type NewKind = SequencerKind | 'mix' | 'key' | 'mode' | 'velocity' | 'length' | `fx:${EffectKind}` | `synth:${string}`
+type NewKind =
+  | SequencerKind
+  | 'mix'
+  | 'key'
+  | 'mode'
+  | 'velocity'
+  | 'length'
+  | `fx:${EffectKind}`
+  | `synth:${string}`
 
 // A wire dragged out of a handle and dropped on empty canvas.
 interface Pending {
@@ -97,12 +134,18 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<CanvasNode>[]) =>
-      commit({ nodes: applyNodeChanges(changes, stateRef.current.nodes), edges: stateRef.current.edges }),
+      commit({
+        nodes: applyNodeChanges(changes, stateRef.current.nodes),
+        edges: stateRef.current.edges
+      }),
     [commit]
   )
   const onEdgesChange = useCallback(
     (changes: EdgeChange[]) =>
-      commit({ nodes: stateRef.current.nodes, edges: applyEdgeChanges(changes, stateRef.current.edges) }),
+      commit({
+        nodes: stateRef.current.nodes,
+        edges: applyEdgeChanges(changes, stateRef.current.edges)
+      }),
     [commit]
   )
   // Each input takes one connection: a new one replaces the old.
@@ -131,12 +174,28 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     if (kind === 'key') return { id: nodeId('key'), type: 'key', position, data: newKey() }
     if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
     if (kind.startsWith('fx:'))
-      return { id: nodeId('fx'), type: 'effect', position, data: newEffect(kind.slice(3) as EffectKind) }
+      return {
+        id: nodeId('fx'),
+        type: 'effect',
+        position,
+        data: newEffect(kind.slice(3) as EffectKind)
+      }
     if (kind === 'length') return { id: nodeId('len'), type: 'length', position, data: newLength() }
-    if (kind === 'velocity') return { id: nodeId('vel'), type: 'velocity', position, data: newVelocity() }
+    if (kind === 'velocity')
+      return { id: nodeId('vel'), type: 'velocity', position, data: newVelocity() }
     if (kind.startsWith('synth:'))
-      return { id: nodeId('sample'), type: 'sample', position, data: { s: kind.slice(6), n: 0, slices: 8 } }
-    return { id: nodeId('seq'), type: 'sequencer', position, data: newSequencer(kind as SequencerKind) }
+      return {
+        id: nodeId('sample'),
+        type: 'sample',
+        position,
+        data: { s: kind.slice(6), n: 0, slices: 8 }
+      }
+    return {
+      id: nodeId('seq'),
+      type: 'sequencer',
+      position,
+      data: newSequencer(kind as SequencerKind)
+    }
   }
 
   // What can be added, given the wire (if any) being dropped.
@@ -151,7 +210,10 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     const mode: [NewKind, string] = ['mode', 'Mode sequencer']
     const velocity: [NewKind, string] = ['velocity', 'Velocity sequencer']
     const length: [NewKind, string] = ['length', 'Length sequencer']
-    const effects: [NewKind, string][] = (Object.keys(EFFECTS) as EffectKind[]).map((k) => [`fx:${k}`, EFFECTS[k].label])
+    const effects: [NewKind, string][] = (Object.keys(EFFECTS) as EffectKind[]).map((k) => [
+      `fx:${k}`,
+      EFFECTS[k].label
+    ])
     const synths: [NewKind, string][] = SYNTHS.map((s) => [`synth:${s}`, s])
     const { pending } = m
 
@@ -242,7 +304,9 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         }
       ]
     // Tapping one of several selected nodes acts on the whole selection.
-    const selected = nodes.filter((n) => n.selected && !n.parentId && n.type !== 'group').map((n) => n.id)
+    const selected = nodes
+      .filter((n) => n.selected && !n.parentId && n.type !== 'group')
+      .map((n) => n.id)
     const targets = node.selected && selected.length > 1 ? selected : [id]
     const items: MenuItem[] = []
     if (!node.parentId)
@@ -280,7 +344,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     const listener = (e: Event): void => {
       const id = (e as CustomEvent<string>).detail
       const group = stateRef.current.nodes.find((n) => n.id === id)
-      if (group?.type === 'group') onChangeRef.current(setCollapsed(stateRef.current, id, !group.data.collapsed))
+      if (group?.type === 'group')
+        onChangeRef.current(setCollapsed(stateRef.current, id, !group.data.collapsed))
     }
     window.addEventListener(GROUP_TOGGLE_EVENT, listener)
     return () => window.removeEventListener(GROUP_TOGGLE_EVENT, listener)
@@ -292,7 +357,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   // Empty canvas: tap clears the selection, long-press (or right-click) opens the add
   // menu, drag fences a selection (React Flow), two fingers / trackpad scroll pan.
   const onPaneClick = (): void => {
-    if (nodes.some((n) => n.selected)) onChange({ nodes: nodes.map((n) => ({ ...n, selected: false })), edges })
+    if (nodes.some((n) => n.selected))
+      onChange({ nodes: nodes.map((n) => ({ ...n, selected: false })), edges })
   }
   const onPaneContextMenu = (e: React.MouseEvent | MouseEvent): void => {
     e.preventDefault()
@@ -321,27 +387,27 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     longPress(e, (x, y) => setMenu({ type: 'node', x, y, nodeId: id }))
   }
 
-// Call onHold if the press stays put for LONG_PRESS_MS; any real movement (a drag,
-// a fence, a pan) cancels it.
-function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void): void {
-  const { pointerId, clientX: x, clientY: y } = e
-  const timer = setTimeout(() => {
-    cleanup()
-    onHold(x, y)
-  }, LONG_PRESS_MS)
-  const move = (ev: PointerEvent): void => {
-    if (ev.pointerId === pointerId && Math.hypot(ev.clientX - x, ev.clientY - y) > 8) cleanup()
+  // Call onHold if the press stays put for LONG_PRESS_MS; any real movement (a drag,
+  // a fence, a pan) cancels it.
+  function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void): void {
+    const { pointerId, clientX: x, clientY: y } = e
+    const timer = setTimeout(() => {
+      cleanup()
+      onHold(x, y)
+    }, LONG_PRESS_MS)
+    const move = (ev: PointerEvent): void => {
+      if (ev.pointerId === pointerId && Math.hypot(ev.clientX - x, ev.clientY - y) > 8) cleanup()
+    }
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', cleanup)
+      window.removeEventListener('pointercancel', cleanup)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', cleanup)
+    window.addEventListener('pointercancel', cleanup)
   }
-  const cleanup = (): void => {
-    clearTimeout(timer)
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', cleanup)
-    window.removeEventListener('pointercancel', cleanup)
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', cleanup)
-  window.addEventListener('pointercancel', cleanup)
-}
 
   const onNodeClick = (e: React.MouseEvent, node: CanvasNode): void => {
     // A plain tap just selects (React Flow does that); Ctrl+click deletes.
@@ -393,10 +459,16 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
   }
 
   // A pattern wire under the pointer, for a free chain node (no pattern wires yet).
-  const wireUnder = (e: MouseEvent | TouchEvent, node: CanvasNode): { edgeId: string; el: Element } | null => {
+  const wireUnder = (
+    e: MouseEvent | TouchEvent,
+    node: CanvasNode
+  ): { edgeId: string; el: Element } | null => {
     if (!CHAIN_TYPES.has(node.type ?? '')) return null
     const es = stateRef.current.edges
-    if (es.some((x) => (x.source === node.id || x.target === node.id) && x.sourceHandle === 'pattern')) return null
+    if (
+      es.some((x) => (x.source === node.id || x.target === node.id) && x.sourceHandle === 'pattern')
+    )
+      return null
     const p = 'changedTouches' in e ? e.changedTouches[0] : e
     for (const el of document.elementsFromPoint(p.clientX, p.clientY)) {
       const g = el.closest('.react-flow__edge')
@@ -431,7 +503,14 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
       sourceHandle: 'pattern',
       targetHandle: 'pattern'
     })
-    commit({ nodes: ns, edges: [...es.filter((x) => x !== wire), link(wire.source, node.id), link(node.id, wire.target)] })
+    commit({
+      nodes: ns,
+      edges: [
+        ...es.filter((x) => x !== wire),
+        link(wire.source, node.id),
+        link(node.id, wire.target)
+      ]
+    })
   }
 
   // ---- Sounds dragged in from the Samples tab (window events, see soundDrag.ts) ----
@@ -440,14 +519,22 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
     dropRef.current = ({ sound, point }) => {
       const r = rootRef.current?.getBoundingClientRect()
       if (!r) return
-      if (point && (point.x < r.left || point.x > r.right || point.y < r.top || point.y > r.bottom)) return
+      if (point && (point.x < r.left || point.x > r.right || point.y < r.top || point.y > r.bottom))
+        return
       onSoundDropped(sound)
       const at = point ?? { x: r.left + r.width / 2, y: r.top + r.height / 2 }
       add({
         id: nodeId('sample'),
         type: 'sample',
         position: screenToFlowPosition(at),
-        data: { s: sound.s, pack: sound.pack, label: sound.label, n: sound.n ?? 0, slices: 8, files: sound.files }
+        data: {
+          s: sound.s,
+          pack: sound.pack,
+          label: sound.label,
+          n: sound.n ?? 0,
+          slices: 8,
+          files: sound.files
+        }
       })
     }
   })
@@ -460,60 +547,64 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
 
   return (
-    <div className="canvas" ref={rootRef} onPointerDownCapture={onPointerDownCapture}>
-      <div className="canvas-tools">
-        <span className="spacer" />
-        <button className={showCode ? 'on' : ''} onClick={() => setShowCode(!showCode)}>
-          {'</>'} Code
-        </button>
+    <StepLensContext.Provider value={compiled.stepLens}>
+      <div className="canvas" ref={rootRef} onPointerDownCapture={onPointerDownCapture}>
+        <div className="canvas-tools">
+          <span className="spacer" />
+          <button className={showCode ? 'on' : ''} onClick={() => setShowCode(!showCode)}>
+            {'</>'} Code
+          </button>
+        </div>
+        <ReactFlow
+          nodes={nodes}
+          edges={edges}
+          nodeTypes={nodeTypes}
+          onNodesChange={onNodesChange}
+          onEdgesChange={onEdgesChange}
+          onConnect={onConnect}
+          onNodeDrag={onNodeDrag}
+          onNodeDragStop={onNodeDragStop}
+          onConnectStart={onConnectStart}
+          onConnectEnd={onConnectEnd}
+          onPaneClick={onPaneClick}
+          onPaneContextMenu={onPaneContextMenu}
+          // Drag on empty canvas draws a selection box; pan with two fingers, trackpad
+          // scroll or the middle/right mouse button; pinch or Ctrl+scroll zooms.
+          selectionOnDrag
+          selectionMode={SelectionMode.Partial}
+          panOnDrag={[1, 2]}
+          panOnScroll
+          onNodeClick={onNodeClick}
+          onNodeContextMenu={onNodeContextMenu}
+          isValidConnection={isValidConnection}
+          // How near a dropped wire must land to snap to an input, in screen px (default 20).
+          connectionRadius={44}
+          colorMode="dark"
+          fitView
+          minZoom={0.2}
+          deleteKeyCode={['Delete', 'Backspace']}
+        >
+          <Background gap={24} />
+          <Controls />
+        </ReactFlow>
+        {nodes.length === 0 && (
+          <div className="canvas-empty">
+            Drag a sound in from Samples, or tap the canvas to add a node.
+          </div>
+        )}
+        {menu && (
+          <ContextMenu
+            x={menu.x}
+            y={menu.y}
+            sections={menu.type === 'add' ? addSections(menu) : nodeSections(menu.nodeId)}
+            searchable={menu.type === 'add'}
+            onClose={closeMenu}
+          />
+        )}
+        {showCode && <pre className="code-view">{compiled.code}</pre>}
+        <Panel nodes={nodes} edges={edges} />
       </div>
-      <ReactFlow
-        nodes={nodes}
-        edges={edges}
-        nodeTypes={nodeTypes}
-        onNodesChange={onNodesChange}
-        onEdgesChange={onEdgesChange}
-        onConnect={onConnect}
-        onNodeDrag={onNodeDrag}
-        onNodeDragStop={onNodeDragStop}
-        onConnectStart={onConnectStart}
-        onConnectEnd={onConnectEnd}
-        onPaneClick={onPaneClick}
-        onPaneContextMenu={onPaneContextMenu}
-        // Drag on empty canvas draws a selection box; pan with two fingers, trackpad
-        // scroll or the middle/right mouse button; pinch or Ctrl+scroll zooms.
-        selectionOnDrag
-        selectionMode={SelectionMode.Partial}
-        panOnDrag={[1, 2]}
-        panOnScroll
-        onNodeClick={onNodeClick}
-        onNodeContextMenu={onNodeContextMenu}
-        isValidConnection={isValidConnection}
-        // How near a dropped wire must land to snap to an input, in screen px (default 20).
-        connectionRadius={44}
-        colorMode="dark"
-        fitView
-        minZoom={0.2}
-        deleteKeyCode={['Delete', 'Backspace']}
-      >
-        <Background gap={24} />
-        <Controls />
-      </ReactFlow>
-      {nodes.length === 0 && (
-        <div className="canvas-empty">Drag a sound in from Samples, or tap the canvas to add a node.</div>
-      )}
-      {menu && (
-        <ContextMenu
-          x={menu.x}
-          y={menu.y}
-          sections={menu.type === 'add' ? addSections(menu) : nodeSections(menu.nodeId)}
-          searchable={menu.type === 'add'}
-          onClose={closeMenu}
-        />
-      )}
-      {showCode && <pre className="code-view">{compiled.code}</pre>}
-      <Panel nodes={nodes} edges={edges} />
-    </div>
+    </StepLensContext.Provider>
   )
 }
 

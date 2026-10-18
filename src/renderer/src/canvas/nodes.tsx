@@ -3,6 +3,7 @@ import StepGrid from './StepGrid'
 import { Fader, ParamFader, StepWidthGrip } from './controls'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { usePlayhead } from './playhead'
+import { useStepLens } from './stepLens'
 import {
   DEGREE_ROWS,
   MAX_STEPS,
@@ -118,7 +119,7 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
   }
 
   const slices = sample ? pieceCount(sample) : 8
-  const timing = { resolution: data.resolution, muted: data.muted }
+  const timing = { resolution: data.resolution, muted: data.muted, lens: useStepLens(id) }
   const grid = (() => {
     switch (data.kind) {
       case 'degree':
@@ -193,6 +194,7 @@ function LevelNode({
   fill: number // value for new or cleared steps
 }): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
+  const lens = useStepLens(id)
   const setLength = (len: number): void => {
     const n = Math.min(MAX_STEPS, Math.max(1, len))
     updateNodeData(id, { steps: Array.from({ length: n }, (_, i) => steps[i] ?? fill) })
@@ -208,7 +210,7 @@ function LevelNode({
           rows={LEVEL_ROWS}
           labels={LEVEL_ROWS.map((v) => (kind === 'length' ? lengthLabel(v) : ''))}
           bars
-          timing={{ resolution: STEP_RESOLUTION }}
+          timing={{ resolution: STEP_RESOLUTION, lens }}
           onChange={(next) => updateNodeData(id, { steps: next.map((v) => v ?? fill) })}
         />
       </div>
@@ -270,6 +272,7 @@ function HarmonyNode({
   kind: 'key' | 'mode'
 }): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
+  const lens = useStepLens(id)
   const update = (patch: Record<string, unknown>): void => updateNodeData(id, patch)
   const setLength = (len: number): void => {
     const n = Math.min(MAX_STEPS, Math.max(1, len))
@@ -299,7 +302,7 @@ function HarmonyNode({
             steps={data.steps}
             rows={rows}
             labels={labels}
-            timing={{ resolution: data.resolution }}
+            timing={{ resolution: data.resolution, lens }}
             onChange={(steps) => update({ steps })}
           />
         ) : (
