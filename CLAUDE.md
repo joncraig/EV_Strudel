@@ -2,23 +2,25 @@
 
 Electron UI frontend for Strudel (live-coding music). A nice editor built on the
 `@strudel/*` npm packages (not the stock REPL web component).
-License: AGPL-3.0-or-later (required — Strudel is AGPL).
+License: AGPL-3.0-or-later (required because Strudel is AGPL).
 
 ## Current Session Status
-2026-10-18: Scaffolded electron-vite + React + TS. Minimal StrudelMirror editor in
-`src/renderer/src/App.tsx` (Play/Stop, synths + dirt-samples). Typecheck + build pass.
-Audio NOT yet verified in the running app. Pushed to github.com/joncraig/EV_Strudel.
+2026-10-18: Patch library v1 built and pushed. Typecheck + build pass.
+NOT yet verified in the running app (audio, import, save/load). Jon to test with `npm run dev`.
 
 ## Active TODO
-- Verify audio in `npm run dev` (Jon)
-- Feature vision (not yet designed — discuss before building):
-  - Patch library: easy finding, downloading, recalling patches
+- Verify in `npm run dev`: audio, save/open/delete, import (strudel.cc long URL, gist, GitHub file, raw URL, pasted code)
+- Short strudel.cc links (`?id`) unsupported (stored in their Supabase). Could add later.
+- Feature vision (discuss before building):
   - Novel interfaces for navigating chords and modes
   - Looping sequencers, polyrhythms
   - Happy accidents (controlled randomness / mutation)
   - Compounding modulators (modulators modulating modulators)
 
 ## Notes
+- Library folder: `Documents/EV_Strudel Library/*.strudel`. Patch metadata is in leading
+  `// @title`, `// @source`, `// @tags` comment lines (`src/shared/patch.ts`), so files stay runnable.
+- Library IPC lives in `src/main/library.ts`. Imports are fetched in main (no CORS). Delete goes to the Recycle Bin.
 - CSP in `src/renderer/index.html` allows `unsafe-eval` (Strudel evaluates code) and
   `https:` connect/media (remote sample maps).
 - Strudel packages have no TS types; stubbed in `src/renderer/src/strudel.d.ts`.

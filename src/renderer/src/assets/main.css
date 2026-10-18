@@ -1,9 +1,37 @@
 @import './base.css';
 
 html, body, #root { height: 100%; margin: 0; }
-body { background: #111; color: #ddd; font-family: system-ui, sans-serif; }
+body { background: #111; color: #ddd; font-family: system-ui, sans-serif; font-size: 13px; }
+button, input, textarea { font: inherit; color: inherit; }
+button { background: #222; border: 1px solid #444; padding: 4px 12px; cursor: pointer; border-radius: 3px; }
+button:hover:not(:disabled) { background: #2c2c2c; }
+button:disabled { opacity: 0.5; cursor: default; }
+input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px; border-radius: 3px; }
+
 .app { display: flex; flex-direction: column; height: 100%; }
-.toolbar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #333; }
-.toolbar button { background: #222; color: #ddd; border: 1px solid #444; padding: 4px 12px; cursor: pointer; }
+.toolbar { display: flex; gap: 8px; padding: 8px; border-bottom: 1px solid #333; align-items: center; }
+.toolbar .sep { width: 12px; }
+.toolbar .title { width: 220px; font-weight: 600; }
+.toolbar .tags { width: 200px; }
+.toolbar .source { color: #8ab4f8; }
+
+.main { flex: 1; display: flex; min-height: 0; }
 .editor { flex: 1; overflow: auto; }
 .editor .cm-editor { height: 100%; }
+
+.library { width: 260px; display: flex; flex-direction: column; border-right: 1px solid #333; }
+.library .search { margin: 8px; }
+.patch-list { flex: 1; overflow: auto; list-style: none; margin: 0; padding: 0; }
+.patch-list li { position: relative; padding: 6px 28px 6px 10px; cursor: pointer; border-left: 2px solid transparent; }
+.patch-list li:hover { background: #1a1a1a; }
+.patch-list li.active { background: #1f2430; border-left-color: #8ab4f8; }
+.patch-list li.empty { color: #666; cursor: default; }
+.patch-title { white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.patch-tags { color: #888; font-size: 11px; }
+.patch-list .delete { position: absolute; right: 4px; top: 4px; padding: 0 6px; border: none; background: none; color: #666; visibility: hidden; }
+.patch-list li:hover .delete { visibility: visible; }
+.patch-list .delete:hover { color: #e66; }
+
+.import { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid #333; }
+.import textarea { resize: vertical; }
+.import .error { color: #e88; font-size: 12px; }
