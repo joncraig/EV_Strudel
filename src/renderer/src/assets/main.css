@@ -19,7 +19,7 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .editor { flex: 1; overflow: auto; }
 .editor .cm-editor { height: 100%; }
 
-.library { width: 260px; display: flex; flex-direction: column; border-right: 1px solid #333; }
+.library { width: 260px; min-height: 0; display: flex; flex-direction: column; border-right: 1px solid #333; }
 .library .search { margin: 8px; }
 .patch-list { flex: 1; overflow: auto; list-style: none; margin: 0; padding: 0; }
 .patch-list li { position: relative; padding: 6px 28px 6px 10px; cursor: pointer; border-left: 2px solid transparent; }
@@ -35,3 +35,26 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .import { display: flex; flex-direction: column; gap: 6px; padding: 8px; border-top: 1px solid #333; }
 .import textarea { resize: vertical; }
 .import .error { color: #e88; font-size: 12px; }
+
+.sidebar { width: 280px; display: flex; flex-direction: column; border-right: 1px solid #333; min-height: 0; }
+.sidebar .library { width: auto; border-right: none; flex: 1; min-height: 0; }
+.tabs { display: flex; border-bottom: 1px solid #333; }
+.tabs button { flex: 1; border: none; border-radius: 0; background: none; padding: 8px; color: #888; }
+.tabs button.on { color: #ddd; box-shadow: inset 0 -2px #8ab4f8; }
+
+.browse { flex: 1; display: flex; flex-direction: column; min-height: 0; }
+.browse .search { margin: 8px; }
+.browse .error { color: #e88; font-size: 12px; padding: 0 8px 8px; }
+.browse li.collection-wrap { padding: 0; cursor: default; border-left: none; }
+.browse li.collection-wrap:hover { background: none; }
+.collection { padding: 6px 10px; cursor: pointer; }
+.collection:hover { background: #1a1a1a; }
+.collection.open { background: #181c24; }
+.collection .count { color: #888; font-weight: normal; }
+.browse .items { list-style: none; margin: 0; padding: 0; }
+.browse .items li { position: relative; padding: 4px 28px 4px 22px; cursor: pointer; font-size: 12px; border-left: 2px solid transparent; }
+.browse .items li:hover { background: #1a1a1a; }
+.browse .items li.active { background: #1f2430; border-left-color: #8ab4f8; }
+.browse .items li.empty { color: #666; cursor: default; }
+.browse .keep { position: absolute; right: 4px; top: 2px; padding: 0 6px; border: none; background: none; color: #8ab4f8; }
+.browse .keep:disabled { color: #6c6; opacity: 1; }

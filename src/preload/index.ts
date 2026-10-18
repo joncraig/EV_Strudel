@@ -1,6 +1,7 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PatchMeta, PatchSummary } from '../shared/patch'
+import type { CatalogItem, Collection } from '../shared/catalog'
 
 // Custom APIs for renderer
 const api = {
@@ -13,6 +14,12 @@ const api = {
     remove: (file: string): Promise<void> => ipcRenderer.invoke('library:delete', file),
     import: (input: string): Promise<string[]> => ipcRenderer.invoke('library:import', input),
     openFolder: (): Promise<string> => ipcRenderer.invoke('library:open-folder')
+  },
+  catalog: {
+    list: (): Promise<Collection[]> => ipcRenderer.invoke('catalog:list'),
+    browse: (id: string): Promise<CatalogItem[]> => ipcRenderer.invoke('catalog:browse', id),
+    preview: (url: string): Promise<{ meta: PatchMeta; code: string }> =>
+      ipcRenderer.invoke('catalog:preview', url)
   }
 }
 
