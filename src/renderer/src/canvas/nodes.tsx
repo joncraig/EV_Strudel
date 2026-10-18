@@ -132,9 +132,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
               Fold
             </button>
           )}
-          <button title="Clear" onClick={() => update({ steps: data.steps.map(() => null) })}>
-            ⌫
-          </button>
         </div>
         {!sample && <div className="hint">Connect a sample to the left input.</div>}
         {/* Grid, then the gain fader; the right edge drags the step count. */}
