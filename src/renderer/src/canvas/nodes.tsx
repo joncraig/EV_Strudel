@@ -2,7 +2,7 @@ import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@
 import StepGrid from './StepGrid'
 import { Fader, ParamFader, StepWidthGrip } from './controls'
 import { GROUP_TOGGLE_EVENT } from './groups'
-import { useModeIndex, usePlayhead } from './playhead'
+import { usePlayhead } from './playhead'
 import {
   DEGREE_ROWS,
   MAX_STEPS,
@@ -10,6 +10,7 @@ import {
   EFFECTS,
   EffectNode as EffectNodeT,
   MODES,
+  KeyNode as KeyNodeT,
   ModeNode as ModeNodeT,
   SampleData,
   SampleNode as SampleNodeT,
@@ -112,7 +113,12 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
     <div className={`node sequencer-node ${data.muted ? 'muted' : ''}`}>
       <Handle type="target" position={Position.Left} id="sound" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
-      {data.kind === 'degree' && <Handle type="target" position={Position.Top} id="mode" />}
+      {data.kind === 'degree' && (
+        <>
+          <Handle type="target" position={Position.Top} id="key" style={{ left: '35%' }} />
+          <Handle type="target" position={Position.Top} id="mode" style={{ left: '65%' }} />
+        </>
+      )}
       <Header
         title={KIND_LABEL[data.kind]}
         right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
@@ -209,54 +215,68 @@ export function EffectNode({ id, data }: NodeProps<EffectNodeT>): React.JSX.Elem
   )
 }
 
-// ---- Mode sequence ----
+// ---- Key and Mode sequencers ----
 
-export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element {
+// Rows top to bottom: highest index first, so the grid reads like a piano roll.
+const KEY_ROWS = TONICS.map((_, i) => TONICS.length - 1 - i)
+const MODE_ROWS = MODES.map((_, i) => MODES.length - 1 - i)
+
+function HarmonyNode({
+  id,
+  data,
+  kind
+}: {
+  id: string
+  data: KeyNodeT['data'] | ModeNodeT['data']
+  kind: 'key' | 'mode'
+}): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
-  const update = (patch: Partial<ModeNodeT['data']>): void => updateNodeData(id, patch)
-  const setStep = (i: number, patch: Partial<ModeNodeT['data']['steps'][number]>): void =>
-    update({ steps: data.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
-  const active = useModeIndex(data.steps.length, data.cyclesPerStep)
-
+  const update = (patch: Record<string, unknown>): void => updateNodeData(id, patch)
+  const setLength = (len: number): void => {
+    const n = Math.min(MAX_STEPS, Math.max(1, len))
+    update({ steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? null) })
+  }
+  const allRows = kind === 'key' ? KEY_ROWS : MODE_ROWS
+  const used = new Set(data.steps.filter((v) => v !== null))
+  const rows = data.folded ? allRows.filter((v) => used.has(v)) : allRows
+  const labels = rows.map((v) => (kind === 'key' ? TONICS[v] : MODES[v].label.replace(/ (.*)/, '')))
   return (
-    <div className="node mode-node">
-      <Header title="Mode sequence" />
-      <div className="node-body nodrag">
-        {data.steps.map((step, i) => (
-          <div className={`mode-step ${i === active ? 'now' : ''}`} key={i}>
-            <span className="row-label">{i + 1}</span>
-            <select value={step.tonic} onChange={(e) => setStep(i, { tonic: e.target.value })}>
-              {TONICS.map((t) => (
-                <option key={t}>{t}</option>
-              ))}
-            </select>
-            <select value={step.mode} onChange={(e) => setStep(i, { mode: e.target.value })}>
-              {MODES.map((m) => (
-                <option key={m.id} value={m.id}>
-                  {m.label}
-                </option>
-              ))}
-            </select>
-            {data.steps.length > 1 && (
-              <button onClick={() => update({ steps: data.steps.filter((_, j) => j !== i) })}>×</button>
-            )}
-          </div>
-        ))}
-        <div className="seq-controls">
-          <button onClick={() => update({ steps: [...data.steps, { ...data.steps[data.steps.length - 1] }] })}>
-            + mode
+    <div className={`node harmony-node ${kind}-node`}>
+      <Handle type="source" position={Position.Right} id={kind} style={{ top: 40 }} />
+      <Header
+        title={kind === 'key' ? 'Key' : 'Mode'}
+        right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
+      />
+      <div className="node-body">
+        <div className="seq-controls nodrag">
+          <button className={`fold ${data.folded ? 'on' : ''}`} onClick={() => update({ folded: !data.folded })}>
+            Fold
           </button>
-          <span>cycles each</span>
-          <button onClick={() => update({ cyclesPerStep: Math.max(1, data.cyclesPerStep - 1) })}>−</button>
-          <span className="value">{data.cyclesPerStep}</span>
-          <button onClick={() => update({ cyclesPerStep: Math.min(16, data.cyclesPerStep + 1) })}>+</button>
+          <span className="hint-inline">empty steps hold</span>
         </div>
+        {rows.length ? (
+          <StepGrid
+            steps={data.steps}
+            rows={rows}
+            labels={labels}
+            timing={{ resolution: data.resolution }}
+            onChange={(steps) => update({ steps })}
+          />
+        ) : (
+          <div className="hint">Nothing placed yet. Unfold to pick.</div>
+        )}
       </div>
-      <Handle type="source" position={Position.Bottom} id="mode" />
     </div>
   )
 }
 
+export function KeyNode({ id, data }: NodeProps<KeyNodeT>): React.JSX.Element {
+  return <HarmonyNode id={id} data={data} kind="key" />
+}
+
+export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element {
+  return <HarmonyNode id={id} data={data} kind="mode" />
+}
 
 // ---- Group ----
 

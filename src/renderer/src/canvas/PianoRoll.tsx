@@ -7,7 +7,12 @@ import {
   DEGREE_ROWS,
   degreeName,
   isBank,
+  KeyData,
+  KeyNode,
   ModeData,
+  ModeNode,
+  MODES,
+  TONICS,
   pieceCount,
   SampleData,
   SequencerNode,
@@ -21,7 +26,7 @@ import {
 // It edits the same steps as the node.
 
 interface Props {
-  node: SequencerNode | VelocityNode
+  node: SequencerNode | VelocityNode | KeyNode | ModeNode
   nodes: CanvasNode[]
   edges: Edge[]
   onSteps: (steps: Step[]) => void
@@ -36,6 +41,7 @@ const input = (nodes: CanvasNode[], edges: Edge[], id: string, type: CanvasNode[
 function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   const sample =
     node.type === 'sequencer' ? (input(nodes, edges, node.id, 'sample')?.data as SampleData | undefined) : undefined
+  const key = node.type === 'sequencer' ? (input(nodes, edges, node.id, 'key')?.data as KeyData | undefined) : undefined
   const mode = node.type === 'sequencer' ? (input(nodes, edges, node.id, 'mode')?.data as ModeData | undefined) : undefined
 
   // File names for a bank, loaded from the pack's sound list.
@@ -54,15 +60,22 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   let rows: number[]
   let labels: string[]
   let bars = false
-  if (node.type === 'velocity') {
+  if (node.type === 'key' || node.type === 'mode') {
+    const names = node.type === 'key' ? [...TONICS] : MODES.map((m) => m.label)
+    const all = names.map((_, i) => names.length - 1 - i)
+    const used = new Set(node.data.steps.filter((v) => v !== null))
+    rows = node.data.folded ? all.filter((v) => used.has(v)) : all
+    labels = rows.map((v) => names[v])
+  } else if (node.type === 'velocity') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
     labels = rows.map((v) => `${Math.round((v / VELOCITY_LEVELS) * 100)}%`)
     bars = true
   } else if (node.data.kind === 'degree') {
-    // Named from the first mode in the wired Mode sequence (C major if none).
-    const first = mode?.steps[0] ?? { tonic: 'C', mode: 'major' }
+    // Named from the first key and mode set in the wired sequencers (C Ionian if none).
+    const tonic = TONICS[key?.steps.find((v) => v !== null) ?? 0]
+    const modeId = MODES[mode?.steps.find((v) => v !== null) ?? 0].id
     rows = DEGREE_ROWS
-    labels = rows.map((d) => `${degreeName(d, first.tonic, first.mode, node.data.octave)}`)
+    labels = rows.map((d) => degreeName(d, tonic, modeId, node.data.octave))
   } else if (node.data.kind === 'trigger') {
     rows = [1]
     labels = [sample?.label ?? sample?.s ?? 'hit']

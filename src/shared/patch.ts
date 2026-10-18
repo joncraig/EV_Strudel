@@ -7,6 +7,8 @@ export interface PatchMeta {
   tags: string[]
   // Canvas graph as JSON, when the patch was made on the canvas.
   canvas?: string
+  // Tempo in BPM (a bar is one cycle of 4 beats).
+  tempo?: number
 }
 
 export interface PatchSummary extends PatchMeta {
@@ -28,6 +30,7 @@ export function parsePatch(text: string): { meta: Partial<PatchMeta>; code: stri
     if (key === 'title') meta.title = value.trim()
     else if (key === 'source') meta.source = value.trim()
     else if (key === 'canvas') meta.canvas = value.trim()
+    else if (key === 'tempo') meta.tempo = Number(value) || undefined
     else if (key === 'tags')
       meta.tags = value
         .split(',')
@@ -41,6 +44,7 @@ export function serializePatch(meta: PatchMeta, code: string): string {
   const head = [`// @title ${meta.title}`]
   if (meta.source) head.push(`// @source ${meta.source}`)
   if (meta.tags.length) head.push(`// @tags ${meta.tags.join(', ')}`)
+  if (meta.tempo) head.push(`// @tempo ${meta.tempo}`)
   if (meta.canvas) head.push(`// @canvas ${meta.canvas}`)
   return `${head.join('\n')}\n\n${code.trimEnd()}\n`
 }

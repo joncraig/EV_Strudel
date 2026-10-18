@@ -12,6 +12,8 @@ import {
   webaudioRepl
 } from '@strudel/webaudio'
 import Library from './components/Library'
+import Transport from './components/Transport'
+import { bpmToCps, DEFAULT_BPM } from './tempo'
 import Samples from './components/Samples'
 import Canvas from './canvas/Canvas'
 import { compile } from './canvas/codegen'
@@ -35,6 +37,15 @@ interface Current {
 
 const EMPTY: CanvasState = { nodes: [], edges: [] }
 const AUTOSAVE_KEY = 'ev-strudel:canvas-autosave'
+const BPM_KEY = 'ev-strudel:bpm'
+
+function readBpm(): number {
+  try {
+    return Number(localStorage.getItem(BPM_KEY)) || DEFAULT_BPM
+  } catch {
+    return DEFAULT_BPM
+  }
+}
 
 function readAutosave(): CanvasState {
   try {
@@ -81,6 +92,19 @@ function App(): React.JSX.Element {
   const [evalError, setEvalError] = useState<string | null>(null)
 
   const replRef = useRef<Repl | null>(null)
+
+  // Tempo: kept with the patch and the autosave, applied to the scheduler.
+  const [bpm, setBpm] = useState<number>(readBpm)
+  const bpmRef = useRef(bpm)
+  useEffect(() => {
+    bpmRef.current = bpm
+    replRef.current?.setCps(bpmToCps(bpm))
+    try {
+      localStorage.setItem(BPM_KEY, String(bpm))
+    } catch {
+      // Convenience only.
+    }
+  }, [bpm])
   const readyRef = useRef<Promise<unknown> | null>(null)
 
   // ---- Sample packs ----
@@ -169,6 +193,7 @@ function App(): React.JSX.Element {
       await readyRef.current
       const failed = (await Promise.allSettled(neededPacks.map(loadPack))).filter((r) => r.status === 'rejected')
       setEvalError(failed.length ? `${failed.length} sample pack(s) failed to load` : null)
+      replRef.current?.setCps(bpmToCps(bpmRef.current))
       await replRef.current?.evaluate(code)
     },
     [neededPacks, loadPack]
@@ -268,6 +293,7 @@ function App(): React.JSX.Element {
     if (file === current.file || !confirmDiscard()) return
     const { meta, code } = await window.api.library.read(file)
     const base = { file, title: meta.title, tags: meta.tags.join(', '), source: meta.source }
+    if (meta.tempo) setBpm(meta.tempo)
     if (meta.canvas) {
       const state = migrateCanvas(JSON.parse(meta.canvas))
       onCanvasChange(state)
@@ -293,7 +319,7 @@ function App(): React.JSX.Element {
     const savedCanvas = serialize(canvas)
     const file = await window.api.library.save(
       current.file,
-      { title: current.title.trim() || 'Untitled', tags, source: current.source, canvas: savedCanvas },
+      { title: current.title.trim() || 'Untitled', tags, source: current.source, canvas: savedCanvas, tempo: bpm },
       compile(canvas.nodes, canvas.edges).code
     )
     setCurrent((c) => ({ ...c, file, savedCanvas }))
@@ -338,13 +364,7 @@ function App(): React.JSX.Element {
   return (
     <div className="app">
       <div className="toolbar">
-        {playing ? (
-          <button className="on" onClick={stop}>
-            ■ Stop
-          </button>
-        ) : (
-          <button onClick={play}>▶ Play</button>
-        )}
+        <Transport playing={playing} bpm={bpm} onPlay={play} onStop={stop} onBpm={setBpm} />
         <span className="sep" />
         <input
           className="title"

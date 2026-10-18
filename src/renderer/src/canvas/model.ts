@@ -60,9 +60,23 @@ export interface SequencerData extends Record<string, unknown> {
   folded?: boolean
 }
 
+// Key and Mode are step sequencers like the others (1/16 steps). A step holds an
+// index into TONICS / MODES; an empty step holds whatever came before.
+export interface KeyData extends Record<string, unknown> {
+  steps: Step[]
+  resolution: number
+  folded?: boolean
+}
+
 export interface ModeData extends Record<string, unknown> {
+  steps: Step[]
+  resolution: number
+  folded?: boolean
+}
+
+// The list-style mode node from before Key and Mode were split (migrated on load).
+interface LegacyModeData {
   steps: ModeStep[]
-  // Cycles each mode step lasts.
   cyclesPerStep: number
 }
 
@@ -160,9 +174,10 @@ export const newEffect = (kind: EffectKind): EffectData => ({
 })
 
 export type EffectNode = Node<EffectData, 'effect'>
+export type KeyNode = Node<KeyData, 'key'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | ModeNode | VelocityNode | EffectNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | KeyNode | ModeNode | VelocityNode | EffectNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
@@ -172,7 +187,7 @@ export interface CanvasState {
 // Steps per bar (a bar is one Strudel cycle): every step is a 1/16.
 export const STEP_RESOLUTION = 16
 
-export const MAX_STEPS = 64
+export const MAX_STEPS = 128
 
 // Which step is playing at a cycle position: steps have a fixed size, so a pattern
 // longer than a bar spans several cycles and loops after length steps.
@@ -191,10 +206,23 @@ export const newSequencer = (kind: SequencerKind, length = 16): SequencerData =>
   muted: false
 })
 
-export const newMode = (): ModeData => ({
-  steps: [{ tonic: 'C', mode: 'dorian' }],
-  cyclesPerStep: 2
+// One bar long, set on the first step (C, Ionian); empty steps hold.
+export const newKey = (): KeyData => ({
+  steps: [0, ...Array(15).fill(null)],
+  resolution: STEP_RESOLUTION
 })
+export const newMode = (): ModeData => ({
+  steps: [0, ...Array(15).fill(null)],
+  resolution: STEP_RESOLUTION
+})
+
+// Fill holds: each empty step takes the last set value (wrapping, so the start of
+// the loop holds what the end set). All-empty gives the fallback.
+export function heldValues(steps: Step[], fallback: number): number[] {
+  const last = [...steps].reverse().find((v) => v !== null)
+  let cur = last ?? fallback
+  return steps.map((v) => (cur = v ?? cur))
+}
 
 export const SYNTHS = ['sawtooth', 'square', 'triangle', 'sine', 'piano', 'supersaw']
 
@@ -219,6 +247,7 @@ export interface DraggedSound {
 
 // Bring older saved canvases up to date. (The Velocity node was briefly called Volume.)
 export function migrateCanvas(state: CanvasState): CanvasState {
+  state = splitLegacyModes(state)
   return {
     nodes: state.nodes.map((n) => {
       let node = (n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n
@@ -260,4 +289,34 @@ export function degreeName(degree: number, tonic: string, mode: string, octave: 
   const semis = tonicPc + steps[((i % steps.length) + steps.length) % steps.length] + 12 * Math.floor(i / steps.length)
   const names = tonic.includes('b') || tonic === 'F' ? FLATS : SHARPS
   return `${names[((semis % 12) + 12) % 12]}${octave + Math.floor(semis / 12)}`
+}
+
+// Old "Mode sequence" nodes held a list of {tonic, mode} each lasting N bars. Turn
+// each into a Mode sequencer (same id) plus a Key sequencer wired to the same Notes
+// sequencers, with a change marked at the start of each list entry.
+function splitLegacyModes(state: CanvasState): CanvasState {
+  const nodes: CanvasNode[] = []
+  const edges = [...state.edges]
+  for (const n of state.nodes) {
+    const legacy = n.data as unknown as LegacyModeData
+    if (n.type !== 'mode' || legacy.cyclesPerStep === undefined) {
+      nodes.push(n)
+      continue
+    }
+    const span = Math.max(1, legacy.cyclesPerStep) * STEP_RESOLUTION
+    const length = Math.min(MAX_STEPS, Math.max(1, legacy.steps.length) * span)
+    const keySteps: Step[] = Array(length).fill(null)
+    const modeSteps: Step[] = Array(length).fill(null)
+    legacy.steps.forEach((s, i) => {
+      if (i * span >= length) return
+      keySteps[i * span] = Math.max(0, (TONICS as readonly string[]).indexOf(s.tonic))
+      modeSteps[i * span] = Math.max(0, MODES.findIndex((m) => m.id === s.mode))
+    })
+    const keyId = `${n.id}-key`
+    nodes.push({ id: keyId, type: 'key', position: { x: n.position.x, y: n.position.y - 300 }, parentId: n.parentId, data: { steps: keySteps, resolution: STEP_RESOLUTION } } as CanvasNode)
+    nodes.push({ ...n, data: { steps: modeSteps, resolution: STEP_RESOLUTION } } as CanvasNode)
+    for (const e of state.edges.filter((e) => e.source === n.id && e.sourceHandle === 'mode'))
+      edges.push({ ...e, id: `${e.id}-key`, source: keyId, sourceHandle: 'key', targetHandle: 'key', animated: true })
+  }
+  return { nodes, edges }
 }

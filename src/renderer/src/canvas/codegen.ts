@@ -1,18 +1,16 @@
 // Compile the canvas graph to Strudel code.
 //
-//   sample ──▶ sequencer ──▶ velocity ──▶ (plays)
+//   sample ──▶ sequencer ──▶ velocity / effects ──▶ (plays)
 //                  ▲
-//                 mode
+//              key, mode
 //
 // Each sequencer with a sound connected becomes one layer of a stack(). Steps have a
 // fixed size (resolution, default 1/16) and length sets the loop, so different
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { EFFECTS, isBank, pieceCount, VELOCITY_LEVELS } from './model'
-import type { CanvasNode, EffectData, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
-
-const DEFAULT_MODE: ModeData = { steps: [{ tonic: 'C', mode: 'major' }], cyclesPerStep: 1 }
+import { EFFECTS, heldValues, isBank, MODES, pieceCount, STEP_RESOLUTION, TONICS, VELOCITY_LEVELS } from './model'
+import type { CanvasNode, EffectData, KeyData, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const quote = (s: string): string => JSON.stringify(s)
 
@@ -27,15 +25,30 @@ function timed(pattern: string, length: number, resolution: number): string {
   return bars === 1 ? pattern : `[${pattern}]/${bars}`
 }
 
-// "<C3:dorian C3:dorian D3:phrygian ...>": one entry per cycle.
-function modePattern(mode: ModeData, octave: number): string {
-  const perCycle = mode.steps.flatMap((m) =>
-    Array(Math.max(1, mode.cyclesPerStep)).fill(`${m.tonic}${octave}:${m.mode}`)
+const gcd = (a: number, b: number): number => (b ? gcd(b, a % b) : a)
+const MAX_HARMONY_STEPS = 4096
+
+// The scale per step, from the Key and Mode sequencers (C / Ionian when not wired).
+// Their lengths can differ, so the combined loop runs for lcm(lengths) steps, e.g.
+// "[D3:dorian D3:dorian ... E3:phrygian ...]/8". Empty steps hold the last value.
+function harmonyPattern(key: KeyData | null, mode: ModeData | null, octave: number): string {
+  const keys = key?.steps.length ? heldValues(key.steps, 0) : [0]
+  const modes = mode?.steps.length ? heldValues(mode.steps, 0) : [0]
+  const length = Math.min(MAX_HARMONY_STEPS, (keys.length * modes.length) / gcd(keys.length, modes.length))
+  const tokens = Array.from(
+    { length },
+    (_, i) => `${TONICS[keys[i % keys.length]] ?? 'C'}${octave}:${MODES[modes[i % modes.length]]?.id ?? 'major'}`
   )
-  return perCycle.length === 1 ? perCycle[0] : `<${perCycle.join(' ')}>`
+  if (tokens.every((tk) => tk === tokens[0])) return tokens[0]
+  return timed(tokens.join(' '), length, STEP_RESOLUTION)
 }
 
-export function sequencerCode(seq: SequencerData, sample: SampleData, mode: ModeData | null): string | null {
+export function sequencerCode(
+  seq: SequencerData,
+  sample: SampleData,
+  key: KeyData | null,
+  mode: ModeData | null
+): string | null {
   if (seq.steps.every((v) => v === null)) return null
   const sound = quote(sample.s)
   const len = seq.steps.length
@@ -45,7 +58,7 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, mode: Mode
     case 'degree': {
       // UI degrees are 1-based; Strudel's are 0-based.
       const degrees = timed(stepPattern(seq.steps, (v) => String(v - 1)), len, res)
-      code = `n("${degrees}").scale("${modePattern(mode ?? DEFAULT_MODE, seq.octave)}").s(${sound})`
+      code = `n("${degrees}").scale("${harmonyPattern(key, mode, seq.octave)}").s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
       if (sample.n) code += `.n(${sample.n})`
       break
@@ -132,8 +145,14 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (node.type !== 'sequencer' || node.data.muted) continue
     const sample = inputs(node.id, 'sample')
     if (!sample) continue
+    const key = inputs(node.id, 'key')
     const mode = inputs(node.id, 'mode')
-    const code = sequencerCode(node.data, sample.data as SampleData, mode ? (mode.data as ModeData) : null)
+    const code = sequencerCode(
+      node.data,
+      sample.data as SampleData,
+      key ? (key.data as KeyData) : null,
+      mode ? (mode.data as ModeData) : null
+    )
     if (code) follow(node, code, new Set([node.id]))
   }
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'

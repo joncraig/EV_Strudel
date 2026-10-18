@@ -5,11 +5,9 @@ import {
   EFFECTS,
   EffectParam,
   isBank,
-  MODES,
   MAX_STEPS,
   pieceCount,
   SequencerKind,
-  TONICS,
   VELOCITY_LEVELS
 } from './model'
 
@@ -189,44 +187,21 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       )
       break
     }
+    case 'key':
     case 'mode': {
       const d = node.data
-      const setStep = (i: number, patch: Record<string, string>): void =>
-        set({ steps: d.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
-      title = 'Mode sequence'
+      title = node.type === 'key' ? 'Key sequencer' : 'Mode sequencer'
       body = (
         <>
-          <div className="pmodes">
-            {d.steps.map((step, i) => (
-              <div className="pmode" key={i}>
-                <select value={step.tonic} onChange={(e) => setStep(i, { tonic: e.target.value })}>
-                  {TONICS.map((t) => (
-                    <option key={t}>{t}</option>
-                  ))}
-                </select>
-                <select value={step.mode} onChange={(e) => setStep(i, { mode: e.target.value })}>
-                  {MODES.map((m) => (
-                    <option key={m.id} value={m.id}>
-                      {m.label}
-                    </option>
-                  ))}
-                </select>
-                {d.steps.length > 1 && (
-                  <button onClick={() => set({ steps: d.steps.filter((_, j) => j !== i) })}>×</button>
-                )}
-              </div>
-            ))}
-            <button className="ptoggle" onClick={() => set({ steps: [...d.steps, { ...d.steps[d.steps.length - 1] }] })}>
-              + mode
-            </button>
-          </div>
           <Stepper
-            label="cycles each"
-            value={d.cyclesPerStep}
+            label="length"
+            value={d.steps.length}
             min={1}
-            max={16}
-            onChange={(cyclesPerStep) => set({ cyclesPerStep })}
+            max={MAX_STEPS}
+            onChange={(n) => set({ steps: resize(d.steps, n, null) })}
           />
+          <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
+          <span className="plabel">Empty steps hold the last {node.type}.</span>
         </>
       )
       break
@@ -245,7 +220,7 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
   }
 
   const roll =
-    node.type === 'sequencer' || node.type === 'velocity' ? (
+    node.type === 'sequencer' || node.type === 'velocity' || node.type === 'key' || node.type === 'mode' ? (
       <PianoRoll node={node} nodes={nodes} edges={edges} onSteps={(steps) => set({ steps })} />
     ) : null
 

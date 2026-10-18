@@ -257,3 +257,19 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .step-grid.roll .cell { width: 30px; height: 26px; border-radius: 3px; }
 .step-grid.roll .cell.barline { margin-left: 8px; }
 .step-grid.roll .playhead-bar { border-radius: 3px; }
+
+/* Transport */
+.transport { display: flex; align-items: center; gap: 10px; padding-right: 10px; margin-right: 4px; border-right: 1px solid #333; }
+.transport .play { width: 44px; height: 34px; font-size: 16px; padding: 0; }
+.transport .play.on { background: #3a2a2a; border-color: #855; }
+.tempo { display: flex; align-items: center; gap: 4px; }
+.tempo button { width: 30px; height: 30px; padding: 0; }
+.bpm { min-width: 64px; text-align: center; font-size: 16px; font-weight: 600; cursor: ns-resize; touch-action: none; user-select: none; padding: 2px 6px; border-radius: 4px; background: #1b1b1b; border: 1px solid #333; }
+.bpm small { font-size: 10px; color: #888; margin-left: 4px; font-weight: normal; }
+
+/* Key / Mode sequencers */
+.key-node .node-header { background: #3d2a4d; }
+.mode-node .node-header { background: #4d2a3d; }
+.harmony-node .row-label { width: 74px; font-size: 10px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.harmony-node .cell.on { background: #c9a0f0; border-color: #c9a0f0; }
+.hint-inline { color: #777; font-size: 10px; margin-left: 6px; }

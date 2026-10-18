@@ -24,12 +24,6 @@ export function useStepIndex(length: number, resolution: number): number {
   return useSyncExternalStore(subscribe, () => (cycle < 0 ? -1 : stepAt(cycle, length, resolution || length)))
 }
 
-// Which mode step is active, or -1 when stopped.
-export function useModeIndex(steps: number, cyclesPerStep: number): number {
-  return useSyncExternalStore(subscribe, () =>
-    cycle < 0 || steps <= 0 ? -1 : Math.floor(cycle / Math.max(1, cyclesPerStep)) % steps
-  )
-}
 
 
 // Any value derived from the cycle; re-renders only when the derived value changes.

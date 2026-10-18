@@ -39,6 +39,8 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Undo: `canvas/useHistory.ts`, serialized snapshots; a burst of changes (drag, paint, fader) settles after 400ms into one step; selection is not recorded. Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, plus toolbar buttons.
 - Parameter panel: `canvas/Panel.tsx`, docked under the canvas, settings for the single selected node (steps, gain, octave, mute/fold/clear; effect sliders + bypass; mode list; group name). Edits go through updateNodeData so they undo.
 - Node menu: long-press (500ms, on the node surface, not on its controls) or right-click; a tap only selects; Ctrl+click deletes.
+- Harmony: separate Key and Mode step sequencers (1/16 steps, index into TONICS/MODES, empty steps hold); Notes sequencers have key + mode inputs on top. Codegen combines them per step over lcm(lengths) (`harmonyPattern`). Old list-style mode nodes split into Key+Mode on load (`splitLegacyModes`). MAX_STEPS 128.
+- Transport: Play/Stop + BPM in the toolbar (`components/Transport.tsx`); cps = BPM/240 (bar = 4 beats); tempo saved as `// @tempo` in patches and in localStorage.
 - Piano roll: `canvas/PianoRoll.tsx` in the bottom panel for the selected sequencer/Velocity node: whole pattern, bar lines every 16, rows named (pitches from the first wired mode via `degreeName`, file names for banks). Mono per step for now.
 - Multi-selection: a tap on a selected node's controls (with 2+ selected) opens the node menu instead of editing (capture handler in Canvas.tsx).
 - Sequencer controls: step count = drag the ↔ pill in the node header (`canvas/controls.tsx`); gain = vertical fader; grids paint by sliding (first cell decides on/erase).
