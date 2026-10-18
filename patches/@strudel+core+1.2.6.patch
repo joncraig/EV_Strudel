@@ -1,0 +1,26 @@
+diff --git a/node_modules/@strudel/core/cyclist.mjs b/node_modules/@strudel/core/cyclist.mjs
+index 59e410c..86e745e 100644
+--- a/node_modules/@strudel/core/cyclist.mjs
++++ b/node_modules/@strudel/core/cyclist.mjs
+@@ -14,7 +14,7 @@ export class Cyclist {
+     onToggle,
+     onError,
+     getTime,
+-    latency = 0.1,
++    latency = 0.5,
+     setInterval,
+     clearInterval,
+     beforeStart,
+diff --git a/node_modules/@strudel/core/dist/index.mjs b/node_modules/@strudel/core/dist/index.mjs
+index 345c62f..e6a2b92 100644
+--- a/node_modules/@strudel/core/dist/index.mjs
++++ b/node_modules/@strudel/core/dist/index.mjs
+@@ -2979,7 +2979,7 @@ class hf {
+     onToggle: s,
+     onError: r,
+     getTime: o,
+-    latency: i = 0.1,
++    latency: i = 0.5,
+     setInterval: a,
+     clearInterval: u,
+     beforeStart: p
