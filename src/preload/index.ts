@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PatchMeta, PatchSummary } from '../shared/patch'
 import type { DownloadProgress, PackSounds, PackStatus } from '../shared/samplePacks'
+import type { MenuCommand } from '../shared/menu'
 
 // Custom APIs for renderer
 const api = {
@@ -14,6 +15,13 @@ const api = {
     remove: (file: string): Promise<void> => ipcRenderer.invoke('library:delete', file),
     import: (input: string): Promise<string[]> => ipcRenderer.invoke('library:import', input),
     openFolder: (): Promise<string> => ipcRenderer.invoke('library:open-folder')
+  },
+  menu: {
+    onCommand: (cb: (command: MenuCommand) => void): (() => void) => {
+      const listener = (_: unknown, command: MenuCommand): void => cb(command)
+      ipcRenderer.on('menu:command', listener)
+      return () => ipcRenderer.removeListener('menu:command', listener)
+    }
   },
   samples: {
     list: (): Promise<PackStatus[]> => ipcRenderer.invoke('samples:list'),

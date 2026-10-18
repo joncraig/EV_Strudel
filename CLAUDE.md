@@ -40,6 +40,8 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Parameter panel: `canvas/Panel.tsx`, docked under the canvas, settings for the single selected node (steps, gain, octave, mute/fold/clear; effect sliders + bypass; mode list; group name). Edits go through updateNodeData so they undo.
 - Node menu: long-press (500ms, on the node surface, not on its controls) or right-click; a tap only selects; Ctrl+click deletes.
 - Harmony: separate Key and Mode step sequencers (1/16 steps, index into TONICS/MODES, empty steps hold); Notes sequencers have key + mode inputs on top. Codegen combines them per step over lcm(lengths) (`harmonyPattern`). Old list-style mode nodes split into Key+Mode on load (`splitLegacyModes`). MAX_STEPS 128.
+- Menu: native File/Edit/View (`src/main/menu.ts`) sends commands to the renderer (`menu:command`); accelerators shown but not registered so the renderer keeps handling keys. Toolbar = transport, patch name (+ dirty dot), Undo/Redo. Open patch file/name persist in localStorage (`ev-strudel:current-patch`).
+- Canvas commits go through `commit()` on a latest-state ref (Canvas.tsx) so several changes in one tick (select + paint) build on each other.
 - Transport: Play/Stop + BPM in the toolbar (`components/Transport.tsx`); cps = BPM/240 (bar = 4 beats); tempo saved as `// @tempo` in patches and in localStorage.
 - Piano roll: `canvas/PianoRoll.tsx` in the bottom panel for the selected sequencer/Velocity node: whole pattern, bar lines every 16, rows named (pitches from the first wired mode via `degreeName`, file names for banks). Mono per step for now.
 - Multi-selection: a tap on a selected node's controls (with 2+ selected) opens the node menu instead of editing (capture handler in Canvas.tsx).

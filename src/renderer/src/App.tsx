@@ -23,6 +23,8 @@ import { setPlayhead } from './canvas/playhead'
 import { useHistory } from './canvas/useHistory'
 import type { CanvasState, DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
+import type { MenuCommand } from '../../shared/menu'
+import { TOGGLE_CODE_EVENT } from './events'
 
 interface Current {
   file: string | null
@@ -38,6 +40,7 @@ interface Current {
 const EMPTY: CanvasState = { nodes: [], edges: [] }
 const AUTOSAVE_KEY = 'ev-strudel:canvas-autosave'
 const BPM_KEY = 'ev-strudel:bpm'
+const CURRENT_KEY = 'ev-strudel:current-patch'
 
 function readBpm(): number {
   try {
@@ -79,13 +82,27 @@ const serialize = (s: CanvasState): string =>
     }))
   })
 
+function readCurrent(): Current {
+  try {
+    const raw = localStorage.getItem(CURRENT_KEY)
+    if (raw) {
+      const { file, title, tags, source } = JSON.parse(raw)
+      // Treat the autosaved canvas as what was last saved, so it doesn't show as dirty.
+      return { file: file ?? null, title: title || 'Untitled', tags: tags ?? '', source, savedCanvas: serialize(readAutosave()) }
+    }
+  } catch {
+    // Fall through.
+  }
+  return blank()
+}
+
 const blank = (): Current => ({ file: null, title: 'Untitled', tags: '', savedCanvas: serialize(EMPTY) })
 
 type Repl = ReturnType<typeof webaudioRepl>
 
 function App(): React.JSX.Element {
   const [patches, setPatches] = useState<PatchSummary[]>([])
-  const [current, setCurrent] = useState<Current>(blank())
+  const [current, setCurrent] = useState<Current>(readCurrent)
   const [canvas, setCanvas] = useState<CanvasState>(readAutosave)
   const [tab, setTab] = useState<'samples' | 'library'>('samples')
   const [playing, setPlaying] = useState(false)
@@ -310,7 +327,8 @@ function App(): React.JSX.Element {
     setCurrent(blank())
   }
 
-  const save = useCallback(async () => {
+  // Save to the open patch, or (asNew / nothing open) to a new file named from the title.
+  const save = useCallback(async (asNew = false) => {
     if (current.codeOnly) return
     const tags = current.tags
       .split(',')
@@ -318,13 +336,13 @@ function App(): React.JSX.Element {
       .filter(Boolean)
     const savedCanvas = serialize(canvas)
     const file = await window.api.library.save(
-      current.file,
+      asNew ? null : current.file,
       { title: current.title.trim() || 'Untitled', tags, source: current.source, canvas: savedCanvas, tempo: bpm },
       compile(canvas.nodes, canvas.edges).code
     )
     setCurrent((c) => ({ ...c, file, savedCanvas }))
     refresh()
-  }, [current, canvas, refresh])
+  }, [current, canvas, bpm, refresh])
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -349,6 +367,27 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('keydown', onKey)
   }, [save, undo, redo])
 
+  // Native menu commands (main/menu.ts). Read through a ref so the latest handlers run.
+  const toggleCode = (): void => {
+    window.dispatchEvent(new Event(TOGGLE_CODE_EVENT))
+  }
+  const menuHandlers = { new: newPatch, open: () => setTab('library'), save: () => save(), saveAs: () => save(true), showFolder: () => window.api.library.openFolder(), undo, redo, toggleCode }
+  const menuRef = useRef(menuHandlers)
+  useEffect(() => {
+    menuRef.current = menuHandlers
+  })
+  useEffect(() => window.api.menu.onCommand((cmd: MenuCommand) => void menuRef.current[cmd]()), [])
+
+  // Remember which patch is open (and its name) across restarts, alongside the canvas autosave.
+  useEffect(() => {
+    try {
+      const { file, title, tags, source } = current
+      localStorage.setItem(CURRENT_KEY, JSON.stringify({ file, title, tags, source }))
+    } catch {
+      // Convenience only.
+    }
+  }, [current])
+
   const remove = async (file: string): Promise<void> => {
     await window.api.library.remove(file)
     if (file === current.file) setCurrent((c) => ({ ...c, file: null }))
@@ -368,26 +407,21 @@ function App(): React.JSX.Element {
         <span className="sep" />
         <input
           className="title"
+          title="Patch name"
           value={current.title}
           onChange={(e) => setCurrent({ ...current, title: e.target.value })}
         />
-        <input
-          className="tags"
-          placeholder="tags, comma separated"
-          value={current.tags}
-          onChange={(e) => setCurrent({ ...current, tags: e.target.value })}
-        />
-        <button onClick={save} disabled={!!current.codeOnly}>
-          {dirty ? 'Save •' : 'Save'}
-        </button>
+        {dirty && (
+          <span className="dirty" title="Unsaved changes (File > Save)">
+            •
+          </span>
+        )}
         <button onClick={undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">
           ↶ Undo
         </button>
         <button onClick={redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">
           ↷ Redo
         </button>
-        <button onClick={newPatch}>New</button>
-        <button onClick={() => window.api.library.openFolder()}>Open folder</button>
         {current.source && (
           <a className="source" href={current.source} target="_blank" rel="noreferrer">
             source

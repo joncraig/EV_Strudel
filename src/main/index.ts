@@ -5,6 +5,7 @@ import icon from '../../resources/icon.png?asset'
 import { registerLibraryIpc } from './library'
 import { registerSampleScheme, registerSamplesIpc } from './samples'
 import { loadWindowState, trackWindowState } from './windowState'
+import { installMenu } from './menu'
 
 // Dev only: Chrome DevTools Protocol endpoint so tooling can read the renderer's console
 // and inspect state. Port is allocated in the compendium port map (9223/9224 are taken).
@@ -19,7 +20,7 @@ function createWindow(): void {
     minWidth: 800,
     minHeight: 500,
     show: false,
-    autoHideMenuBar: true,
+    autoHideMenuBar: false,
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
@@ -28,6 +29,7 @@ function createWindow(): void {
   })
 
   trackWindowState(mainWindow, windowState)
+  installMenu(mainWindow, is.dev)
 
   // Dev only: after sleep, Vite's client can reload the page while Windows still has
   // networking suspended (net::ERR_NETWORK_IO_SUSPENDED), leaving a blank window.

@@ -21,6 +21,7 @@ import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import Panel from './Panel'
+import { TOGGLE_CODE_EVENT } from '../events'
 import { useLongPressFence } from './useLongPressFence'
 import {
   CanvasNode,
@@ -70,31 +71,46 @@ type Menu =
 function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const { screenToFlowPosition, getIntersectingNodes, updateNodeData } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
+  useEffect(() => {
+    const toggle = (): void => setShowCode((s) => !s)
+    window.addEventListener(TOGGLE_CODE_EVENT, toggle)
+    return () => window.removeEventListener(TOGGLE_CODE_EVENT, toggle)
+  }, [])
   const rootRef = useRef<HTMLDivElement>(null)
   const { nodes, edges } = state
-  // For window event handlers that outlive a render.
+  // The latest state, including changes not rendered yet. One tap can produce
+  // several changes in the same tick (React Flow selecting the node, plus the grid
+  // painting a cell); each must build on the one before, or the later one wipes
+  // out the earlier (the first tap on an unselected node used to lose its edit).
   const stateRef = useRef(state)
   const onChangeRef = useRef(onChange)
   useEffect(() => {
     stateRef.current = state
     onChangeRef.current = onChange
   })
+  const commit = useCallback((next: CanvasState) => {
+    stateRef.current = next
+    onChangeRef.current(next)
+  }, [])
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<CanvasNode>[]) => onChange({ nodes: applyNodeChanges(changes, nodes), edges }),
-    [nodes, edges, onChange]
+    (changes: NodeChange<CanvasNode>[]) =>
+      commit({ nodes: applyNodeChanges(changes, stateRef.current.nodes), edges: stateRef.current.edges }),
+    [commit]
   )
   const onEdgesChange = useCallback(
-    (changes: EdgeChange[]) => onChange({ nodes, edges: applyEdgeChanges(changes, edges) }),
-    [nodes, edges, onChange]
+    (changes: EdgeChange[]) =>
+      commit({ nodes: stateRef.current.nodes, edges: applyEdgeChanges(changes, stateRef.current.edges) }),
+    [commit]
   )
   // Each input takes one connection: a new one replaces the old.
   const onConnect = useCallback(
     (c: Connection) => {
-      const kept = edges.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle))
-      onChange({ nodes, edges: addEdge({ ...c, animated: c.sourceHandle === 'mode' || c.sourceHandle === 'key' }, kept) })
+      const { nodes: ns, edges: es } = stateRef.current
+      const kept = es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle))
+      commit({ nodes: ns, edges: addEdge({ ...c, animated: c.sourceHandle === 'mode' || c.sourceHandle === 'key' }, kept) })
     },
-    [nodes, edges, onChange]
+    [commit]
   )
 
   const add = (node: CanvasNode, edge?: Edge): void => {

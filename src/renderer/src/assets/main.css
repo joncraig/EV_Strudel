@@ -273,3 +273,4 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .harmony-node .row-label { width: 74px; font-size: 10px; text-align: right; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
 .harmony-node .cell.on { background: #c9a0f0; border-color: #c9a0f0; }
 .hint-inline { color: #777; font-size: 10px; margin-left: 6px; }
+.toolbar .dirty { color: #fc6; font-size: 20px; line-height: 1; margin-left: -4px; }
