@@ -375,7 +375,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     return [{ items }]
   }
 
-  // Ctrl+D duplicates the selected nodes (not while typing in a field).
+  // Ctrl+D duplicates the selected nodes, Ctrl+G groups them (not while typing in a field).
   // Delete/Backspace dissolves the selected nodes (and removes selected wires).
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -385,6 +385,10 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         e.preventDefault()
         const ids = ns.filter((n) => n.selected).map((n) => n.id)
         if (ids.length) commit(duplicateNodes(stateRef.current, ids))
+      } else if ((e.ctrlKey || e.metaKey) && e.key.toLowerCase() === 'g') {
+        e.preventDefault()
+        const ids = ns.filter((n) => n.selected && n.type !== 'group').map((n) => n.id)
+        if (ids.length) commit(groupNodes(stateRef.current, ids))
       } else if (e.key === 'Delete' || e.key === 'Backspace') {
         const ids = ns.filter((n) => n.selected).map((n) => n.id)
         const wires = es.filter((x) => x.selected)
@@ -650,7 +654,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
           // scroll or the middle/right mouse button; pinch or Ctrl+scroll zooms.
           selectionOnDrag
           selectionMode={SelectionMode.Partial}
-          panOnDrag={[1, 2]}
+          panOnDrag={[1]}
           panOnScroll
           onNodeClick={onNodeClick}
           onNodeContextMenu={onNodeContextMenu}
