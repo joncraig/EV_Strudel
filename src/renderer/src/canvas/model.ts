@@ -75,19 +75,19 @@ export interface GroupData extends Record<string, unknown> {
 }
 
 // Per-step loudness, applied to whatever pattern is wired into it. Steps are levels
-// 1..VOLUME_LEVELS (top = full). Its own step count, so accents can run polymetric.
-export interface VolumeData extends Record<string, unknown> {
+// 1..VELOCITY_LEVELS (top = full). Its own step count, so accents can run polymetric.
+export interface VelocityData extends Record<string, unknown> {
   steps: number[]
 }
 
-export const VOLUME_LEVELS = 8
+export const VELOCITY_LEVELS = 8
 
-export const newVolume = (length = 8): VolumeData => ({ steps: Array(length).fill(VOLUME_LEVELS) })
+export const newVelocity = (length = 8): VelocityData => ({ steps: Array(length).fill(VELOCITY_LEVELS) })
 
-export type VolumeNode = Node<VolumeData, 'volume'>
+export type VelocityNode = Node<VelocityData, 'velocity'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | ModeNode | VolumeNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | ModeNode | VelocityNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
@@ -129,4 +129,12 @@ export interface DraggedSound {
   n?: number
   // File count, when a whole multi-file sound is dragged.
   files?: number
+}
+
+// Bring older saved canvases up to date. (The Velocity node was briefly called Volume.)
+export function migrateCanvas(state: CanvasState): CanvasState {
+  return {
+    nodes: state.nodes.map((n) => ((n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n)),
+    edges: state.edges
+  }
 }

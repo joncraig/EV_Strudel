@@ -1,6 +1,6 @@
 // Compile the canvas graph to Strudel code.
 //
-//   sample ──▶ sequencer ──▶ volume ──▶ (plays)
+//   sample ──▶ sequencer ──▶ velocity ──▶ (plays)
 //                  ▲
 //                 mode
 //
@@ -8,8 +8,8 @@
 // sequencer squeezes its steps into one cycle, so different lengths give polyrhythms.
 
 import type { Edge } from '@xyflow/react'
-import { isBank, pieceCount, VOLUME_LEVELS } from './model'
-import type { CanvasNode, ModeData, SampleData, SequencerData, Step, VolumeData } from './model'
+import { isBank, pieceCount, VELOCITY_LEVELS } from './model'
+import type { CanvasNode, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const DEFAULT_MODE: ModeData = { steps: [{ tonic: 'C', mode: 'major' }], cyclesPerStep: 1 }
 
@@ -59,8 +59,8 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, mode: Mode
 }
 
 // Strudel's velocity is 0..1 and multiplies with gain, so accents scale the channel level.
-export function volumeCode(data: VolumeData): string {
-  const levels = data.steps.map((v) => +(v / VOLUME_LEVELS).toFixed(3)).join(' ')
+export function velocityCode(data: VelocityData): string {
+  const levels = data.steps.map((v) => +(v / VELOCITY_LEVELS).toFixed(3)).join(' ')
   return `.velocity("${levels}")`
 }
 
@@ -70,9 +70,9 @@ export interface Compiled {
   layers: string[]
 }
 
-// Sequencers make patterns; nodes on their `pattern` output (Volume, later others)
-// modify them. Only the end of each chain plays, so a sequencer feeding a Volume
-// node is heard once, with the volume applied. A fork plays each branch.
+// Sequencers make patterns; nodes on their `pattern` output (Velocity, later others)
+// modify them. Only the end of each chain plays, so a sequencer feeding a Velocity
+// node is heard once, with the velocity applied. A fork plays each branch.
 export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const inputs = (id: string, type: CanvasNode['type']): CanvasNode | undefined =>
@@ -84,7 +84,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     edges
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
       .map((e) => byId.get(e.target))
-      .filter((n): n is CanvasNode => n?.type === 'volume')
+      .filter((n): n is CanvasNode => n?.type === 'velocity')
 
   const lines: string[] = []
   const layers: string[] = []
@@ -96,7 +96,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       return
     }
     for (const next of outs) {
-      const applied = next.type === 'volume' ? code + volumeCode(next.data) : code
+      const applied = next.type === 'velocity' ? code + velocityCode(next.data) : code
       follow(next, applied, new Set(seen).add(next.id))
     }
   }

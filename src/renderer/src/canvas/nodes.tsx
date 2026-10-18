@@ -1,5 +1,6 @@
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import StepGrid from './StepGrid'
+import { Fader, StepWidthGrip } from './controls'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { useModeIndex, usePlayhead, useStepIndex } from './playhead'
 import {
@@ -15,8 +16,8 @@ import {
   isBank,
   pieceCount,
   TONICS,
-  VOLUME_LEVELS,
-  VolumeNode as VolumeNodeT
+  VELOCITY_LEVELS,
+  VelocityNode as VelocityNodeT
 } from './model'
 
 const MAX_STEPS = 32
@@ -104,10 +105,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
       <Header title={KIND_LABEL[data.kind]} />
       <div className="node-body">
         <div className="seq-controls nodrag">
-          <span>steps</span>
-          <button onClick={() => setLength(data.steps.length - 1)}>−</button>
-          <span className="value">{data.steps.length}</span>
-          <button onClick={() => setLength(data.steps.length + 1)}>+</button>
           {data.kind === 'degree' && (
             <>
               <span>oct</span>
@@ -129,56 +126,45 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
           </button>
         </div>
         {!sample && <div className="hint">Connect a sample to the left input.</div>}
-        {grid}
-        <label className="nodrag">
-          gain
-          <input
-            type="range"
-            min={0}
-            max={1.5}
-            step={0.01}
-            value={data.gain}
-            onChange={(e) => update({ gain: Number(e.target.value) })}
-          />
-        </label>
+        {/* Grid, then the gain fader; the right edge drags the step count. */}
+        <div className="seq-main">
+          {grid}
+          <Fader label="gain" value={data.gain} max={1.5} onChange={(gain) => update({ gain })} />
+        </div>
       </div>
+      <StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />
     </div>
   )
 }
 
-// ---- Volume ----
+// ---- Velocity ----
 
-const LEVEL_ROWS = Array.from({ length: VOLUME_LEVELS }, (_, i) => VOLUME_LEVELS - i)
+const LEVEL_ROWS = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
 
 // Per-step loudness for whatever pattern is wired in; passes the result on.
-export function VolumeNode({ id, data }: NodeProps<VolumeNodeT>): React.JSX.Element {
+export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
   const current = useStepIndex(data.steps.length)
   const setLength = (len: number): void => {
     const n = Math.min(MAX_STEPS, Math.max(1, len))
-    updateNodeData(id, { steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? VOLUME_LEVELS) })
+    updateNodeData(id, { steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? VELOCITY_LEVELS) })
   }
   return (
-    <div className="node volume-node">
+    <div className="node velocity-node">
       <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
-      <Header title="Volume" />
+      <Header title="Velocity" />
       <div className="node-body">
-        <div className="seq-controls nodrag">
-          <span>steps</span>
-          <button onClick={() => setLength(data.steps.length - 1)}>−</button>
-          <span className="value">{data.steps.length}</span>
-          <button onClick={() => setLength(data.steps.length + 1)}>+</button>
-        </div>
         <StepGrid
           steps={data.steps}
           rows={LEVEL_ROWS}
           labels={LEVEL_ROWS.map(() => '')}
           bars
           current={current}
-          onChange={(steps) => updateNodeData(id, { steps: steps.map((v) => v ?? VOLUME_LEVELS) })}
+          onChange={(steps) => updateNodeData(id, { steps: steps.map((v) => v ?? VELOCITY_LEVELS) })}
         />
       </div>
+      <StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />
     </div>
   )
 }

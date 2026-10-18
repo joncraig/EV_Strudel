@@ -19,7 +19,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
   - Compounding modulators (modulators modulating modulators)
 
 ## Notes
-- Chains: sequencers have a `pattern` output; modifier nodes (Volume so far) take a `pattern` input and pass it on. Codegen plays only chain ends (`compile` in codegen.ts follows `pattern` edges); forks play each branch. Volume = Strudel `velocity` (0..1, multiplies with gain); future: outs route to busses.
+- Chains: sequencers have a `pattern` output; modifier nodes (Velocity so far) take a `pattern` input and pass it on. Codegen plays only chain ends (`compile` in codegen.ts follows `pattern` edges); forks play each branch. Velocity = Strudel `velocity` (0..1, multiplies with gain); future: outs route to busses.
 - Canvas: `src/renderer/src/canvas/`, React Flow (`@xyflow/react`). `codegen.ts` turns the graph into a
   `stack()`. Degrees are 1-based in the UI, 0-based in Strudel. Mode node becomes
   `.scale("<D3:dorian ...>")`, one entry per cycle. Each sequencer fits its steps into one cycle,
@@ -32,6 +32,8 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Dev restarts: Claude relaunches `npm run dev` itself whenever a change needs it (main/preload changes don't hot-reload). Stop only this project's node/electron PIDs (match the project path in the command line), then run `npm.cmd run dev` in the "dev" terminal tab (PowerShell blocks `npm.ps1`).
 - Overnight white screen (2026-10-18) was NOT a leak: the Surface slept, Vite reloaded the page while Windows had networking suspended (`ERR_NETWORK_IO_SUSPENDED`), so no code loaded. Dev now reloads a blank page on `powerMonitor` resume. Renderer measured flat at idle and ~12 style recalcs/s while playing.
 - Inspecting the running app: dev builds open a CDP port on 9225 (`src/main/index.ts`). `node scripts/cdp.mjs "<js>"` evaluates in the renderer (e.g. query DOM classes, click Play). Hot-reloading a shared module like `canvas/playhead.ts` can split it into two copies; restart dev after editing it.
+- Naming (Jon): call them Gain (level fader) and Velocity (per-step sequencer), never "volume". Old saved `volume` nodes migrate in `migrateCanvas` (model.ts).
+- Sequencer controls: step count = drag the right-edge grip (`canvas/controls.tsx`); gain = vertical fader; grids paint by sliding (first cell decides on/erase).
 - Touch: Jon is on a Surface touchscreen. HTML5 drag-and-drop does not start from touch in Chromium on Windows, so sounds drag with pointer events (`canvas/soundDrag.ts`). Keep touch targets large.
 - Library folder: `Documents/EV_Strudel Library/*.strudel`. Patch metadata is in leading
   `// @title`, `// @source`, `// @tags` comment lines (`src/shared/patch.ts`), so files stay runnable.

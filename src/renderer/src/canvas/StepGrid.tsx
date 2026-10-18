@@ -1,3 +1,4 @@
+import { useEffect, useRef } from 'react'
 import type { Step } from './model'
 
 interface Props {
@@ -13,24 +14,69 @@ interface Props {
   bars?: boolean
 }
 
-// One value per column: clicking a cell sets that step to the row's value,
-// clicking the lit cell again makes it a rest.
+// Press a cell and slide across others to paint. The first cell decides the stroke:
+// turning a cell on paints "on" (that row) along the way; turning one off erases.
+// In bar mode every column touched takes the level under the pointer.
 function StepGrid({ steps, rows, labels, onChange, current = -1, bars = false }: Props): React.JSX.Element {
-  const set = (i: number, v: number): void => {
-    const next = [...steps]
-    next[i] = bars ? v : next[i] === v ? null : v
-    onChange(next)
+  // Latest steps for the stroke handlers, which outlive a render.
+  const stepsRef = useRef(steps)
+  useEffect(() => {
+    stepsRef.current = steps
+  }, [steps])
+
+  const cellAt = (x: number, y: number): { i: number; v: number } | null => {
+    const el = document.elementFromPoint(x, y) as HTMLElement | null
+    const cell = el?.closest<HTMLElement>('.cell')
+    if (!cell?.dataset.i) return null
+    return { i: Number(cell.dataset.i), v: Number(cell.dataset.v) }
   }
+
+  const onPointerDown = (e: React.PointerEvent): void => {
+    const start = cellAt(e.clientX, e.clientY)
+    if (!start) return
+    e.preventDefault()
+    e.stopPropagation()
+    const erase = !bars && stepsRef.current[start.i] === start.v
+    const { pointerId } = e
+
+    const apply = ({ i, v }: { i: number; v: number }): void => {
+      const cur = stepsRef.current
+      const next = bars ? v : erase ? (cur[i] === v ? null : cur[i]) : v
+      if (cur[i] === next) return
+      const copy = [...cur]
+      copy[i] = next
+      stepsRef.current = copy
+      onChange(copy)
+    }
+    apply(start)
+
+    const move = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId) return
+      const hit = cellAt(ev.clientX, ev.clientY)
+      if (hit) apply(hit)
+    }
+    const up = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId) return
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+
   return (
-    <div className="step-grid nodrag">
+    <div className="step-grid nodrag" onPointerDown={onPointerDown}>
       {rows.map((v, r) => (
         <div className="grid-row" key={v}>
           <span className="row-label">{labels?.[r] ?? v}</span>
           {steps.map((s, i) => (
-            <button
+            <div
               key={i}
+              data-i={i}
+              data-v={v}
               className={`cell ${(bars ? s !== null && v <= s : s === v) ? 'on' : ''} ${i % 4 === 0 ? 'beat' : ''} ${i === current ? 'now' : ''}`}
-              onClick={() => set(i, v)}
             />
           ))}
         </div>

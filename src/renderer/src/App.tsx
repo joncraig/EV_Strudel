@@ -7,7 +7,7 @@ import Library from './components/Library'
 import Samples from './components/Samples'
 import Canvas from './canvas/Canvas'
 import { compile } from './canvas/codegen'
-import { SYNTH_PACKS } from './canvas/model'
+import { migrateCanvas, SYNTH_PACKS } from './canvas/model'
 import { AUDITION_EVENT, AuditionDetail } from './canvas/packSounds'
 import { setPlayhead } from './canvas/playhead'
 import type { CanvasState, DraggedSound } from './canvas/model'
@@ -30,7 +30,7 @@ const AUTOSAVE_KEY = 'ev-strudel:canvas-autosave'
 function readAutosave(): CanvasState {
   try {
     const raw = localStorage.getItem(AUTOSAVE_KEY)
-    if (raw) return JSON.parse(raw)
+    if (raw) return migrateCanvas(JSON.parse(raw))
   } catch {
     // Start empty.
   }
@@ -226,7 +226,7 @@ function App(): React.JSX.Element {
     const { meta, code } = await window.api.library.read(file)
     const base = { file, title: meta.title, tags: meta.tags.join(', '), source: meta.source }
     if (meta.canvas) {
-      const state = JSON.parse(meta.canvas) as CanvasState
+      const state = migrateCanvas(JSON.parse(meta.canvas))
       onCanvasChange(state)
       setCurrent({ ...base, savedCanvas: serialize(state) })
     } else {
