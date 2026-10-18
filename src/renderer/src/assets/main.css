@@ -206,3 +206,13 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
    is part of the handle for hit-testing, so presses anywhere in it start a wire. */
 .react-flow__handle::before { content: ''; position: absolute; width: 44px; height: 44px; left: 50%; top: 50%; transform: translate(-50%, -50%); border-radius: 50%; }
 .react-flow__handle:hover { box-shadow: 0 0 0 4px #8ab4f855; }
+
+/* Effects */
+.effect-node .node-header { background: #233d3d; }
+.effect-node.muted { opacity: 0.55; }
+.params { flex-direction: row; gap: 10px; padding: 8px 12px 10px; }
+.param { display: flex; flex-direction: column; align-items: center; gap: 3px; }
+.param .fader { height: 90px; width: 26px; }
+.param-value { font-size: 10px; color: #9cc; min-width: 34px; text-align: center; }
+.param-label { font-size: 10px; color: #888; }
+.effect-node .fader-fill { background: linear-gradient(#7cc, #3a7a7a); }

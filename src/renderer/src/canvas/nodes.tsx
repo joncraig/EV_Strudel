@@ -1,10 +1,12 @@
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import StepGrid from './StepGrid'
-import { Fader, StepWidthGrip } from './controls'
+import { Fader, ParamFader, StepWidthGrip } from './controls'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { useModeIndex, usePlayhead, useStepIndex } from './playhead'
 import {
   DEGREE_ROWS,
+  EFFECTS,
+  EffectNode as EffectNodeT,
   MODES,
   ModeNode as ModeNodeT,
   SampleData,
@@ -165,6 +167,34 @@ export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.
         />
       </div>
       <StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />
+    </div>
+  )
+}
+
+// ---- Effect ----
+
+// One Strudel effect on the pattern wired in; passes the result on.
+export function EffectNode({ id, data }: NodeProps<EffectNodeT>): React.JSX.Element {
+  const { updateNodeData } = useReactFlow()
+  const spec = EFFECTS[data.kind]
+  return (
+    <div className={`node effect-node ${data.bypass ? 'muted' : ''}`}>
+      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
+      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
+      <Header title={data.bypass ? `${spec.label} (bypassed)` : spec.label} />
+      <div className="node-body nodrag params">
+        {spec.params.map((p) => (
+          <ParamFader
+            key={p.key}
+            label={p.label}
+            min={p.min}
+            max={p.max}
+            log={p.log}
+            value={data.params[p.key] ?? p.value}
+            onChange={(v) => updateNodeData(id, { params: { ...data.params, [p.key]: v } })}
+          />
+        ))}
+      </div>
     </div>
   )
 }

@@ -8,8 +8,8 @@
 // sequencer squeezes its steps into one cycle, so different lengths give polyrhythms.
 
 import type { Edge } from '@xyflow/react'
-import { isBank, pieceCount, VELOCITY_LEVELS } from './model'
-import type { CanvasNode, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
+import { EFFECTS, isBank, pieceCount, VELOCITY_LEVELS } from './model'
+import type { CanvasNode, EffectData, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const DEFAULT_MODE: ModeData = { steps: [{ tonic: 'C', mode: 'major' }], cyclesPerStep: 1 }
 
@@ -64,13 +64,21 @@ export function velocityCode(data: VelocityData): string {
   return `.velocity("${levels}")`
 }
 
+// Each setting becomes its Strudel control, e.g. .delay(0.5).delaytime(0.25).
+export function effectCode(data: EffectData): string {
+  if (data.bypass) return ''
+  return EFFECTS[data.kind].params
+    .map((p) => `.${p.key}(${+(data.params[p.key] ?? p.value).toFixed(3)})`)
+    .join('')
+}
+
 export interface Compiled {
   code: string
   // Ids of the node that ends each playing chain, in stack order.
   layers: string[]
 }
 
-// Sequencers make patterns; nodes on their `pattern` output (Velocity, later others)
+// Sequencers make patterns; nodes on their `pattern` output (Velocity, effects)
 // modify them. Only the end of each chain plays, so a sequencer feeding a Velocity
 // node is heard once, with the velocity applied. A fork plays each branch.
 export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
@@ -84,7 +92,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     edges
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
       .map((e) => byId.get(e.target))
-      .filter((n): n is CanvasNode => n?.type === 'velocity')
+      .filter((n): n is CanvasNode => n?.type === 'velocity' || n?.type === 'effect')
 
   const lines: string[] = []
   const layers: string[] = []
@@ -96,7 +104,12 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       return
     }
     for (const next of outs) {
-      const applied = next.type === 'velocity' ? code + velocityCode(next.data) : code
+      const applied =
+        next.type === 'velocity'
+          ? code + velocityCode(next.data)
+          : next.type === 'effect'
+            ? code + effectCode(next.data)
+            : code
       follow(next, applied, new Set(seen).add(next.id))
     }
   }

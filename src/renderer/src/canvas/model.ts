@@ -85,9 +85,78 @@ export const VELOCITY_LEVELS = 8
 export const newVelocity = (length = 8): VelocityData => ({ steps: Array(length).fill(VELOCITY_LEVELS) })
 
 export type VelocityNode = Node<VelocityData, 'velocity'>
+
+// ---- Effects: pattern in, pattern out, each setting is a Strudel control ----
+
+export interface EffectParam {
+  key: string // Strudel control name
+  label: string
+  min: number
+  max: number
+  value: number // default
+  log?: boolean // frequencies: fader moves evenly through octaves
+}
+
+export const EFFECTS = {
+  delay: {
+    label: 'Delay',
+    params: [
+      { key: 'delay', label: 'wet', min: 0, max: 1, value: 0.5 },
+      { key: 'delaytime', label: 'time', min: 0.01, max: 1, value: 0.25 },
+      { key: 'delayfeedback', label: 'fdbk', min: 0, max: 0.95, value: 0.5 }
+    ]
+  },
+  reverb: {
+    label: 'Reverb',
+    params: [
+      { key: 'room', label: 'wet', min: 0, max: 1, value: 0.5 },
+      { key: 'size', label: 'size', min: 0, max: 10, value: 4 }
+    ]
+  },
+  lowpass: {
+    label: 'Low-pass',
+    params: [
+      { key: 'lpf', label: 'cutoff', min: 40, max: 16000, value: 2000, log: true },
+      { key: 'lpq', label: 'reso', min: 0, max: 20, value: 1 }
+    ]
+  },
+  highpass: {
+    label: 'High-pass',
+    params: [
+      { key: 'hpf', label: 'cutoff', min: 20, max: 8000, value: 300, log: true },
+      { key: 'hpq', label: 'reso', min: 0, max: 20, value: 1 }
+    ]
+  },
+  crush: { label: 'Bitcrush', params: [{ key: 'crush', label: 'bits', min: 1, max: 16, value: 6 }] },
+  distort: { label: 'Distortion', params: [{ key: 'distort', label: 'drive', min: 0, max: 10, value: 2 }] },
+  phaser: {
+    label: 'Phaser',
+    params: [
+      { key: 'phaser', label: 'rate', min: 0, max: 10, value: 2 },
+      { key: 'phaserdepth', label: 'depth', min: 0, max: 1, value: 0.5 }
+    ]
+  },
+  coarse: { label: 'Downsample', params: [{ key: 'coarse', label: 'amount', min: 1, max: 32, value: 4 }] },
+  pan: { label: 'Pan', params: [{ key: 'pan', label: 'L–R', min: 0, max: 1, value: 0.5 }] }
+} satisfies Record<string, { label: string; params: EffectParam[] }>
+
+export type EffectKind = keyof typeof EFFECTS
+
+export interface EffectData extends Record<string, unknown> {
+  kind: EffectKind
+  params: Record<string, number>
+  bypass?: boolean
+}
+
+export const newEffect = (kind: EffectKind): EffectData => ({
+  kind,
+  params: Object.fromEntries(EFFECTS[kind].params.map((p) => [p.key, p.value]))
+})
+
+export type EffectNode = Node<EffectData, 'effect'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | ModeNode | VelocityNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | ModeNode | VelocityNode | EffectNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
