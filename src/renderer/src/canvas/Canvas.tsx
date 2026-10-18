@@ -19,6 +19,7 @@ import { ModeNode, SampleNode, SequencerNode } from './nodes'
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuSection } from './ContextMenu'
+import { useLongPressFence } from './useLongPressFence'
 import { CanvasNode, CanvasState, DraggedSound, newMode, newSequencer, nodeId, SequencerKind, SYNTHS } from './model'
 
 interface Props {
@@ -48,7 +49,7 @@ type Menu =
   | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, getIntersectingNodes } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const { nodes, edges } = state
@@ -151,7 +152,22 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const openAdd = (x: number, y: number, pending?: Pending): void =>
     setMenu({ type: 'add', x, y, flow: screenToFlowPosition({ x, y }), pending })
 
-  const onPaneClick = (e: React.MouseEvent): void => openAdd(e.clientX, e.clientY)
+  // Long-press empty canvas, then drag: select every node the fence touches.
+  const { fence, suppressClick } = useLongPressFence(rootRef, (f) => {
+    const a = screenToFlowPosition({ x: Math.min(f.x0, f.x1), y: Math.min(f.y0, f.y1) })
+    const b = screenToFlowPosition({ x: Math.max(f.x0, f.x1), y: Math.max(f.y0, f.y1) })
+    const hit = new Set(
+      getIntersectingNodes({ x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y }, true).map((n) => n.id)
+    )
+    onChange({ nodes: nodes.map((n) => ({ ...n, selected: hit.has(n.id) })), edges })
+  })
+
+  const onPaneClick = (e: React.MouseEvent): void => {
+    if (suppressClick()) return
+    // With something selected, a tap on empty canvas just clears the selection.
+    if (nodes.some((n) => n.selected)) return onChange({ nodes: nodes.map((n) => ({ ...n, selected: false })), edges })
+    openAdd(e.clientX, e.clientY)
+  }
 
   const onNodeClick = (e: React.MouseEvent, node: CanvasNode): void => {
     // Taps on a node's own controls (grid cells, buttons, selects) aren't node taps.
@@ -224,6 +240,17 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       </ReactFlow>
       {nodes.length === 0 && (
         <div className="canvas-empty">Drag a sound in from Samples, or tap the canvas to add a node.</div>
+      )}
+      {fence && (
+        <div
+          className="fence"
+          style={{
+            left: Math.min(fence.x0, fence.x1) - fence.ox,
+            top: Math.min(fence.y0, fence.y1) - fence.oy,
+            width: Math.abs(fence.x1 - fence.x0),
+            height: Math.abs(fence.y1 - fence.y0)
+          }}
+        />
       )}
       {menu && (
         <ContextMenu

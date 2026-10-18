@@ -159,3 +159,7 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .context-menu button:hover { background: #23344d; }
 .context-menu button.danger { color: #e88; }
 .context-menu button.danger:hover { background: #4d2323; }
+
+/* Long-press fence select */
+.fence { position: absolute; z-index: 800; pointer-events: none; border: 1px dashed #8ab4f8; background: #8ab4f81a; }
+.react-flow__node.selected .sample-chip { border-color: #8ab4f8; box-shadow: 0 0 0 2px #8ab4f855; }
