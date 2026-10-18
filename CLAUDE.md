@@ -12,7 +12,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 
 ## Active TODO
 - Verify in `npm run dev`: canvas (drag sample in, wire, play, live edits), Samples tab (play, variants, download + offline), Patches save/open/import
-- Canvas next steps (not built): Slice node (sets cut count for a single file; no slice controls on chips or menus), Extract node (narrow a bank to chosen pieces), playhead highlight, chords (stacked degrees), per-step variant/velocity, modulator nodes
+- Canvas next steps (not built): Slice node (sets cut count for a single file; no slice controls on chips or menus), Extract node (narrow a bank to chosen pieces), chords (stacked degrees), per-step variant/velocity, modulator nodes
 - Short strudel.cc links (`?id`) unsupported (stored in their Supabase). Could add later.
 - Feature vision (discuss before building):
   - Happy accidents (controlled randomness / mutation)

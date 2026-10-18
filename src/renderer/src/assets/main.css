@@ -174,3 +174,11 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .sample-chip { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; }
 .slice-count { font-size: 12px; font-weight: normal; color: #9ab; background: #0004; border-radius: 8px; padding: 1px 7px; }
 .seq-controls button.fold.on { background: #23344d; border-color: #8ab4f8; }
+
+/* Playhead */
+.cell.now { border-color: #fc6; }
+.cell.on.now { background: #fc6; border-color: #fc6; box-shadow: 0 0 6px #fc6a; }
+.mode-step.now .row-label { color: #fc6; }
+.mode-step.now select { border-color: #c9a0f0; }
+.sample-chip { transition: box-shadow 60ms, background 60ms; }
+.sample-chip.hit { background: #2c4a33; box-shadow: 0 0 10px #7c7a; }

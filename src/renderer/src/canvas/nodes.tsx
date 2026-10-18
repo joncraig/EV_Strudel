@@ -1,6 +1,7 @@
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import StepGrid from './StepGrid'
 import { GROUP_TOGGLE_EVENT } from './groups'
+import { useModeIndex, usePlayhead, useStepIndex } from './playhead'
 import {
   DEGREE_ROWS,
   MODES,
@@ -26,9 +27,21 @@ function Header({ title }: { title: string }): React.JSX.Element {
 
 // A sound on the canvas: just its name and an output. Picking files, slicing etc.
 // will be separate nodes wired after it.
-export function SampleNode({ data }: NodeProps<SampleNodeT>): React.JSX.Element {
+export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Element {
+  // Flash while any sequencer this sound feeds has a hit on its current step.
+  const nodes = useNodes()
+  const edges = useEdges()
+  const feeds = edges
+    .filter((e) => e.source === id)
+    .map((e) => nodes.find((n) => n.id === e.target))
+    .filter((n): n is SequencerNodeT => n?.type === 'sequencer' && !n.data.muted)
+  const hit = usePlayhead((cycle) => {
+    if (cycle < 0) return false
+    const pos = cycle - Math.floor(cycle)
+    return feeds.some((s) => s.data.steps[Math.floor(pos * s.data.steps.length)] != null)
+  })
   return (
-    <div className="node sample-chip" title={data.pack ? `${data.s} (${data.pack})` : data.s}>
+    <div className={`node sample-chip ${hit ? 'hit' : ''}`} title={data.pack ? `${data.s} (${data.pack})` : data.s}>
       <span>{data.label ?? data.s}</span>
       {/* How many equal pieces a Slices sequencer cuts this into; change it from the node menu. */}
       <span className="slice-count" title={isBank(data) ? 'files' : 'slices'}>
@@ -63,19 +76,20 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
   }
 
   const slices = sample ? pieceCount(sample) : 8
+  const current = useStepIndex(data.muted ? 0 : data.steps.length)
   const grid = (() => {
     switch (data.kind) {
       case 'degree':
-        return <StepGrid steps={data.steps} rows={DEGREE_ROWS} onChange={(steps: Step[]) => update({ steps })} />
+        return <StepGrid steps={data.steps} rows={DEGREE_ROWS} onChange={(steps: Step[]) => update({ steps })} current={current} />
       case 'trigger':
-        return <StepGrid steps={data.steps} rows={[1]} labels={['●']} onChange={(steps) => update({ steps })} />
+        return <StepGrid steps={data.steps} rows={[1]} labels={['●']} onChange={(steps) => update({ steps })} current={current} />
       case 'slice': {
         // Show slices top-down from the highest, so the grid reads like a piano roll.
         const all = Array.from({ length: slices }, (_, i) => slices - 1 - i)
         const used = new Set(data.steps.map((v) => (v === null ? v : v % slices)))
         const rows = data.folded ? all.filter((v) => used.has(v)) : all
         if (!rows.length) return <div className="hint">Nothing placed yet. Unfold to pick slices.</div>
-        return <StepGrid steps={data.steps} rows={rows} onChange={(steps) => update({ steps })} />
+        return <StepGrid steps={data.steps} rows={rows} onChange={(steps) => update({ steps })} current={current} />
       }
     }
   })()
@@ -136,13 +150,14 @@ export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element 
   const update = (patch: Partial<ModeNodeT['data']>): void => updateNodeData(id, patch)
   const setStep = (i: number, patch: Partial<ModeNodeT['data']['steps'][number]>): void =>
     update({ steps: data.steps.map((s, j) => (j === i ? { ...s, ...patch } : s)) })
+  const active = useModeIndex(data.steps.length, data.cyclesPerStep)
 
   return (
     <div className="node mode-node">
       <Header title="Mode sequence" />
       <div className="node-body nodrag">
         {data.steps.map((step, i) => (
-          <div className="mode-step" key={i}>
+          <div className={`mode-step ${i === active ? 'now' : ''}`} key={i}>
             <span className="row-label">{i + 1}</span>
             <select value={step.tonic} onChange={(e) => setStep(i, { tonic: e.target.value })}>
               {TONICS.map((t) => (

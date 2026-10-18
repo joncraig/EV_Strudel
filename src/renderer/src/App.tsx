@@ -9,6 +9,7 @@ import Canvas from './canvas/Canvas'
 import { compile } from './canvas/codegen'
 import { SYNTH_PACKS } from './canvas/model'
 import { AUDITION_EVENT, AuditionDetail } from './canvas/packSounds'
+import { setPlayhead } from './canvas/playhead'
 import type { CanvasState, DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
 
@@ -170,6 +171,22 @@ function App(): React.JSX.Element {
   const playingRef = useRef(playing)
   useEffect(() => {
     playingRef.current = playing
+  }, [playing])
+
+  // Feed the playhead from the scheduler every frame while playing.
+  useEffect(() => {
+    if (!playing) return setPlayhead(-1)
+    let raf = 0
+    const tick = (): void => {
+      const scheduler = replRef.current?.scheduler
+      if (scheduler) setPlayhead(scheduler.now())
+      raf = requestAnimationFrame(tick)
+    }
+    raf = requestAnimationFrame(tick)
+    return () => {
+      cancelAnimationFrame(raf)
+      setPlayhead(-1)
+    }
   }, [playing])
   useEffect(() => {
     if (!playingRef.current) return
