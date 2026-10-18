@@ -40,7 +40,7 @@ export function StepWidthGrip({
   return (
     <div
       className="width-grip nodrag"
-      title={`${steps} steps: drag to change`}
+      title={`length ${steps} steps: drag to change`}
       onPointerDown={(e) => {
         const start = steps
         let last = start

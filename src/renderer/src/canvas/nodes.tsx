@@ -2,9 +2,11 @@ import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@
 import StepGrid from './StepGrid'
 import { Fader, ParamFader, StepWidthGrip } from './controls'
 import { GROUP_TOGGLE_EVENT } from './groups'
-import { useModeIndex, usePlayhead, useStepIndex } from './playhead'
+import { useModeIndex, usePlayhead } from './playhead'
 import {
   DEGREE_ROWS,
+  MAX_STEPS,
+  stepAt,
   EFFECTS,
   EffectNode as EffectNodeT,
   MODES,
@@ -22,7 +24,6 @@ import {
   VelocityNode as VelocityNodeT
 } from './model'
 
-const MAX_STEPS = 32
 
 // Title bar (drags the node). `right` holds header controls like the step grip.
 function Header({ title, right }: { title: string; right?: React.ReactNode }): React.JSX.Element {
@@ -48,8 +49,10 @@ export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Elem
     .filter((n): n is SequencerNodeT => n?.type === 'sequencer' && !n.data.muted)
   const hit = usePlayhead((cycle) => {
     if (cycle < 0) return false
-    const pos = cycle - Math.floor(cycle)
-    return feeds.some((s) => s.data.steps[Math.floor(pos * s.data.steps.length)] != null)
+    return feeds.some((s) => {
+      const len = s.data.steps.length
+      return s.data.steps[stepAt(cycle, len, s.data.resolution || len)] != null
+    })
   })
   return (
     <div className={`node sample-chip ${hit ? 'hit' : ''}`} title={data.pack ? `${data.s} (${data.pack})` : data.s}>
@@ -87,20 +90,20 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
   }
 
   const slices = sample ? pieceCount(sample) : 8
-  const current = useStepIndex(data.muted ? 0 : data.steps.length)
+  const timing = { resolution: data.resolution, muted: data.muted }
   const grid = (() => {
     switch (data.kind) {
       case 'degree':
-        return <StepGrid steps={data.steps} rows={DEGREE_ROWS} onChange={(steps: Step[]) => update({ steps })} current={current} />
+        return <StepGrid steps={data.steps} rows={DEGREE_ROWS} onChange={(steps: Step[]) => update({ steps })} timing={timing} />
       case 'trigger':
-        return <StepGrid steps={data.steps} rows={[1]} labels={['●']} onChange={(steps) => update({ steps })} current={current} />
+        return <StepGrid steps={data.steps} rows={[1]} labels={['●']} onChange={(steps) => update({ steps })} timing={timing} />
       case 'slice': {
         // Show slices top-down from the highest, so the grid reads like a piano roll.
         const all = Array.from({ length: slices }, (_, i) => slices - 1 - i)
         const used = new Set(data.steps.map((v) => (v === null ? v : v % slices)))
         const rows = data.folded ? all.filter((v) => used.has(v)) : all
         if (!rows.length) return <div className="hint">Nothing placed yet. Unfold to pick slices.</div>
-        return <StepGrid steps={data.steps} rows={rows} onChange={(steps) => update({ steps })} current={current} />
+        return <StepGrid steps={data.steps} rows={rows} onChange={(steps) => update({ steps })} timing={timing} />
       }
     }
   })()
@@ -151,7 +154,7 @@ const LEVEL_ROWS = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LE
 // Per-step loudness for whatever pattern is wired in; passes the result on.
 export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
-  const current = useStepIndex(data.steps.length)
+  const timing = { resolution: data.resolution }
   const setLength = (len: number): void => {
     const n = Math.min(MAX_STEPS, Math.max(1, len))
     updateNodeData(id, { steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? VELOCITY_LEVELS) })
@@ -170,7 +173,7 @@ export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.
           rows={LEVEL_ROWS}
           labels={LEVEL_ROWS.map(() => '')}
           bars
-          current={current}
+          timing={timing}
           onChange={(steps) => updateNodeData(id, { steps: steps.map((v) => v ?? VELOCITY_LEVELS) })}
         />
       </div>

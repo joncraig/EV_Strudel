@@ -50,7 +50,9 @@ export const pieceCount = (s: SampleData): number => (isBank(s) ? (s.files as nu
 
 export interface SequencerData extends Record<string, unknown> {
   kind: SequencerKind
+  // Length is steps.length; each step lasts 1/resolution of a bar (one Strudel cycle).
   steps: Step[]
+  resolution: number
   octave: number
   gain: number
   muted: boolean
@@ -78,11 +80,15 @@ export interface GroupData extends Record<string, unknown> {
 // 1..VELOCITY_LEVELS (top = full). Its own step count, so accents can run polymetric.
 export interface VelocityData extends Record<string, unknown> {
   steps: number[]
+  resolution: number
 }
 
 export const VELOCITY_LEVELS = 8
 
-export const newVelocity = (length = 8): VelocityData => ({ steps: Array(length).fill(VELOCITY_LEVELS) })
+export const newVelocity = (length = 16): VelocityData => ({
+  steps: Array(length).fill(VELOCITY_LEVELS),
+  resolution: 16
+})
 
 export type VelocityNode = Node<VelocityData, 'velocity'>
 
@@ -163,12 +169,30 @@ export interface CanvasState {
   edges: Edge[]
 }
 
+// Step sizes, as steps per bar. A bar is one Strudel cycle.
+export const RESOLUTIONS: { value: number; label: string }[] = [
+  { value: 4, label: '1/4' },
+  { value: 8, label: '1/8' },
+  { value: 12, label: '1/8T' },
+  { value: 16, label: '1/16' },
+  { value: 24, label: '1/16T' },
+  { value: 32, label: '1/32' }
+]
+
+export const MAX_STEPS = 64
+
+// Which step is playing at a cycle position: steps have a fixed size, so a pattern
+// longer than a bar spans several cycles and loops after length steps.
+export const stepAt = (cycle: number, length: number, resolution: number): number =>
+  length > 0 ? ((Math.floor(cycle * resolution) % length) + length) % length : -1
+
 // Degree rows shown in the grid, top to bottom.
 export const DEGREE_ROWS = [8, 7, 6, 5, 4, 3, 2, 1]
 
-export const newSequencer = (kind: SequencerKind, length = 8): SequencerData => ({
+export const newSequencer = (kind: SequencerKind, length = 16): SequencerData => ({
   kind,
   steps: Array(length).fill(null),
+  resolution: 16,
   octave: kind === 'degree' ? 3 : 0,
   gain: 0.8,
   muted: false
@@ -203,7 +227,13 @@ export interface DraggedSound {
 // Bring older saved canvases up to date. (The Velocity node was briefly called Volume.)
 export function migrateCanvas(state: CanvasState): CanvasState {
   return {
-    nodes: state.nodes.map((n) => ((n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n)),
+    nodes: state.nodes.map((n) => {
+      let node = (n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n
+      // Before resolution existed, a pattern's steps filled one bar. Keep it sounding the same.
+      if ((node.type === 'sequencer' || node.type === 'velocity') && !node.data.resolution)
+        node = { ...node, data: { ...node.data, resolution: node.data.steps.length } } as CanvasNode
+      return node
+    }),
     edges: state.edges
   }
 }

@@ -2,7 +2,15 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
 import { evalScope } from '@strudel/core'
 import { transpiler } from '@strudel/transpiler'
-import { getAudioContext, initAudio, registerSynthSounds, samples, superdough, webaudioRepl } from '@strudel/webaudio'
+import {
+  getAudioContext,
+  initAudio,
+  registerSynthSounds,
+  samples,
+  setAudioContext,
+  superdough,
+  webaudioRepl
+} from '@strudel/webaudio'
 import Library from './components/Library'
 import Samples from './components/Samples'
 import Canvas from './canvas/Canvas'
@@ -100,7 +108,12 @@ function App(): React.JSX.Element {
   // ---- Strudel engine (no editor: the canvas compiles to code) ----
   useEffect(() => {
     if (replRef.current) return
+    // "playback" latency gives the audio thread a bigger buffer, so a busy UI frame
+    // doesn't cause dropouts (heard as clicks). Strudel's default is "interactive"
+    // (~10ms), which crackled on the Surface while the playhead was drawing.
+    const audioContext = setAudioContext(new AudioContext({ latencyHint: 'playback' }))
     replRef.current = webaudioRepl({
+      audioContext,
       transpiler,
       onEvalError: (e: Error) => setEvalError(e.message),
       onToggle: (started: boolean) => setPlaying(started)

@@ -176,17 +176,13 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .seq-controls button.fold.on { background: #23344d; border-color: #8ab4f8; }
 
 /* Playhead */
-.cell.now { border-color: #fc6; }
-.cell.on.now { background: #fc6; border-color: #fc6; box-shadow: 0 0 6px #fc6a; }
 .mode-step.now .row-label { color: #fc6; }
 .mode-step.now select { border-color: #c9a0f0; }
-.sample-chip { transition: box-shadow 60ms, background 60ms; }
-.sample-chip.hit { background: #2c4a33; box-shadow: 0 0 10px #7c7a; }
+.sample-chip.hit { background: #2c4a33; }
 
 /* Velocity */
 .velocity-node .node-header { background: #4d3a23; }
 .velocity-node .cell.on { background: #e0a050; border-color: #e0a050; }
-.velocity-node .cell.on.now { background: #fc6; border-color: #fc6; }
 .velocity-node .row-label { width: 4px; }
 
 /* Paintable grid cells (divs), right-edge step grip, vertical gain fader */
@@ -241,3 +237,12 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .width-grip { flex: none; display: flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px; border-radius: 12px; background: #0005; border: 1px solid #ffffff22; cursor: ew-resize; touch-action: none; font-weight: 600; font-size: 12px; color: #ddd; }
 .width-grip::before { content: '↔'; font-size: 11px; color: #9ab; }
 .width-grip:hover { border-color: #8ab4f8; background: #8ab4f822; }
+.seg { display: flex; }
+.seg button { height: 34px; padding: 0 10px; border-radius: 0; margin-left: -1px; }
+.seg button:first-child { border-radius: 4px 0 0 4px; }
+.seg button:last-child { border-radius: 0 4px 4px 0; }
+.seg button.on { background: #23344d; border-color: #8ab4f8; position: relative; }
+
+/* Playhead: one translucent bar per grid, moved with transform (no re-render, no glow) */
+.step-grid { position: relative; }
+.playhead-bar { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: 16px; background: #ffcc6640; border: 1px solid #ffcc66aa; border-radius: 2px; pointer-events: none; will-change: transform; z-index: 1; }

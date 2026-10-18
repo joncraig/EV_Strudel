@@ -4,8 +4,9 @@
 //                  ▲
 //                 mode
 //
-// Each sequencer with a sound connected becomes one layer of a stack(). Every
-// sequencer squeezes its steps into one cycle, so different lengths give polyrhythms.
+// Each sequencer with a sound connected becomes one layer of a stack(). Steps have a
+// fixed size (resolution, default 1/16) and length sets the loop, so different
+// lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
 import { EFFECTS, isBank, pieceCount, VELOCITY_LEVELS } from './model'
@@ -19,6 +20,13 @@ function stepPattern(steps: Step[], toToken: (v: number) => string): string {
   return steps.map((v) => (v === null ? '~' : toToken(v))).join(' ')
 }
 
+// Steps have a fixed size (1/resolution of a bar), so the pattern spans
+// length/resolution bars: "[a b c]/2" in mini-notation plays over two cycles.
+function timed(pattern: string, length: number, resolution: number): string {
+  const bars = +(length / resolution).toFixed(6)
+  return bars === 1 ? pattern : `[${pattern}]/${bars}`
+}
+
 // "<C3:dorian C3:dorian D3:phrygian ...>": one entry per cycle.
 function modePattern(mode: ModeData, octave: number): string {
   const perCycle = mode.steps.flatMap((m) =>
@@ -30,24 +38,26 @@ function modePattern(mode: ModeData, octave: number): string {
 export function sequencerCode(seq: SequencerData, sample: SampleData, mode: ModeData | null): string | null {
   if (seq.steps.every((v) => v === null)) return null
   const sound = quote(sample.s)
+  const len = seq.steps.length
+  const res = seq.resolution || len
   let code: string
   switch (seq.kind) {
     case 'degree': {
       // UI degrees are 1-based; Strudel's are 0-based.
-      const degrees = stepPattern(seq.steps, (v) => String(v - 1))
+      const degrees = timed(stepPattern(seq.steps, (v) => String(v - 1)), len, res)
       code = `n("${degrees}").scale("${modePattern(mode ?? DEFAULT_MODE, seq.octave)}").s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
       if (sample.n) code += `.n(${sample.n})`
       break
     }
     case 'trigger': {
-      code = `s(${sound}).n(${sample.n}).struct("${stepPattern(seq.steps, () => 'x')}")`
+      code = `s(${sound}).n(${sample.n}).struct("${timed(stepPattern(seq.steps, () => 'x'), len, res)}")`
       break
     }
     case 'slice': {
       // Steps set before the piece count was lowered wrap around.
       const count = pieceCount(sample)
-      const picks = stepPattern(seq.steps, (v) => String(v % count))
+      const picks = timed(stepPattern(seq.steps, (v) => String(v % count)), len, res)
       // A multi-file sound picks files; a single file is cut into equal slices.
       code = isBank(sample)
         ? `n("${picks}").s(${sound})`
@@ -60,7 +70,11 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, mode: Mode
 
 // Strudel's velocity is 0..1 and multiplies with gain, so accents scale the channel level.
 export function velocityCode(data: VelocityData): string {
-  const levels = data.steps.map((v) => +(v / VELOCITY_LEVELS).toFixed(3)).join(' ')
+  const levels = timed(
+    data.steps.map((v) => +(v / VELOCITY_LEVELS).toFixed(3)).join(' '),
+    data.steps.length,
+    data.resolution || data.steps.length
+  )
   return `.velocity("${levels}")`
 }
 
