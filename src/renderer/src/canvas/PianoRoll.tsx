@@ -16,6 +16,10 @@ import {
   lengthLabel,
   ModeData,
   ModeNode,
+  OCTAVES,
+  OctaveData,
+  OctaveNode,
+  DEFAULT_OCTAVE,
   MODES,
   TONICS,
   pieceCount,
@@ -31,7 +35,7 @@ import {
 // It edits the same steps as the node.
 
 interface Props {
-  node: SequencerNode | VelocityNode | LengthNode | KeyNode | ModeNode
+  node: SequencerNode | VelocityNode | LengthNode | KeyNode | ModeNode | OctaveNode
   nodes: CanvasNode[]
   edges: Edge[]
   onSteps: (steps: Step[]) => void
@@ -59,12 +63,20 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   let rows: number[]
   let labels: string[]
   let bars = false
-  if (node.type === 'key' || node.type === 'mode') {
-    const names = node.type === 'key' ? [...TONICS] : MODES.map((m) => m.label)
+  if (node.type === 'key' || node.type === 'mode' || node.type === 'octave') {
+    const names =
+      node.type === 'key' ? [...TONICS] : node.type === 'mode' ? MODES.map((m) => m.label) : OCTAVES.map((o) => `octave ${o}`)
     const all = names.map((_, i) => names.length - 1 - i)
     const used = new Set(node.data.steps.filter((v) => v !== null))
     rows = node.data.folded ? all.filter((v) => used.has(v)) : all
     labels = rows.map((v) => names[v])
+    // Octave rows hold octave numbers, not indexes.
+    if (node.type === 'octave') {
+      const all2 = [...OCTAVES].reverse()
+      const used2 = new Set(node.data.steps.filter((v) => v !== null))
+      rows = node.data.folded ? all2.filter((v) => used2.has(v)) : all2
+      labels = rows.map((v) => `octave ${v}`)
+    }
   } else if (node.type === 'velocity' || node.type === 'length') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
     labels = rows.map((v) =>
@@ -82,10 +94,11 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     const tonic = TONICS[key?.steps.find((v) => v !== null) ?? 0]
     const modeId = MODES[mode?.steps.find((v) => v !== null) ?? 0].id
     rows = DEGREE_ROWS
-    labels = rows.map((d) => degreeName(d, tonic, modeId, node.data.octave))
-  } else if (node.data.kind === 'trigger') {
-    rows = [1]
-    labels = [sample?.label ?? sample?.s ?? 'hit']
+    const octave =
+      (downstream(nodes, edges, node.id, 'octave')?.data as OctaveData | undefined)?.steps.find((v) => v !== null) ??
+      node.data.octave ??
+      DEFAULT_OCTAVE
+    labels = rows.map((d) => degreeName(d, tonic, modeId, octave))
   } else {
     const count = sample ? pieceCount(sample) : 8
     const all = Array.from({ length: count }, (_, i) => count - 1 - i)

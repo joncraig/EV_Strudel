@@ -21,6 +21,8 @@ import {
   lengthLabel,
   STEP_RESOLUTION,
   ModeNode as ModeNodeT,
+  OCTAVES,
+  OctaveNode as OctaveNodeT,
   SampleData,
   SampleNode as SampleNodeT,
   SequencerKind,
@@ -67,9 +69,11 @@ export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Elem
     <div className={`node sample-chip ${hit ? 'hit' : ''}`} title={data.pack ? `${data.s} (${data.pack})` : data.s}>
       <span>{data.label ?? data.s}</span>
       {/* How many equal pieces a Slices sequencer cuts this into; change it from the node menu. */}
-      <span className="slice-count" title={isBank(data) ? 'files' : 'slices'}>
-        {pieceCount(data)}
-      </span>
+      {isBank(data) && (
+        <span className="slice-count" title="files">
+          {pieceCount(data)}
+        </span>
+      )}
       <Handle type="target" position={Position.Left} id="pattern" />
       <Handle type="source" position={Position.Right} id="pattern" />
     </div>
@@ -101,7 +105,6 @@ export function MixNode({ id }: NodeProps<MixNodeT>): React.JSX.Element {
 
 const KIND_LABEL: Record<SequencerKind, string> = {
   degree: 'Notes (scale degrees)',
-  trigger: 'Rhythm (triggers)',
   slice: 'Slices (cut & rearrange)'
 }
 
@@ -124,8 +127,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
     switch (data.kind) {
       case 'degree':
         return <StepGrid steps={data.steps} rows={DEGREE_ROWS} onChange={(steps: Step[]) => update({ steps })} timing={timing} />
-      case 'trigger':
-        return <StepGrid steps={data.steps} rows={[1]} labels={['●']} onChange={(steps) => update({ steps })} timing={timing} />
       case 'slice': {
         // Show slices top-down from the highest, so the grid reads like a piano roll.
         const all = Array.from({ length: slices }, (_, i) => slices - 1 - i)
@@ -148,14 +149,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
       />
       <div className="node-body">
         <div className="seq-controls nodrag">
-          {data.kind === 'degree' && (
-            <>
-              <span>oct</span>
-              <button onClick={() => update({ octave: Math.max(0, data.octave - 1) })}>−</button>
-              <span className="value">{data.octave}</span>
-              <button onClick={() => update({ octave: Math.min(7, data.octave + 1) })}>+</button>
-            </>
-          )}
           <button className={data.muted ? 'on' : ''} onClick={() => update({ muted: !data.muted })}>
             M
           </button>
@@ -276,6 +269,7 @@ export function EffectNode({ id, data }: NodeProps<EffectNodeT>): React.JSX.Elem
 // Rows top to bottom: highest index first, so the grid reads like a piano roll.
 const KEY_ROWS = TONICS.map((_, i) => TONICS.length - 1 - i)
 const MODE_ROWS = MODES.map((_, i) => MODES.length - 1 - i)
+const OCTAVE_ROWS = [...OCTAVES].reverse()
 
 function HarmonyNode({
   id,
@@ -283,8 +277,8 @@ function HarmonyNode({
   kind
 }: {
   id: string
-  data: KeyNodeT['data'] | ModeNodeT['data']
-  kind: 'key' | 'mode'
+  data: KeyNodeT['data'] | ModeNodeT['data'] | OctaveNodeT['data']
+  kind: 'key' | 'mode' | 'octave'
 }): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
   const lens = useStepLens(id)
@@ -293,16 +287,18 @@ function HarmonyNode({
     const n = Math.min(MAX_STEPS, Math.max(1, len))
     update({ steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? null) })
   }
-  const allRows = kind === 'key' ? KEY_ROWS : MODE_ROWS
+  const allRows = kind === 'key' ? KEY_ROWS : kind === 'mode' ? MODE_ROWS : OCTAVE_ROWS
   const used = new Set(data.steps.filter((v) => v !== null))
   const rows = data.folded ? allRows.filter((v) => used.has(v)) : allRows
-  const labels = rows.map((v) => (kind === 'key' ? TONICS[v] : MODES[v].label.replace(/ (.*)/, '')))
+  const labels = rows.map((v) =>
+    kind === 'key' ? TONICS[v] : kind === 'mode' ? MODES[v].label.replace(/ (.*)/, '') : `oct ${v}`
+  )
   return (
     <div className={`node harmony-node ${kind}-node`}>
       <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
       <Header
-        title={kind === 'key' ? 'Key' : 'Mode'}
+        title={kind === 'key' ? 'Key' : kind === 'mode' ? 'Mode' : 'Octave'}
         right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
       />
       <div className="node-body">
@@ -330,6 +326,10 @@ function HarmonyNode({
 
 export function KeyNode({ id, data }: NodeProps<KeyNodeT>): React.JSX.Element {
   return <HarmonyNode id={id} data={data} kind="key" />
+}
+
+export function OctaveNode({ id, data }: NodeProps<OctaveNodeT>): React.JSX.Element {
+  return <HarmonyNode id={id} data={data} kind="octave" />
 }
 
 export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element {

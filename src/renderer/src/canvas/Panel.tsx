@@ -18,7 +18,6 @@ import {
 
 const KIND: Record<SequencerKind, string> = {
   degree: 'Notes sequencer',
-  trigger: 'Rhythm sequencer',
   slice: 'Slices sequencer'
 }
 
@@ -138,9 +137,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
             max={MAX_STEPS}
             onChange={(n) => set({ steps: resize(d.steps, n, null) })}
           />
-          {d.kind === 'degree' && (
-            <Stepper label="octave" value={d.octave} min={0} max={7} onChange={(octave) => set({ octave })} />
-          )}
           <Slider label="gain" value={d.gain} min={0} max={1.5} onChange={(gain) => set({ gain })} />
           <Toggle label="Mute" on={d.muted} onChange={(muted) => set({ muted })} />
           {d.kind === 'slice' && <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />}
@@ -190,9 +186,10 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       break
     }
     case 'key':
-    case 'mode': {
+    case 'mode':
+    case 'octave': {
       const d = node.data
-      title = node.type === 'key' ? 'Key sequencer' : 'Mode sequencer'
+      title = node.type === 'key' ? 'Key sequencer' : node.type === 'mode' ? 'Mode sequencer' : 'Octave sequencer'
       body = (
         <>
           <Stepper
@@ -233,7 +230,7 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
   }
 
   const roll =
-    node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length' || node.type === 'key' || node.type === 'mode' ? (
+    node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length' || node.type === 'key' || node.type === 'mode' || node.type === 'octave' ? (
       <PianoRoll node={node} nodes={nodes} edges={edges} onSteps={(steps) => set({ steps })} />
     ) : null
 

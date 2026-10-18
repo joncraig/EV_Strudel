@@ -7,8 +7,8 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { EFFECTS, heldValues, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS, VELOCITY_LEVELS } from './model'
-import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
+import { DEFAULT_OCTAVE, EFFECTS, heldValues, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS, VELOCITY_LEVELS } from './model'
+import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, OctaveData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const quote = (s: string): string => JSON.stringify(s)
 
@@ -49,12 +49,21 @@ const perSixteenth = (values: number[], lens: Lens): number[] =>
 // The scale per 1/16, from the Key and Mode sequencers (C / Ionian when not wired).
 // They loop at their own lengths, so the combined loop is lcm of the two, written
 // compactly with weights: "[D3:dorian@16 E3:dorian@16 ...]/2". Empty steps hold.
-function harmonyPattern(key: Stepped<KeyData> | null, mode: Stepped<ModeData> | null, octave: number): string {
+function harmonyPattern(
+  key: Stepped<KeyData> | null,
+  mode: Stepped<ModeData> | null,
+  octave: Stepped<OctaveData> | null,
+  fallbackOctave: number
+): string {
   const keys = key?.data.steps.length ? perSixteenth(heldValues(key.data.steps, 0), key.lens) : [0]
   const modes = mode?.data.steps.length ? perSixteenth(heldValues(mode.data.steps, 0), mode.lens) : [0]
-  const length = Math.min(MAX_HARMONY_STEPS, (keys.length * modes.length) / gcd(keys.length, modes.length))
+  const octs = octave?.data.steps.length
+    ? perSixteenth(heldValues(octave.data.steps, fallbackOctave), octave.lens)
+    : [fallbackOctave]
+  const lcm = (a: number, b: number): number => (a * b) / gcd(a, b)
+  const length = Math.min(MAX_HARMONY_STEPS, lcm(lcm(keys.length, modes.length), octs.length))
   const at = (i: number): string =>
-    `${TONICS[keys[i % keys.length]] ?? 'C'}${octave}:${MODES[modes[i % modes.length]]?.id ?? 'major'}`
+    `${TONICS[keys[i % keys.length]] ?? 'C'}${octs[i % octs.length]}:${MODES[modes[i % modes.length]]?.id ?? 'major'}`
   // Run-length encode: consecutive equal sixteenths become one weighted token.
   const runs: [string, number][] = []
   for (let i = 0; i < length; i++) {
@@ -83,10 +92,6 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens
       code = `n("${degrees}")${SCALE}.s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
       if (sample.n) code += `.n(${sample.n})`
-      break
-    }
-    case 'trigger': {
-      code = `s(${sound}).n(${sample.n}).struct("${stepped(steps(seq.steps, () => 'x'), lens)}")`
       break
     }
     case 'slice': {
@@ -150,7 +155,7 @@ const DEFAULT_NOTE_SOUND: SampleData = { s: 'triangle', n: 0, slices: 8 }
 // inputs (and its delay/reverb are its own).
 export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const byId = new Map(nodes.map((n) => [n.id, n]))
-  const CHAIN = new Set(['sample', 'velocity', 'length', 'effect', 'key', 'mode', 'mix'])
+  const CHAIN = new Set(['sample', 'velocity', 'length', 'effect', 'key', 'mode', 'octave', 'mix'])
   const patternOuts = (id: string): CanvasNode[] =>
     edges
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
@@ -165,6 +170,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     sample: SampleData | null
     key: Stepped<KeyData> | null
     mode: Stepped<ModeData> | null
+    octave: Stepped<OctaveData> | null
     // The Length in effect: sequencers after it step at these lengths.
     length: Lens
     // Step lengths of the playing sequencer (notes are clipped relative to them).
@@ -182,7 +188,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (!sample) return null
     const code = sequencerCode(ctx.seq, sample, ctx.seqLens)
     if (!code) return null
-    const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.seq.octave)}")`
+    const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.octave, ctx.seq.octave ?? DEFAULT_OCTAVE)}")`
     return code.replace(SCALE, scale) + ctx.mods
   }
 
@@ -198,6 +204,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       stepLens.set(n.id, c.length)
     } else if (n.type === 'mode') {
       c.mode = { data: n.data, lens: c.length }
+      stepLens.set(n.id, c.length)
+    } else if (n.type === 'octave') {
+      c.octave = { data: n.data, lens: c.length }
       stepLens.set(n.id, c.length)
     } else if (n.type === 'velocity') {
       c.mods += velocityCode(n.data, c.length)
@@ -268,7 +277,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     }
   }
 
-  const empty = { sample: null, key: null, mode: null, length: null, seqLens: null, mods: '' }
+  const empty = { sample: null, key: null, mode: null, octave: null, length: null, seqLens: null, mods: '' }
   for (const node of nodes)
     if (node.type === 'sequencer' && !node.data.muted)
     {

@@ -24,6 +24,7 @@ import {
   LengthNode,
   MixNode,
   ModeNode,
+  OctaveNode,
   SampleNode,
   SequencerNode,
   VelocityNode
@@ -48,6 +49,7 @@ import {
   DraggedSound,
   newKey,
   newMode,
+  newOctave,
   newSequencer,
   newEffect,
   newLength,
@@ -75,6 +77,7 @@ const nodeTypes = {
   mix: MixNode,
   key: KeyNode,
   mode: ModeNode,
+  octave: OctaveNode,
   velocity: VelocityNode,
   length: LengthNode,
   effect: EffectNode,
@@ -89,6 +92,7 @@ const isValidConnection: IsValidConnection = (c) =>
 type NewKind =
   | SequencerKind
   | 'mix'
+  | 'octave'
   | 'key'
   | 'mode'
   | 'velocity'
@@ -172,6 +176,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
 
   const makeNode = (kind: NewKind, position: { x: number; y: number }): CanvasNode => {
     if (kind === 'mix') return { id: nodeId('mix'), type: 'mix', position, data: {} }
+    if (kind === 'octave') return { id: nodeId('oct'), type: 'octave', position, data: newOctave() }
     if (kind === 'key') return { id: nodeId('key'), type: 'key', position, data: newKey() }
     if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
     if (kind.startsWith('fx:'))
@@ -203,12 +208,12 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const addSections = (m: Extract<Menu, { type: 'add' }>): MenuSection[] => {
     const sequencers: [NewKind, string][] = [
       ['degree', 'Notes sequencer'],
-      ['trigger', 'Rhythm sequencer'],
       ['slice', 'Slices sequencer']
     ]
     const mix: [NewKind, string] = ['mix', 'Mix']
     const key: [NewKind, string] = ['key', 'Key sequencer']
     const mode: [NewKind, string] = ['mode', 'Mode sequencer']
+    const octave: [NewKind, string] = ['octave', 'Octave sequencer']
     const velocity: [NewKind, string] = ['velocity', 'Velocity sequencer']
     const length: [NewKind, string] = ['length', 'Length sequencer']
     const effects: [NewKind, string][] = (Object.keys(EFFECTS) as EffectKind[]).map((k) => [
@@ -224,7 +229,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         { title: 'Sequencers', kinds: sequencers },
         { title: 'Shape', kinds: [velocity, length] },
         { title: 'Effects', kinds: effects },
-        { title: 'Harmony', kinds: [key, mode] },
+        { title: 'Harmony', kinds: [key, mode, octave] },
         { title: 'Sound', kinds: synths },
         { title: 'Route', kinds: [mix] }
       ]
@@ -236,7 +241,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         pattern: [
           { title: 'Sound', kinds: synths },
           { title: 'Shape', kinds: [velocity, length] },
-          { title: 'Harmony', kinds: [key, mode] },
+          { title: 'Harmony', kinds: [key, mode, octave] },
           { title: 'Effects', kinds: effects },
           { title: 'Route', kinds: [mix] }
         ]
@@ -249,7 +254,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         pattern: [
           { title: 'Pattern from', kinds: sequencers },
           { title: 'Shape', kinds: [velocity, length] },
-          { title: 'Harmony', kinds: [key, mode] },
+          { title: 'Harmony', kinds: [key, mode, octave] },
           { title: 'Route', kinds: [mix] }
         ]
       }[pending.handle]

@@ -27,9 +27,9 @@ export interface ModeStep {
   mode: string
 }
 
-export type SequencerKind = 'degree' | 'trigger' | 'slice'
+export type SequencerKind = 'degree' | 'slice'
 
-// A step is a degree (1-based), a slice index (0-based), 1 for a trigger, or null for a rest.
+// A step is a degree (1-based), a piece index (0-based), or null for a rest.
 export type Step = number | null
 
 export interface SampleData extends Record<string, unknown> {
@@ -46,7 +46,9 @@ export interface SampleData extends Record<string, unknown> {
 
 // What a Slices sequencer picks from: the sound's files, or cuts of one file.
 export const isBank = (s: SampleData): boolean => (s.files ?? 0) > 1
-export const pieceCount = (s: SampleData): number => (isBank(s) ? (s.files as number) : s.slices)
+// A multi-file sound's pieces are its files; a single sound is one piece (the whole
+// sound) until a Slice node cuts it.
+export const pieceCount = (s: SampleData): number => (isBank(s) ? (s.files as number) : 1)
 
 export interface SequencerData extends Record<string, unknown> {
   kind: SequencerKind
@@ -73,6 +75,15 @@ export interface ModeData extends Record<string, unknown> {
   resolution: number
   folded?: boolean
 }
+
+// Octave as a step sequencer: a step holds an octave number (1..7); empty steps hold.
+export interface OctaveData extends Record<string, unknown> {
+  steps: Step[]
+  resolution: number
+  folded?: boolean
+}
+export const OCTAVES = [1, 2, 3, 4, 5, 6, 7]
+export const DEFAULT_OCTAVE = 3
 
 // The list-style mode node from before Key and Mode were split (migrated on load).
 interface LegacyModeData {
@@ -201,9 +212,10 @@ export interface MixData extends Record<string, unknown> {
 
 export type MixNode = Node<MixData, 'mix'>
 export type KeyNode = Node<KeyData, 'key'>
+export type OctaveNode = Node<OctaveData, 'octave'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | MixNode | KeyNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | MixNode | KeyNode | OctaveNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
@@ -250,6 +262,8 @@ export const newKey = (): KeyData => ({
   steps: [0, ...Array(15).fill(null)],
   resolution: STEP_RESOLUTION
 })
+// One octave unless lengthened into a sequence.
+export const newOctave = (): OctaveData => ({ steps: [DEFAULT_OCTAVE], resolution: STEP_RESOLUTION })
 export const newMode = (): ModeData => ({
   steps: [0, ...Array(15).fill(null)],
   resolution: STEP_RESOLUTION
@@ -303,6 +317,9 @@ export function migrateCanvas(state: CanvasState): CanvasState {
       // canvases had steps squeezed into one bar; they become 1/16 steps, by design.
       if ((node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length') && node.data.resolution !== STEP_RESOLUTION)
         node = { ...node, data: { ...node.data, resolution: STEP_RESOLUTION } } as CanvasNode
+      // Rhythm sequencers are gone: a Slices sequencer with one row is the same thing.
+      if (node.type === 'sequencer' && (node.data.kind as string) === 'trigger')
+        node = { ...node, data: { ...node.data, kind: 'slice', steps: node.data.steps.map((v) => (v === null ? null : 0)) } } as CanvasNode
       // Length table v1 was [1/4, 1/2, 1, 2, 3, 4, 6, 8] steps; map to the nearest v2 value.
       if (node.type === 'length' && node.data.version !== 2) {
         const V1 = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
