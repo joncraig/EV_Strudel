@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useState } from 'react'
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import {
   addEdge,
   applyEdgeChanges,
@@ -16,6 +16,7 @@ import {
 import '@xyflow/react/dist/style.css'
 import { ModeNode, SampleNode, SequencerNode } from './nodes'
 import { compile } from './codegen'
+import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import {
   CanvasNode,
   CanvasState,
@@ -24,7 +25,6 @@ import {
   newSequencer,
   nodeId,
   SequencerKind,
-  SOUND_MIME,
   SYNTHS
 } from './model'
 
@@ -74,24 +74,32 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const addSequencer = (kind: SequencerKind): void =>
     add({ id: nodeId('seq'), type: 'sequencer', position: spawnPosition(), data: newSequencer(kind) })
 
-  const onDrop = (e: React.DragEvent): void => {
-    const raw = e.dataTransfer.getData(SOUND_MIME)
-    if (!raw) return
-    e.preventDefault()
-    const sound = JSON.parse(raw) as DraggedSound
+  // Sounds arrive from the Samples tab as window events (see soundDrag.ts).
+  const rootRef = useRef<HTMLDivElement>(null)
+  const dropRef = useRef<(d: SoundDropDetail) => void>(() => {})
+  dropRef.current = ({ sound, point }) => {
+    if (point) {
+      const r = rootRef.current?.getBoundingClientRect()
+      if (!r || point.x < r.left || point.x > r.right || point.y < r.top || point.y > r.bottom) return
+    }
     onSoundDropped(sound)
     add({
       id: nodeId('sample'),
       type: 'sample',
-      position: screenToFlowPosition({ x: e.clientX, y: e.clientY }),
+      position: point ? screenToFlowPosition(point) : spawnPosition(),
       data: { s: sound.s, pack: sound.pack, n: 0, slices: 8 }
     })
   }
+  useEffect(() => {
+    const listener = (e: Event): void => dropRef.current((e as CustomEvent<SoundDropDetail>).detail)
+    window.addEventListener(SOUND_DROP_EVENT, listener)
+    return () => window.removeEventListener(SOUND_DROP_EVENT, listener)
+  }, [])
 
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
 
   return (
-    <div className="canvas" onDragOver={(e) => e.preventDefault()} onDrop={onDrop}>
+    <div className="canvas" ref={rootRef}>
       <div className="canvas-tools">
         <button onClick={() => addSequencer('degree')}>+ Notes</button>
         <button onClick={() => addSequencer('trigger')}>+ Rhythm</button>

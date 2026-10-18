@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
-import { SOUND_MIME } from '../canvas/model'
+import { addSound, startSoundDrag } from '../canvas/soundDrag'
 import type { DownloadProgress, PackSounds, PackStatus } from '../../../shared/samplePacks'
 
 interface Props {
@@ -139,17 +139,15 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
                 <ul className="items">
                   {!sounds[p.id] && <li className="empty">Loading…</li>}
                   {shownSounds.map(([name, count]) => (
-                    <li
-                      key={name}
-                      className={expanded === name ? 'active' : ''}
-                      draggable
-                      title="Click to play, drag onto the canvas"
-                      onDragStart={(e) => {
-                        e.dataTransfer.setData(SOUND_MIME, JSON.stringify({ s: name, pack: p.id }))
-                        e.dataTransfer.effectAllowed = 'copy'
-                      }}
-                    >
+                    <li key={name} className={expanded === name ? 'active' : ''}>
                       <div className="sound-row">
+                        <span
+                          className="grip"
+                          title="Drag onto the canvas"
+                          onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id })}
+                        >
+                          ⠿
+                        </span>
                         <span className="sound-name" title="Play" onClick={() => audition(p.id, name, 0)}>
                           ▶ {name}
                         </span>
@@ -158,6 +156,13 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): Re
                             {count} {expanded === name ? '▾' : '▸'}
                           </span>
                         )}
+                        <button
+                          className="keep"
+                          title="Add to the canvas"
+                          onClick={() => addSound({ s: name, pack: p.id })}
+                        >
+                          +
+                        </button>
                       </div>
                       {expanded === name && (
                         <div className="variants">

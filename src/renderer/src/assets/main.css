@@ -117,3 +117,10 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 
 .mode-step { display: flex; gap: 4px; align-items: center; }
 .mode-step button { padding: 0 5px; }
+
+/* Touch-friendly sound dragging (pointer events, see canvas/soundDrag.ts) */
+.grip { touch-action: none; cursor: grab; color: #777; padding: 2px 6px; margin-left: -6px; font-size: 14px; user-select: none; }
+.grip:hover { color: #ddd; }
+.samples .sound-row { align-items: center; }
+.samples .sound-row .keep { position: static; padding: 0 8px; font-size: 14px; }
+.drag-ghost { position: fixed; left: 0; top: 0; z-index: 1000; pointer-events: none; padding: 4px 10px; background: #233d2a; color: #9d9; border: 1px solid #4a7; border-radius: 4px; font-size: 12px; font-weight: 600; box-shadow: 0 4px 12px #0008; }

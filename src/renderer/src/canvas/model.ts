@@ -85,8 +85,7 @@ export const SYNTHS = ['sawtooth', 'square', 'triangle', 'sine', 'piano', 'super
 let counter = 0
 export const nodeId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${counter++}`
 
-// Drag-and-drop payload from the Samples tab.
-export const SOUND_MIME = 'application/x-ev-sound'
+// A sound dragged or added from the Samples tab.
 
 export interface DraggedSound {
   s: string
