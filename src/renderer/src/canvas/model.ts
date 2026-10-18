@@ -191,10 +191,17 @@ export const newEffect = (kind: EffectKind): EffectData => ({
 })
 
 export type EffectNode = Node<EffectData, 'effect'>
+// Several chains in, one out: they play stacked through whatever follows (shared
+// effects). Each Mix is its own Strudel orbit, so its delay/reverb are its own.
+export interface MixData extends Record<string, unknown> {
+  label?: string
+}
+
+export type MixNode = Node<MixData, 'mix'>
 export type KeyNode = Node<KeyData, 'key'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | KeyNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | MixNode | KeyNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
@@ -269,7 +276,7 @@ export interface DraggedSound {
 
 // Bring older saved canvases up to date. (The Velocity node was briefly called Volume.)
 export function migrateCanvas(state: CanvasState): CanvasState {
-  state = chainHarmony(splitLegacyModes(state))
+  state = chainSamples(chainHarmony(splitLegacyModes(state)))
   // Wires are all drawn the same now (key/mode used to be animated).
   state = { nodes: state.nodes, edges: state.edges.map((e) => (e.animated ? { ...e, animated: false } : e)) }
   return {
@@ -375,4 +382,75 @@ function chainHarmony(state: CanvasState): CanvasState {
     for (const o of outs) edges.push({ ...o, id: `${o.id}-via-${prev}`, source: prev })
   }
   return { nodes: state.nodes, edges }
+}
+
+// ---- Chain walking (pattern wires) ----
+
+const patternEdges = (edges: Edge[]): Edge[] => edges.filter((e) => e.sourceHandle === 'pattern')
+
+// First node of a type after id along the chain (e.g. the Sample a sequencer plays).
+export function downstream(nodes: CanvasNode[], edges: Edge[], id: string, type: CanvasNode['type']): CanvasNode | undefined {
+  const pe = patternEdges(edges)
+  const seen = new Set([id])
+  let frontier = [id]
+  while (frontier.length) {
+    const next: string[] = []
+    for (const from of frontier)
+      for (const e of pe.filter((e) => e.source === from)) {
+        const n = nodes.find((n) => n.id === e.target)
+        if (!n || seen.has(n.id)) continue
+        if (n.type === type) return n
+        seen.add(n.id)
+        if (n.type !== 'mix') next.push(n.id) // a Mix starts a new, shared chain
+      }
+    frontier = next
+  }
+  return undefined
+}
+
+// Nodes of a type before id along the chain (e.g. the sequencers feeding a Sample).
+export function upstream(nodes: CanvasNode[], edges: Edge[], id: string, type: CanvasNode['type']): CanvasNode[] {
+  const pe = patternEdges(edges)
+  const seen = new Set([id])
+  const found: CanvasNode[] = []
+  let frontier = [id]
+  while (frontier.length) {
+    const next: string[] = []
+    for (const to of frontier)
+      for (const e of pe.filter((e) => e.target === to)) {
+        const n = nodes.find((n) => n.id === e.source)
+        if (!n || seen.has(n.id)) continue
+        seen.add(n.id)
+        if (n.type === type) found.push(n)
+        if (n.type !== 'mix') next.push(n.id)
+      }
+    frontier = next
+  }
+  return found
+}
+
+// Samples used to plug into a sequencer's sound input. Sound is a chain dimension
+// now: rewire Sample -> Seq as Seq -> Sample -> (whatever Seq fed before). A sample
+// that fed several sequencers is copied, one per sequencer, so chains stay separate.
+function chainSamples(state: CanvasState): CanvasState {
+  const old = state.edges.filter((e) => e.sourceHandle === 'sound')
+  if (!old.length) return state
+  const nodes = [...state.nodes]
+  let edges = state.edges.filter((e) => !old.includes(e))
+  const used = new Set<string>()
+  for (const e of old) {
+    let sampleId = e.source
+    const original = nodes.find((n) => n.id === e.source)
+    if (!original) continue
+    if (used.has(sampleId)) {
+      sampleId = `${e.source}-${e.target}`
+      nodes.push({ ...original, id: sampleId, position: { x: original.position.x, y: original.position.y + 60 } })
+    }
+    used.add(sampleId)
+    const outs = edges.filter((x) => x.source === e.target && x.sourceHandle === 'pattern')
+    edges = edges.filter((x) => !outs.includes(x))
+    edges.push({ id: `e-${e.target}-${sampleId}-pattern`, source: e.target, target: sampleId, sourceHandle: 'pattern', targetHandle: 'pattern' })
+    for (const o of outs) edges.push({ ...o, id: `${o.id}-via-${sampleId}`, source: sampleId })
+  }
+  return { nodes, edges }
 }

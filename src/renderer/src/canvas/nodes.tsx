@@ -10,7 +10,11 @@ import {
   EFFECTS,
   EffectNode as EffectNodeT,
   MODES,
+  CanvasNode,
+  downstream,
   KeyNode as KeyNodeT,
+  MixNode as MixNodeT,
+  upstream,
   LENGTH_FULL_STEP,
   LengthNode as LengthNodeT,
   lengthLabel,
@@ -45,13 +49,12 @@ function Header({ title, right }: { title: string; right?: React.ReactNode }): R
 // A sound on the canvas: just its name and an output. Picking files, slicing etc.
 // will be separate nodes wired after it.
 export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Element {
-  // Flash while any sequencer this sound feeds has a hit on its current step.
-  const nodes = useNodes()
+  // Flash while any sequencer that plays this sound has a hit on its current step.
+  const nodes = useNodes() as CanvasNode[]
   const edges = useEdges()
-  const feeds = edges
-    .filter((e) => e.source === id)
-    .map((e) => nodes.find((n) => n.id === e.target))
-    .filter((n): n is SequencerNodeT => n?.type === 'sequencer' && !n.data.muted)
+  const feeds = upstream(nodes, edges, id, 'sequencer').filter(
+    (n): n is SequencerNodeT => n.type === 'sequencer' && !n.data.muted
+  )
   const hit = usePlayhead((cycle) => {
     if (cycle < 0) return false
     return feeds.some((s) => {
@@ -66,7 +69,29 @@ export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Elem
       <span className="slice-count" title={isBank(data) ? 'files' : 'slices'}>
         {pieceCount(data)}
       </span>
-      <Handle type="source" position={Position.Right} id="sound" />
+      <Handle type="target" position={Position.Left} id="pattern" />
+      <Handle type="source" position={Position.Right} id="pattern" />
+    </div>
+  )
+}
+
+// ---- Mix ----
+
+// Several chains in, one out: they play stacked through whatever follows, sharing
+// its effects. Each Mix is its own orbit (bus), so its delay and reverb are its own.
+export function MixNode({ id }: NodeProps<MixNodeT>): React.JSX.Element {
+  const edges = useEdges()
+  const inputs = edges.filter((e) => e.target === id).length
+  return (
+    <div className="node mix-node">
+      <Handle type="target" position={Position.Left} id="pattern" />
+      <Header title="Mix" />
+      <div className="node-body">
+        <div className="mix-count">
+          {inputs} input{inputs === 1 ? '' : 's'}
+        </div>
+      </div>
+      <Handle type="source" position={Position.Right} id="pattern" />
     </div>
   )
 }
@@ -83,10 +108,8 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
   const { updateNodeData } = useReactFlow()
   const nodes = useNodes()
   const edges = useEdges()
-  const sample = edges
-    .filter((e) => e.target === id)
-    .map((e) => nodes.find((n) => n.id === e.source))
-    .find((n) => n?.type === 'sample')?.data as SampleData | undefined
+  // The sound this sequencer plays: the first Sample along its chain.
+  const sample = downstream(nodes as CanvasNode[], edges, id, 'sample')?.data as SampleData | undefined
 
   const update = (patch: Partial<SequencerNodeT['data']>): void => updateNodeData(id, patch)
   const setLength = (len: number): void => {
@@ -115,7 +138,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
 
   return (
     <div className={`node sequencer-node ${data.muted ? 'muted' : ''}`}>
-      <Handle type="target" position={Position.Left} id="sound" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
       <Header
         title={KIND_LABEL[data.kind]}
@@ -140,7 +162,7 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
             </button>
           )}
         </div>
-        {!sample && <div className="hint">Connect a sample to the left input.</div>}
+        {!sample && data.kind !== 'degree' && <div className="hint">Wire the output into a Sample.</div>}
         {/* Grid, then the gain fader; the right edge drags the step count. */}
         <div className="seq-main">
           {grid}

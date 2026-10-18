@@ -108,68 +108,102 @@ export interface Compiled {
   layers: string[]
 }
 
-// Sequencers make patterns; nodes on their `pattern` output (Velocity, effects)
-// modify them. Only the end of each chain plays, so a sequencer feeding a Velocity
-// node is heard once, with the velocity applied. A fork plays each branch.
+// Without a Sample in the chain, Notes play this synth; other sequencers stay silent.
+const DEFAULT_NOTE_SOUND: SampleData = { s: 'triangle', n: 0, slices: 8 }
+
+// A chain starts at a sequencer (when) and every node after it adds a dimension of
+// what: Sample (sound), Key, Mode, Length, Velocity, effects, each with its own
+// length. Only chain ends play. A Mix gathers several chains, stacks them, and
+// continues as one chain on its own orbit, so effects after it are shared by its
+// inputs (and its delay/reverb are its own).
 export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const byId = new Map(nodes.map((n) => [n.id, n]))
-  const inputs = (id: string, type: CanvasNode['type']): CanvasNode | undefined =>
-    edges
-      .filter((e) => e.target === id)
-      .map((e) => byId.get(e.source))
-      .find((n) => n?.type === type)
-  const CHAIN = new Set(['velocity', 'length', 'effect', 'key', 'mode'])
+  const CHAIN = new Set(['sample', 'velocity', 'length', 'effect', 'key', 'mode', 'mix'])
   const patternOuts = (id: string): CanvasNode[] =>
     edges
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
       .map((e) => byId.get(e.target))
       .filter((n): n is CanvasNode => !!n && CHAIN.has(n.type))
 
-  // Key and Mode anywhere in a chain set the scale for that chain's Notes.
-  interface Harmony {
+  // What a chain has gathered so far. A sequencer start builds its pattern only at
+  // the end, once it knows its sound and scale; a Mix start is already a pattern.
+  interface Ctx {
+    seq: SequencerData | null
+    base: string | null
+    sample: SampleData | null
     key: KeyData | null
     mode: ModeData | null
-    octave: number
+    mods: string // appended controls: .velocity() .clip() .delay() ...
+  }
+
+  const finish = (ctx: Ctx): string | null => {
+    if (ctx.base) return ctx.base + ctx.mods
+    if (!ctx.seq) return null
+    const sample = ctx.sample ?? (ctx.seq.kind === 'degree' ? DEFAULT_NOTE_SOUND : null)
+    if (!sample) return null
+    const code = sequencerCode(ctx.seq, sample)
+    if (!code) return null
+    const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.seq.octave)}")`
+    return code.replace(SCALE, scale) + ctx.mods
   }
 
   const lines: string[] = []
   const layers: string[] = []
-  const follow = (node: CanvasNode, code: string, seen: Set<string>, harmony: Harmony): void => {
+  const mixMembers = new Map<string, string[]>()
+
+  const follow = (node: CanvasNode, ctx: Ctx, seen: Set<string>): void => {
     const outs = patternOuts(node.id).filter((n) => !seen.has(n.id))
     if (!outs.length) {
-      const scale = `.scale("${harmonyPattern(harmony.key, harmony.mode, harmony.octave)}")`
-      lines.push(code.replace(SCALE, scale))
-      layers.push(node.id)
+      const code = finish(ctx)
+      if (code) {
+        lines.push(code)
+        layers.push(node.id)
+      }
       return
     }
     for (const next of outs) {
-      const h =
-        next.type === 'key'
-          ? { ...harmony, key: next.data }
-          : next.type === 'mode'
-            ? { ...harmony, mode: next.data }
-            : harmony
-      const applied =
-        next.type === 'velocity'
-          ? code + velocityCode(next.data)
-          : next.type === 'length'
-            ? code + lengthCode(next.data)
-            : next.type === 'effect'
-              ? code + effectCode(next.data)
-              : code
-      follow(next, applied, new Set(seen).add(next.id), h)
+      if (next.type === 'mix') {
+        const code = finish(ctx)
+        if (code) mixMembers.set(next.id, [...(mixMembers.get(next.id) ?? []), code])
+        continue
+      }
+      const c = { ...ctx }
+      if (next.type === 'sample') {
+        // The first sound sets how the sequencer plays (files, slices); later ones re-voice it.
+        if (!c.sample && !c.base) c.sample = next.data
+        else c.mods += `.s(${quote(next.data.s)}).n(${next.data.n})`
+      } else if (next.type === 'key') c.key = next.data
+      else if (next.type === 'mode') c.mode = next.data
+      else if (next.type === 'velocity') c.mods += velocityCode(next.data)
+      else if (next.type === 'length') c.mods += lengthCode(next.data)
+      else if (next.type === 'effect') c.mods += effectCode(next.data)
+      follow(next, c, new Set(seen).add(next.id))
     }
   }
 
-  for (const node of nodes) {
-    if (node.type !== 'sequencer' || node.data.muted) continue
-    const sample = inputs(node.id, 'sample')
-    if (!sample) continue
-    const code = sequencerCode(node.data, sample.data as SampleData)
-    if (code) follow(node, code, new Set([node.id]), { key: null, mode: null, octave: node.data.octave })
-  }
+  const empty = { sample: null, key: null, mode: null, mods: '' }
+  for (const node of nodes)
+    if (node.type === 'sequencer' && !node.data.muted)
+      follow(node, { ...empty, seq: node.data, base: null }, new Set([node.id]))
+
+  // Mixes: once a Mix's inputs are known, it continues as one chain. A Mix that feeds
+  // another Mix is done first, so keep going until nothing new arrives.
+  const mixes = nodes.filter((n) => n.type === 'mix')
+  const done = new Set<string>()
+  for (let pass = 0; pass < mixes.length; pass++)
+    for (const [i, mix] of mixes.entries()) {
+      if (done.has(mix.id)) continue
+      const feedsFromMix = edges.some(
+        (e) => e.target === mix.id && byId.get(e.source)?.type === 'mix' && !done.has(e.source)
+      )
+      if (feedsFromMix) continue
+      done.add(mix.id)
+      const members = mixMembers.get(mix.id) ?? []
+      if (!members.length) continue
+      const base = `stack(${members.join(', ')}).orbit(${i + 2})`
+      follow(mix, { ...empty, seq: null, base }, new Set([mix.id]))
+    }
+
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
   return { code, layers }
 }
-
-export type { SequencerData }

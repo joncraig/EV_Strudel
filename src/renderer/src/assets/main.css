@@ -281,3 +281,9 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 
 /* Blender-style insert: the wire a dragged node will splice into */
 .react-flow__edge.insert-target .react-flow__edge-path { stroke: #fc6; stroke-width: 3; }
+
+/* Mix */
+.mix-node { min-width: 120px; }
+.mix-node .node-header { background: #3a3a3a; }
+.mix-count { color: #aaa; font-size: 12px; text-align: center; padding: 4px 0; }
+.mix-node .react-flow__handle-left { height: 24px; border-radius: 3px; }

@@ -208,6 +208,17 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       )
       break
     }
+    case 'mix': {
+      title = 'Mix'
+      body = (
+        <div className="pinfo">
+          Stacks every chain wired in and plays them through what follows, sharing its effects.
+          <br />
+          Its delay and reverb are its own (a separate orbit).
+        </div>
+      )
+      break
+    }
     case 'group': {
       const d = node.data
       title = 'Group'

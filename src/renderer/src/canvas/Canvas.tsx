@@ -17,7 +17,7 @@ import {
   useReactFlow
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { EffectNode, GroupNode, KeyNode, LengthNode, ModeNode, SampleNode, SequencerNode, VelocityNode } from './nodes'
+import { EffectNode, GroupNode, KeyNode, LengthNode, MixNode, ModeNode, SampleNode, SequencerNode, VelocityNode } from './nodes'
 import { GROUP_TOGGLE_EVENT, groupNodes, removeNode, setCollapsed, ungroup } from './groups'
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
@@ -51,13 +51,13 @@ interface Props {
 // Hold this long without moving to open a node's menu.
 const LONG_PRESS_MS = 500
 
-const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, key: KeyNode, mode: ModeNode, velocity: VelocityNode, length: LengthNode, effect: EffectNode, group: GroupNode }
+const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mix: MixNode, key: KeyNode, mode: ModeNode, velocity: VelocityNode, length: LengthNode, effect: EffectNode, group: GroupNode }
 
 // Handles only connect to the same-named handle: sound→sound, mode→mode.
 const isValidConnection: IsValidConnection = (c) => c.sourceHandle === c.targetHandle && c.source !== c.target
 
 // What the add menu can create: a sequencer kind, a mode node, or a synth sound.
-type NewKind = SequencerKind | 'key' | 'mode' | 'velocity' | 'length' | `fx:${EffectKind}` | `synth:${string}`
+type NewKind = SequencerKind | 'mix' | 'key' | 'mode' | 'velocity' | 'length' | `fx:${EffectKind}` | `synth:${string}`
 
 // A wire dragged out of a handle and dropped on empty canvas.
 interface Pending {
@@ -109,7 +109,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const onConnect = useCallback(
     (c: Connection) => {
       const { nodes: ns, edges: es } = stateRef.current
-      const kept = es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle))
+      const multi = ns.find((n) => n.id === c.target)?.type === 'mix'
+      const kept = multi ? es : es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle))
       commit({ nodes: ns, edges: addEdge(c, kept) })
     },
     [commit]
@@ -117,7 +118,9 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
 
   const add = (node: CanvasNode, edge?: Edge): void => {
     // A new wire into an input replaces whatever was wired there.
-    const kept = edge ? edges.filter((e) => !(e.target === edge.target && e.targetHandle === edge.targetHandle)) : edges
+    const multi = edge && nodes.find((n) => n.id === edge.target)?.type === 'mix'
+    const kept =
+      edge && !multi ? edges.filter((e) => !(e.target === edge.target && e.targetHandle === edge.targetHandle)) : edges
     onChange({ nodes: [...nodes, node], edges: edge ? [...kept, edge] : edges })
   }
 
@@ -128,6 +131,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const closeMenu = useCallback(() => setMenu(null), [])
 
   const makeNode = (kind: NewKind, position: { x: number; y: number }): CanvasNode => {
+    if (kind === 'mix') return { id: nodeId('mix'), type: 'mix', position, data: {} }
     if (kind === 'key') return { id: nodeId('key'), type: 'key', position, data: newKey() }
     if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
     if (kind.startsWith('fx:'))
@@ -146,6 +150,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       ['trigger', 'Rhythm sequencer'],
       ['slice', 'Slices sequencer']
     ]
+    const mix: [NewKind, string] = ['mix', 'Mix']
     const key: [NewKind, string] = ['key', 'Key sequencer']
     const mode: [NewKind, string] = ['mode', 'Mode sequencer']
     const velocity: [NewKind, string] = ['velocity', 'Velocity sequencer']
@@ -161,7 +166,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         { title: 'Shape', kinds: [velocity, length] },
         { title: 'Effects', kinds: effects },
         { title: 'Harmony', kinds: [key, mode] },
-        { title: 'Synths', kinds: synths }
+        { title: 'Sound', kinds: synths },
+        { title: 'Route', kinds: [mix] }
       ]
     else if (pending.handleType === 'source')
       groups = {
@@ -169,9 +175,11 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         key: [{ title: 'Apply to', kinds: [sequencers[0]] }],
         mode: [{ title: 'Apply to', kinds: [sequencers[0]] }],
         pattern: [
+          { title: 'Sound', kinds: synths },
           { title: 'Shape', kinds: [velocity, length] },
           { title: 'Harmony', kinds: [key, mode] },
-          { title: 'Effects', kinds: effects }
+          { title: 'Effects', kinds: effects },
+          { title: 'Route', kinds: [mix] }
         ]
       }[pending.handle]
     else
@@ -179,7 +187,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         sound: [{ title: 'Sound from', kinds: synths }],
         key: [{ title: 'Key from', kinds: [key] }],
         mode: [{ title: 'Mode from', kinds: [mode] }],
-        pattern: [{ title: 'Pattern from', kinds: sequencers }]
+        pattern: [{ title: 'Pattern from', kinds: sequencers }, { title: 'Route', kinds: [mix] }]
       }[pending.handle]
 
     return groups.map((g) => ({
@@ -335,6 +343,7 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
   const onConnectStart: OnConnectStart = (_e, { nodeId, handleId, handleType }) => {
     detachedRef.current = false
     if (handleType !== 'target' || !nodeId) return
+    if (stateRef.current.nodes.find((n) => n.id === nodeId)?.type === 'mix') return
     const { nodes: ns, edges: es } = stateRef.current
     const wired = es.filter((e) => e.target === nodeId && e.targetHandle === handleId)
     if (!wired.length) return
@@ -357,7 +366,7 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
   }
 
   // ---- Blender-style insert: drag a chain node over a pattern wire to splice it in ----
-  const CHAIN_TYPES = new Set(['velocity', 'length', 'key', 'mode', 'effect'])
+  const CHAIN_TYPES = new Set(['sample', 'velocity', 'length', 'key', 'mode', 'effect', 'mix'])
   const insertRef = useRef<{ edgeId: string; el: Element } | null>(null)
 
   const clearInsert = (): void => {
