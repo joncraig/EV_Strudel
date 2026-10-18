@@ -5,6 +5,8 @@ export interface PatchMeta {
   title: string
   source?: string
   tags: string[]
+  // Canvas graph as JSON, when the patch was made on the canvas.
+  canvas?: string
 }
 
 export interface PatchSummary extends PatchMeta {
@@ -25,6 +27,7 @@ export function parsePatch(text: string): { meta: Partial<PatchMeta>; code: stri
     const [, key, value] = m
     if (key === 'title') meta.title = value.trim()
     else if (key === 'source') meta.source = value.trim()
+    else if (key === 'canvas') meta.canvas = value.trim()
     else if (key === 'tags')
       meta.tags = value
         .split(',')
@@ -38,5 +41,6 @@ export function serializePatch(meta: PatchMeta, code: string): string {
   const head = [`// @title ${meta.title}`]
   if (meta.source) head.push(`// @source ${meta.source}`)
   if (meta.tags.length) head.push(`// @tags ${meta.tags.join(', ')}`)
+  if (meta.canvas) head.push(`// @canvas ${meta.canvas}`)
   return `${head.join('\n')}\n\n${code.trimEnd()}\n`
 }

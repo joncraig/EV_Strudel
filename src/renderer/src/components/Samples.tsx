@@ -1,4 +1,5 @@
 import { useEffect, useMemo, useState } from 'react'
+import { SOUND_MIME } from '../canvas/model'
 import type { DownloadProgress, PackSounds, PackStatus } from '../../../shared/samplePacks'
 
 interface Props {
@@ -8,7 +9,6 @@ interface Props {
   onLoad: (id: string) => Promise<void>
   onTogglePin: (id: string) => void
   onAudition: (sound: string, n: number) => void
-  onInsert: (sound: string) => void
 }
 
 const cleanError = (e: unknown): string =>
@@ -16,7 +16,7 @@ const cleanError = (e: unknown): string =>
 
 const MAX_VARIANTS = 32
 
-function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition, onInsert }: Props): React.JSX.Element {
+function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition }: Props): React.JSX.Element {
   const [packs, setPacks] = useState<PackStatus[]>([])
   const [open, setOpen] = useState<string | null>(null)
   const [sounds, setSounds] = useState<Record<string, PackSounds>>({})
@@ -139,7 +139,16 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition, onInsert }: 
                 <ul className="items">
                   {!sounds[p.id] && <li className="empty">Loading…</li>}
                   {shownSounds.map(([name, count]) => (
-                    <li key={name} className={expanded === name ? 'active' : ''}>
+                    <li
+                      key={name}
+                      className={expanded === name ? 'active' : ''}
+                      draggable
+                      title="Click to play, drag onto the canvas"
+                      onDragStart={(e) => {
+                        e.dataTransfer.setData(SOUND_MIME, JSON.stringify({ s: name, pack: p.id }))
+                        e.dataTransfer.effectAllowed = 'copy'
+                      }}
+                    >
                       <div className="sound-row">
                         <span className="sound-name" title="Play" onClick={() => audition(p.id, name, 0)}>
                           ▶ {name}
@@ -149,9 +158,6 @@ function Samples({ pinned, loaded, onLoad, onTogglePin, onAudition, onInsert }: 
                             {count} {expanded === name ? '▾' : '▸'}
                           </span>
                         )}
-                        <button className="keep" title={`Insert s("${name}") at the cursor`} onClick={() => onInsert(name)}>
-                          ⤵
-                        </button>
                       </div>
                       {expanded === name && (
                         <div className="variants">

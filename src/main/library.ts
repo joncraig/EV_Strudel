@@ -61,7 +61,10 @@ async function list(): Promise<PatchSummary[]> {
 
 async function read(file: string): Promise<{ meta: PatchMeta; code: string }> {
   const { meta, code } = parsePatch(await fs.readFile(safePath(file), 'utf8'))
-  return { meta: { title: meta.title ?? file, source: meta.source, tags: meta.tags ?? [] }, code }
+  return {
+    meta: { title: meta.title ?? file, source: meta.source, tags: meta.tags ?? [], canvas: meta.canvas },
+    code
+  }
 }
 
 // Writes to `file` if given, otherwise creates a new file from the title.
@@ -139,7 +142,8 @@ async function importPatches(raw: string): Promise<string[]> {
     const patchMeta: PatchMeta = {
       title: meta.title ?? f.title,
       source: meta.source ?? (isUrl ? input : undefined),
-      tags: meta.tags ?? []
+      tags: meta.tags ?? [],
+      canvas: meta.canvas
     }
     saved.push(await save(null, patchMeta, code))
   }
