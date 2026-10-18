@@ -1,6 +1,7 @@
 import { Edge, useReactFlow } from '@xyflow/react'
 import PianoRoll from './PianoRoll'
 import { valueDrag } from '../drag'
+import { useNudge } from '../nudge'
 import {
   CanvasNode,
   EFFECTS,
@@ -68,12 +69,16 @@ function Slider({
   const fromT = (p: number): number => (log ? min * Math.pow(max / min, p) : min + p * (max - min))
   const shown = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value >= 100 ? value.toFixed(0) : value.toFixed(2)
   const t = Math.min(1, Math.max(0, toT(value)))
+  const setT = (p: number): void => onChange(+fromT(Math.min(1, Math.max(0, p))).toFixed(3))
+  // One notch = 1% of the travel.
+  const touch = useNudge((n) => setT(t + n / 100))
   return (
     <div className="pfield slider">
       <span className="plabel">{label}</span>
       <div
         className="hbar"
         onPointerDown={(e) => {
+          touch()
           const r = e.currentTarget.getBoundingClientRect()
           const start = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
           const set = (p: number): void => onChange(+fromT(Math.min(1, Math.max(0, p))).toFixed(3))

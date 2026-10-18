@@ -2,6 +2,7 @@
 
 import { MAX_BPM, MIN_BPM } from '../tempo'
 import { valueDrag } from '../drag'
+import { useNudge } from '../nudge'
 
 interface Props {
   playing: boolean
@@ -16,7 +17,9 @@ const clamp = (v: number): number => Math.min(MAX_BPM, Math.max(MIN_BPM, Math.ro
 function Transport({ playing, bpm, onPlay, onStop, onBpm }: Props): React.JSX.Element {
   // Drag the number up/down (or sideways) to change tempo: 1 BPM per 4px. A mouse drag
   // isn't stopped at the screen edge (pointer lock, see ../drag.ts).
+  const touch = useNudge((n) => onBpm(clamp(bpm + n)))
   const onDragTempo = (e: React.PointerEvent): void => {
+    touch()
     const start = bpm
     valueDrag(e, (dx, dy) => onBpm(clamp(start + (dx - dy) / 4)))
   }

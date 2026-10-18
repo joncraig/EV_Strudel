@@ -1,5 +1,6 @@
 import { useStore } from '@xyflow/react'
 import { valueDrag } from '../drag'
+import { useNudge } from '../nudge'
 
 // Width of one grid column on screen at zoom 1: a 16px cell plus its 2px gap.
 export const CELL_PX = 18
@@ -25,11 +26,16 @@ export function StepWidthGrip({
   onChange: (steps: number) => void
 }): React.JSX.Element {
   const zoom = useZoom()
+  const touch = useNudge((n) => {
+    const next = Math.min(max, Math.max(min, steps + n))
+    if (next !== steps) onChange(next)
+  })
   return (
     <div
       className="width-grip nodrag"
       title={`length ${steps} steps: drag to change`}
       onPointerDown={(e) => {
+        touch()
         const start = steps
         let last = start
         dragCanvas(e, zoom, (dx) => {
@@ -63,11 +69,14 @@ export function Fader({
 }): React.JSX.Element {
   const zoom = useZoom()
   const set = (v: number): void => onChange(+Math.min(max, Math.max(0, v)).toFixed(2))
+  // One notch = 1% of the travel.
+  const touch = useNudge((n) => set(value + (n * max) / 100))
   return (
     <div
       className="fader nodrag"
       title={`${label} ${display ?? value.toFixed(2)}`}
       onPointerDown={(e) => {
+        touch()
         const track = e.currentTarget.getBoundingClientRect()
         // Jump to where the track was touched, then follow the drag.
         const fromY = (clientY: number): number => ((track.bottom - clientY) / track.height) * max

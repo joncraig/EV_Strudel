@@ -12,6 +12,7 @@ import {
   webaudioRepl
 } from '@strudel/webaudio'
 import { installFastReverb } from './audio/fastReverb'
+import { installNudgeKeys } from './nudge'
 import Library from './components/Library'
 import Transport from './components/Transport'
 import { bpmToCps, DEFAULT_BPM } from './tempo'
@@ -29,6 +30,7 @@ import { TOGGLE_CODE_EVENT, TOGGLE_PANEL_EVENT } from './events'
 
 // Reverb impulse responses built in a worker and cached (see audio/fastReverb.ts).
 installFastReverb()
+installNudgeKeys()
 
 interface Current {
   file: string | null
