@@ -24,7 +24,10 @@ function createWindow(): void {
     ...(process.platform === 'linux' ? { icon } : {}),
     webPreferences: {
       preload: join(__dirname, '../preload/index.js'),
-      sandbox: false
+      sandbox: false,
+      // Keep timers at full rate when the window is hidden or behind another one:
+      // Strudel's scheduler runs on a 50ms timer, and throttling it drops notes.
+      backgroundThrottling: false
     }
   })
 

@@ -11,6 +11,7 @@ import {
   superdough,
   webaudioRepl
 } from '@strudel/webaudio'
+import { installFastReverb } from './audio/fastReverb'
 import Library from './components/Library'
 import Transport from './components/Transport'
 import { bpmToCps, DEFAULT_BPM } from './tempo'
@@ -25,6 +26,9 @@ import type { CanvasState, DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
 import type { MenuCommand } from '../../shared/menu'
 import { TOGGLE_CODE_EVENT, TOGGLE_PANEL_EVENT } from './events'
+
+// Reverb impulse responses built in a worker and cached (see audio/fastReverb.ts).
+installFastReverb()
 
 interface Current {
   file: string | null
