@@ -5,6 +5,7 @@ import {
   EFFECTS,
   EffectParam,
   isBank,
+  LENGTH_FULL_STEP,
   MAX_STEPS,
   pieceCount,
   SequencerKind,
@@ -150,9 +151,10 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       )
       break
     }
+    case 'length':
     case 'velocity': {
       const d = node.data
-      title = 'Velocity sequencer'
+      title = node.type === 'length' ? 'Length sequencer' : 'Velocity sequencer'
       body = (
         <>
           <Stepper
@@ -160,7 +162,7 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
             value={d.steps.length}
             min={1}
             max={MAX_STEPS}
-            onChange={(n) => set({ steps: resize(d.steps, n, VELOCITY_LEVELS) })}
+            onChange={(n) => set({ steps: resize(d.steps, n, node.type === 'length' ? LENGTH_FULL_STEP : VELOCITY_LEVELS) })}
           />
         </>
       )
@@ -220,7 +222,7 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
   }
 
   const roll =
-    node.type === 'sequencer' || node.type === 'velocity' || node.type === 'key' || node.type === 'mode' ? (
+    node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length' || node.type === 'key' || node.type === 'mode' ? (
       <PianoRoll node={node} nodes={nodes} edges={edges} onSteps={(steps) => set({ steps })} />
     ) : null
 

@@ -11,6 +11,10 @@ import {
   EffectNode as EffectNodeT,
   MODES,
   KeyNode as KeyNodeT,
+  LENGTH_FULL_STEP,
+  LengthNode as LengthNodeT,
+  lengthLabel,
+  STEP_RESOLUTION,
   ModeNode as ModeNodeT,
   SampleData,
   SampleNode as SampleNodeT,
@@ -153,38 +157,55 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
   )
 }
 
-// ---- Velocity ----
+// ---- Velocity and Length: level-bar sequencers that shape the pattern wired in ----
 
 const LEVEL_ROWS = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
 
-// Per-step loudness for whatever pattern is wired in; passes the result on.
-export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.Element {
+function LevelNode({
+  id,
+  steps,
+  title,
+  kind,
+  fill
+}: {
+  id: string
+  steps: number[]
+  title: string
+  kind: 'velocity' | 'length'
+  fill: number // value for new or cleared steps
+}): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
-  const timing = { resolution: data.resolution }
   const setLength = (len: number): void => {
     const n = Math.min(MAX_STEPS, Math.max(1, len))
-    updateNodeData(id, { steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? VELOCITY_LEVELS) })
+    updateNodeData(id, { steps: Array.from({ length: n }, (_, i) => steps[i] ?? fill) })
   }
   return (
-    <div className="node velocity-node">
+    <div className={`node level-node ${kind}-node`}>
       <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
-      <Header
-        title="Velocity"
-        right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
-      />
+      <Header title={title} right={<StepWidthGrip steps={steps.length} max={MAX_STEPS} onChange={setLength} />} />
       <div className="node-body">
         <StepGrid
-          steps={data.steps}
+          steps={steps}
           rows={LEVEL_ROWS}
-          labels={LEVEL_ROWS.map(() => '')}
+          labels={LEVEL_ROWS.map((v) => (kind === 'length' ? lengthLabel(v) : ''))}
           bars
-          timing={timing}
-          onChange={(steps) => updateNodeData(id, { steps: steps.map((v) => v ?? VELOCITY_LEVELS) })}
+          timing={{ resolution: STEP_RESOLUTION }}
+          onChange={(next) => updateNodeData(id, { steps: next.map((v) => v ?? fill) })}
         />
       </div>
     </div>
   )
+}
+
+// Per-step loudness (Strudel velocity).
+export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.Element {
+  return <LevelNode id={id} steps={data.steps} title="Velocity" kind="velocity" fill={VELOCITY_LEVELS} />
+}
+
+// Per-step note length in steps (Strudel clip); rows read ¼ … 8.
+export function LengthNode({ id, data }: NodeProps<LengthNodeT>): React.JSX.Element {
+  return <LevelNode id={id} steps={data.steps} title="Length" kind="length" fill={LENGTH_FULL_STEP} />
 }
 
 // ---- Effect ----

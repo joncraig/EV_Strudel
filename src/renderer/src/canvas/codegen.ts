@@ -9,8 +9,8 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { EFFECTS, heldValues, isBank, MODES, pieceCount, STEP_RESOLUTION, TONICS, VELOCITY_LEVELS } from './model'
-import type { CanvasNode, EffectData, KeyData, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
+import { EFFECTS, heldValues, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS, VELOCITY_LEVELS } from './model'
+import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const quote = (s: string): string => JSON.stringify(s)
 
@@ -91,6 +91,12 @@ export function velocityCode(data: VelocityData): string {
   return `.velocity("${levels}")`
 }
 
+// Strudel's clip multiplies each note's duration and cuts samples at the end.
+export function lengthCode(data: LengthData): string {
+  const factors = data.steps.map((v) => LENGTH_STEPS[v - 1] ?? 1).join(' ')
+  return `.clip("${timed(factors, data.steps.length, data.resolution || data.steps.length)}")`
+}
+
 // Each setting becomes its Strudel control, e.g. .delay(0.5).delaytime(0.25).
 export function effectCode(data: EffectData): string {
   if (data.bypass) return ''
@@ -119,7 +125,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     edges
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
       .map((e) => byId.get(e.target))
-      .filter((n): n is CanvasNode => n?.type === 'velocity' || n?.type === 'effect')
+      .filter((n): n is CanvasNode => n?.type === 'velocity' || n?.type === 'length' || n?.type === 'effect')
 
   const lines: string[] = []
   const layers: string[] = []
@@ -134,9 +140,11 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       const applied =
         next.type === 'velocity'
           ? code + velocityCode(next.data)
-          : next.type === 'effect'
-            ? code + effectCode(next.data)
-            : code
+          : next.type === 'length'
+            ? code + lengthCode(next.data)
+            : next.type === 'effect'
+              ? code + effectCode(next.data)
+              : code
       follow(next, applied, new Set(seen).add(next.id))
     }
   }

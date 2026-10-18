@@ -9,6 +9,9 @@ import {
   isBank,
   KeyData,
   KeyNode,
+  LENGTH_FULL_STEP,
+  LengthNode,
+  lengthLabel,
   ModeData,
   ModeNode,
   MODES,
@@ -26,7 +29,7 @@ import {
 // It edits the same steps as the node.
 
 interface Props {
-  node: SequencerNode | VelocityNode | KeyNode | ModeNode
+  node: SequencerNode | VelocityNode | LengthNode | KeyNode | ModeNode
   nodes: CanvasNode[]
   edges: Edge[]
   onSteps: (steps: Step[]) => void
@@ -66,9 +69,11 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     const used = new Set(node.data.steps.filter((v) => v !== null))
     rows = node.data.folded ? all.filter((v) => used.has(v)) : all
     labels = rows.map((v) => names[v])
-  } else if (node.type === 'velocity') {
+  } else if (node.type === 'velocity' || node.type === 'length') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
-    labels = rows.map((v) => `${Math.round((v / VELOCITY_LEVELS) * 100)}%`)
+    labels = rows.map((v) =>
+      node.type === 'length' ? `${lengthLabel(v)} step${lengthLabel(v) === '1' ? '' : 's'}` : `${Math.round((v / VELOCITY_LEVELS) * 100)}%`
+    )
     bars = true
   } else if (node.data.kind === 'degree') {
     // Named from the first key and mode set in the wired sequencers (C Ionian if none).
@@ -99,7 +104,13 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
           roll
           timing={{ resolution: node.data.resolution, muted }}
           onChange={(steps) =>
-            onSteps(node.type === 'velocity' ? steps.map((v) => v ?? VELOCITY_LEVELS) : steps)
+            onSteps(
+              node.type === 'velocity'
+                ? steps.map((v) => v ?? VELOCITY_LEVELS)
+                : node.type === 'length'
+                  ? steps.map((v) => v ?? LENGTH_FULL_STEP)
+                  : steps
+            )
           }
         />
       ) : (

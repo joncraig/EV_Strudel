@@ -106,6 +106,23 @@ export const newVelocity = (length = 16): VelocityData => ({
 
 export type VelocityNode = Node<VelocityData, 'velocity'>
 
+// Per-step note length, in steps: a step holds an index (1..8) into LENGTH_STEPS.
+// Becomes Strudel's clip, which multiplies each note's duration (one step) and cuts
+// samples off at the end: 2 = held for two steps, 0.5 = staccato.
+export const LENGTH_STEPS = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
+export const LENGTH_FULL_STEP = 3 // index of 1 step
+export const lengthLabel = (level: number): string => {
+  const v = LENGTH_STEPS[level - 1]
+  return v === 0.25 ? '¼' : v === 0.5 ? '½' : String(v)
+}
+
+export interface LengthData extends Record<string, unknown> {
+  steps: number[]
+  resolution: number
+}
+
+export type LengthNode = Node<LengthData, 'length'>
+
 // ---- Effects: pattern in, pattern out, each setting is a Strudel control ----
 
 export interface EffectParam {
@@ -177,7 +194,7 @@ export type EffectNode = Node<EffectData, 'effect'>
 export type KeyNode = Node<KeyData, 'key'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | KeyNode | ModeNode | VelocityNode | EffectNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | KeyNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
@@ -213,6 +230,11 @@ export const newKey = (): KeyData => ({
 })
 export const newMode = (): ModeData => ({
   steps: [0, ...Array(15).fill(null)],
+  resolution: STEP_RESOLUTION
+})
+
+export const newLength = (length = 16): LengthData => ({
+  steps: Array(length).fill(LENGTH_FULL_STEP),
   resolution: STEP_RESOLUTION
 })
 
@@ -253,7 +275,7 @@ export function migrateCanvas(state: CanvasState): CanvasState {
       let node = (n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n
       // Every step is a 1/16 for now (a note-length node may change that later). Older
       // canvases had steps squeezed into one bar; they become 1/16 steps, by design.
-      if ((node.type === 'sequencer' || node.type === 'velocity') && node.data.resolution !== STEP_RESOLUTION)
+      if ((node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length') && node.data.resolution !== STEP_RESOLUTION)
         node = { ...node, data: { ...node.data, resolution: STEP_RESOLUTION } } as CanvasNode
       return node
     }),

@@ -19,7 +19,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
   - Compounding modulators (modulators modulating modulators)
 
 ## Notes
-- Chains: sequencers have a `pattern` output; modifier nodes (Velocity, Effect) take a `pattern` input and pass it on. Codegen plays only chain ends (`compile` in codegen.ts follows `pattern` edges); forks play each branch. Velocity = Strudel `velocity` (0..1, multiplies with gain); future: outs route to busses.
+- Chains: sequencers have a `pattern` output; modifier nodes (Velocity, Length, Effect) take a `pattern` input and pass it on. Codegen plays only chain ends (`compile` in codegen.ts follows `pattern` edges); forks play each branch. Velocity = Strudel `velocity` (0..1, multiplies with gain); future: outs route to busses.
 - Canvas: `src/renderer/src/canvas/`, React Flow (`@xyflow/react`). `codegen.ts` turns the graph into a
   `stack()`. Degrees are 1-based in the UI, 0-based in Strudel. Mode node becomes
   `.scale("<D3:dorian ...>")`, one entry per cycle. Each sequencer fits its steps into one cycle,
@@ -34,6 +34,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Steps: every step is a 1/16 (`STEP_RESOLUTION` in model.ts); length = steps.length, so a pattern spans length/16 bars (`[...]/bars` in mini-notation). Jon: no per-node step-size setting; a note-length node may come later. Old canvases migrate to 1/16 on purpose (their sound changes).
 - Overnight white screen (2026-10-18) was NOT a leak: the Surface slept, Vite reloaded the page while Windows had networking suspended (`ERR_NETWORK_IO_SUSPENDED`), so no code loaded. Dev now reloads a blank page on `powerMonitor` resume. Renderer measured flat at idle and ~12 style recalcs/s while playing.
 - Inspecting the running app: dev builds open a CDP port on 9225 (`src/main/index.ts`). `node scripts/cdp.mjs "<js>"` evaluates in the renderer (e.g. query DOM classes, click Play). Hot-reloading a shared module like `canvas/playhead.ts` can split it into two copies; restart dev after editing it.
+- Length sequencer: per-step note length in steps (¼ ½ 1 2 3 4 6 8, `LENGTH_STEPS`) -> Strudel `clip`, which multiplies each note's duration and cuts samples at the end. Shares `LevelNode` with Velocity.
 - Effects: one `effect` node type; kinds + params in `EFFECTS` (model.ts), each param a Strudel control on a vertical fader (log for cutoffs). Delay and reverb are per-orbit in Strudel (shared by everything on that orbit), which is where busses will come in.
 - Naming (Jon): call them Gain (level fader) and Velocity (per-step sequencer), never "volume". Old saved `volume` nodes migrate in `migrateCanvas` (model.ts).
 - Undo: `canvas/useHistory.ts`, serialized snapshots; a burst of changes (drag, paint, fader) settles after 400ms into one step; selection is not recorded. Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, plus toolbar buttons.
