@@ -1,25 +1,13 @@
 import { useStore } from '@xyflow/react'
+import { valueDrag } from '../drag'
 
 // Width of one grid column on screen at zoom 1: a 16px cell plus its 2px gap.
 export const CELL_PX = 18
 
-// Drag a pointer and report movement in canvas units (screen px / zoom).
+// Drag and report movement in canvas units (screen px / zoom). Uses a pointer lock with
+// a mouse, so the drag isn't stopped at the window or screen edge (see ../drag.ts).
 function dragCanvas(e: React.PointerEvent, zoom: number, onMove: (dx: number, dy: number) => void): void {
-  e.preventDefault()
-  e.stopPropagation()
-  const { pointerId, clientX: x0, clientY: y0 } = e
-  const move = (ev: PointerEvent): void => {
-    if (ev.pointerId === pointerId) onMove((ev.clientX - x0) / zoom, (ev.clientY - y0) / zoom)
-  }
-  const up = (ev: PointerEvent): void => {
-    if (ev.pointerId !== pointerId) return
-    window.removeEventListener('pointermove', move)
-    window.removeEventListener('pointerup', up)
-    window.removeEventListener('pointercancel', up)
-  }
-  window.addEventListener('pointermove', move)
-  window.addEventListener('pointerup', up)
-  window.addEventListener('pointercancel', up)
+  valueDrag(e, (dx, dy) => onMove(dx / zoom, dy / zoom))
 }
 
 const useZoom = (): number => useStore((s) => s.transform[2])

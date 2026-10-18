@@ -1,6 +1,7 @@
 // Play/stop and tempo.
 
 import { MAX_BPM, MIN_BPM } from '../tempo'
+import { valueDrag } from '../drag'
 
 interface Props {
   playing: boolean
@@ -13,24 +14,11 @@ interface Props {
 const clamp = (v: number): number => Math.min(MAX_BPM, Math.max(MIN_BPM, Math.round(v)))
 
 function Transport({ playing, bpm, onPlay, onStop, onBpm }: Props): React.JSX.Element {
-  // Drag the number up/down (or sideways) to change tempo: 1 BPM per 4px.
+  // Drag the number up/down (or sideways) to change tempo: 1 BPM per 4px. A mouse drag
+  // isn't stopped at the screen edge (pointer lock, see ../drag.ts).
   const onDragTempo = (e: React.PointerEvent): void => {
-    e.preventDefault()
-    const { pointerId, clientX: x0, clientY: y0 } = e
     const start = bpm
-    const move = (ev: PointerEvent): void => {
-      if (ev.pointerId !== pointerId) return
-      onBpm(clamp(start + (ev.clientX - x0 - (ev.clientY - y0)) / 4))
-    }
-    const up = (ev: PointerEvent): void => {
-      if (ev.pointerId !== pointerId) return
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', up)
-      window.removeEventListener('pointercancel', up)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', up)
-    window.addEventListener('pointercancel', up)
+    valueDrag(e, (dx, dy) => onBpm(clamp(start + (dx - dy) / 4)))
   }
 
   return (

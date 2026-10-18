@@ -1,5 +1,6 @@
 import { Edge, useReactFlow } from '@xyflow/react'
 import PianoRoll from './PianoRoll'
+import { valueDrag } from '../drag'
 import {
   CanvasNode,
   EFFECTS,
@@ -46,6 +47,8 @@ function Stepper({
   )
 }
 
+// Horizontal value bar. Drag anywhere on it (tap jumps there); with a mouse the drag
+// takes a pointer lock, so it isn't stopped at the screen edge. Log scale for cutoffs.
 function Slider({
   label,
   value,
@@ -61,20 +64,25 @@ function Slider({
   log?: boolean
   onChange: (v: number) => void
 }): React.JSX.Element {
-  // The range input works in 0..1000; log scale moves evenly through octaves.
   const toT = (v: number): number => (log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min))
   const fromT = (p: number): number => (log ? min * Math.pow(max / min, p) : min + p * (max - min))
   const shown = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value >= 100 ? value.toFixed(0) : value.toFixed(2)
+  const t = Math.min(1, Math.max(0, toT(value)))
   return (
     <div className="pfield slider">
       <span className="plabel">{label}</span>
-      <input
-        type="range"
-        min={0}
-        max={1000}
-        value={Math.round(toT(value) * 1000)}
-        onChange={(e) => onChange(+fromT(Number(e.target.value) / 1000).toFixed(3))}
-      />
+      <div
+        className="hbar"
+        onPointerDown={(e) => {
+          const r = e.currentTarget.getBoundingClientRect()
+          const start = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+          const set = (p: number): void => onChange(+fromT(Math.min(1, Math.max(0, p))).toFixed(3))
+          set(start)
+          valueDrag(e, (dx) => set(start + dx / r.width))
+        }}
+      >
+        <div className="hbar-fill" style={{ width: `${t * 100}%` }} />
+      </div>
       <span className="pvalue">{shown}</span>
     </div>
   )

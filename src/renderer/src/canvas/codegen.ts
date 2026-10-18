@@ -7,7 +7,7 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { DEFAULT_OCTAVE, EFFECTS, heldValues, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS, VELOCITY_LEVELS } from './model'
+import { DEFAULT_OCTAVE, EFFECTS, heldValues, velocityGain, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS } from './model'
 import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, OctaveData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const quote = (s: string): string => JSON.stringify(s)
@@ -110,7 +110,7 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens
 
 // Strudel's velocity is 0..1 and multiplies with gain, so accents scale the channel level.
 export function velocityCode(data: VelocityData, lens: Lens = null): string {
-  return `.velocity("${stepped(data.steps.map((v) => String(+(v / VELOCITY_LEVELS).toFixed(3))), lens)}")`
+  return `.velocity("${stepped(data.steps.map((v) => String(+velocityGain(v).toFixed(4))), lens)}")`
 }
 
 // Strudel's clip multiplies each note's duration and cuts samples at the end.

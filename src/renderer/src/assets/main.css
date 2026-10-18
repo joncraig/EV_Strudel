@@ -241,11 +241,11 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 
 /* Piano roll in the panel */
 .panel-top { display: flex; gap: 18px; align-items: flex-start; width: 100%; }
-.piano-roll { width: 100%; overflow: auto; padding-bottom: 4px; }
-.step-grid.roll { gap: 3px; }
-.step-grid.roll .grid-row { gap: 3px; }
+.piano-roll { width: 100%; flex: 1; min-height: 0; overflow-x: auto; overflow-y: hidden; }
+.step-grid.roll { gap: var(--row-gap, 3px); }
+.step-grid.roll .grid-row { gap: 3px; height: var(--row-h, 26px); }
 .step-grid.roll .row-label { width: 110px; min-width: 110px; text-align: right; font-size: 12px; color: #aab; margin-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; left: 0; background: #151515; z-index: 2; padding-right: 4px; }
-.step-grid.roll .cell { width: 30px; height: 26px; border-radius: 3px; }
+.step-grid.roll .cell { width: 30px; height: var(--row-h, 26px); border-radius: min(3px, calc(var(--row-h, 26px) / 3)); }
 .step-grid.roll .cell.barline { margin-left: 8px; }
 .step-grid.roll .playhead-bar { border-radius: 3px; }
 
@@ -294,8 +294,12 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .panel-dock { flex: none; position: relative; height: 260px; border-top: 1px solid #333; background: #151515; }
 .panel-dock.closed { height: 0; border-top-color: #444; }
 .panel-toggle { position: absolute; z-index: 5; right: 10px; top: -22px; width: 36px; height: 22px; padding: 0; border-radius: 4px 4px 0 0; border-bottom: none; background: #1b1b1b; color: #aaa; font-size: 12px; }
-.panel { height: 100%; box-sizing: border-box; overflow: auto; padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+.panel { height: 100%; box-sizing: border-box; overflow: hidden; padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
 
 /* Add menu items carry their node's colour; Octave gets its own title colour */
 .context-menu button { border-left: 4px solid transparent; }
 .octave-node .node-header { background: #2d2a4d; }
+.hbar { position: relative; width: 180px; height: 26px; border: 1px solid #444; border-radius: 4px; background: #1b1b1b; cursor: ew-resize; touch-action: none; overflow: hidden; }
+.hbar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #4a6a9a, #8ab4f8); }
+.panel-top { flex: none; }
+.step-grid.roll .row-label { font-size: min(12px, calc(var(--row-h, 26px) - 1px)); line-height: var(--row-h, 26px); }

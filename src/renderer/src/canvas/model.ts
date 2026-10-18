@@ -110,6 +110,11 @@ export interface VelocityData extends Record<string, unknown> {
 
 export const VELOCITY_LEVELS = 8
 
+// Rows are 6 dB apart (loudness is heard in dB, not amplitude): top row 0 dB, bottom
+// row -42 dB, nearly silent. Strudel's velocity multiplies gain linearly.
+export const velocityDb = (level: number): number => -6 * (VELOCITY_LEVELS - level)
+export const velocityGain = (level: number): number => Math.pow(10, velocityDb(level) / 20)
+
 export const newVelocity = (length = 16): VelocityData => ({
   steps: Array(length).fill(VELOCITY_LEVELS),
   resolution: STEP_RESOLUTION

@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react'
+import { useEffect, useRef, useState } from 'react'
 import type { Edge } from '@xyflow/react'
 import StepGrid from './StepGrid'
 import { useStepLens } from './stepLens'
@@ -27,6 +27,7 @@ import {
   SequencerNode,
   Step,
   VELOCITY_LEVELS,
+  velocityDb,
   VelocityNode
 } from './model'
 
@@ -80,7 +81,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   } else if (node.type === 'velocity' || node.type === 'length') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
     labels = rows.map((v) =>
-      node.type === 'length' ? lengthLabel(v) : `${Math.round((v / VELOCITY_LEVELS) * 100)}%`
+      node.type === 'length' ? lengthLabel(v) : `${velocityDb(v)} dB`
     )
     bars = node.type === 'velocity'
     if (node.type === 'length' && node.data.folded) {
@@ -107,10 +108,31 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     labels = rows.map((v) => (sample && isBank(sample) ? (files?.[v] ?? `file ${v}`) : `slice ${v + 1}`))
   }
 
+  // Rows always fit the panel's height (it never scrolls vertically, only sideways for
+  // long patterns): row height = available height / rows, thinner gaps when crowded.
+  const boxRef = useRef<HTMLDivElement>(null)
+  const [height, setHeight] = useState(0)
+  useEffect(() => {
+    const el = boxRef.current
+    if (!el) return
+    const ro = new ResizeObserver(([entry]) => setHeight(entry.contentRect.height))
+    ro.observe(el)
+    return () => ro.disconnect()
+  }, [])
   const muted = node.type === 'sequencer' && node.data.muted
   const lens = useStepLens(node.id)
   return (
-    <div className="piano-roll">
+    <div
+      className="piano-roll"
+      ref={boxRef}
+      style={(() => {
+        const n = Math.max(1, rows.length)
+        const gap = n > 20 ? 1 : 3
+        // Leave room for a horizontal scrollbar.
+        const rowH = Math.max(2, Math.min(26, Math.floor((height - 14 - gap * (n - 1)) / n)))
+        return { ['--row-h' as string]: `${rowH}px`, ['--row-gap' as string]: `${gap}px` }
+      })()}
+    >
       <StepGrid
         steps={node.data.steps}
         rows={rows}
