@@ -12,6 +12,7 @@ import {
   NodeChange,
   OnConnectEnd,
   ReactFlow,
+  SelectionMode,
   useReactFlow
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
@@ -22,7 +23,6 @@ import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import Panel from './Panel'
 import { TOGGLE_CODE_EVENT } from '../events'
-import { useLongPressFence } from './useLongPressFence'
 import {
   CanvasNode,
   CanvasState,
@@ -70,7 +70,7 @@ type Menu =
   | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
-  const { screenToFlowPosition, getIntersectingNodes, updateNodeData } = useReactFlow()
+  const { screenToFlowPosition, updateNodeData } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
   useEffect(() => {
     const toggle = (): void => setShowCode((s) => !s)
@@ -262,20 +262,13 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const openAdd = (x: number, y: number, pending?: Pending): void =>
     setMenu({ type: 'add', x, y, flow: screenToFlowPosition({ x, y }), pending })
 
-  // Long-press empty canvas, then drag: select every node the fence touches.
-  const { fence, suppressClick } = useLongPressFence(rootRef, (f) => {
-    const a = screenToFlowPosition({ x: Math.min(f.x0, f.x1), y: Math.min(f.y0, f.y1) })
-    const b = screenToFlowPosition({ x: Math.max(f.x0, f.x1), y: Math.max(f.y0, f.y1) })
-    const hit = new Set(
-      getIntersectingNodes({ x: a.x, y: a.y, width: b.x - a.x, height: b.y - a.y }, true).map((n) => n.id)
-    )
-    onChange({ nodes: nodes.map((n) => ({ ...n, selected: hit.has(n.id) })), edges })
-  })
-
-  const onPaneClick = (e: React.MouseEvent): void => {
-    if (suppressClick()) return
-    // With something selected, a tap on empty canvas just clears the selection.
-    if (nodes.some((n) => n.selected)) return onChange({ nodes: nodes.map((n) => ({ ...n, selected: false })), edges })
+  // Empty canvas: tap clears the selection, long-press (or right-click) opens the add
+  // menu, drag fences a selection (React Flow), two fingers / trackpad scroll pan.
+  const onPaneClick = (): void => {
+    if (nodes.some((n) => n.selected)) onChange({ nodes: nodes.map((n) => ({ ...n, selected: false })), edges })
+  }
+  const onPaneContextMenu = (e: React.MouseEvent | MouseEvent): void => {
+    e.preventDefault()
     openAdd(e.clientX, e.clientY)
   }
 
@@ -286,6 +279,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   // like the grid or faders, which use the press themselves.
   const onPointerDownCapture = (e: React.PointerEvent): void => {
     const target = e.target as HTMLElement
+    if (target.classList.contains('react-flow__pane')) return longPress(e, (x, y) => openAdd(x, y))
     const id = target.closest<HTMLElement>('.react-flow__node')?.dataset.id
     if (!id) return
     const onControl = !!target.closest('.nodrag')
@@ -297,25 +291,30 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       e.preventDefault()
     } else if (onControl) return
 
-    const { pointerId, clientX: x, clientY: y } = e
-    const timer = setTimeout(() => {
-      cleanup()
-      setMenu({ type: 'node', x, y, nodeId: id })
-    }, LONG_PRESS_MS)
-    const move = (ev: PointerEvent): void => {
-      // Moving means a drag, not a long-press.
-      if (ev.pointerId === pointerId && Math.hypot(ev.clientX - x, ev.clientY - y) > 8) cleanup()
-    }
-    const cleanup = (): void => {
-      clearTimeout(timer)
-      window.removeEventListener('pointermove', move)
-      window.removeEventListener('pointerup', cleanup)
-      window.removeEventListener('pointercancel', cleanup)
-    }
-    window.addEventListener('pointermove', move)
-    window.addEventListener('pointerup', cleanup)
-    window.addEventListener('pointercancel', cleanup)
+    longPress(e, (x, y) => setMenu({ type: 'node', x, y, nodeId: id }))
   }
+
+// Call onHold if the press stays put for LONG_PRESS_MS; any real movement (a drag,
+// a fence, a pan) cancels it.
+function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void): void {
+  const { pointerId, clientX: x, clientY: y } = e
+  const timer = setTimeout(() => {
+    cleanup()
+    onHold(x, y)
+  }, LONG_PRESS_MS)
+  const move = (ev: PointerEvent): void => {
+    if (ev.pointerId === pointerId && Math.hypot(ev.clientX - x, ev.clientY - y) > 8) cleanup()
+  }
+  const cleanup = (): void => {
+    clearTimeout(timer)
+    window.removeEventListener('pointermove', move)
+    window.removeEventListener('pointerup', cleanup)
+    window.removeEventListener('pointercancel', cleanup)
+  }
+  window.addEventListener('pointermove', move)
+  window.addEventListener('pointerup', cleanup)
+  window.addEventListener('pointercancel', cleanup)
+}
 
   const onNodeClick = (e: React.MouseEvent, node: CanvasNode): void => {
     // A plain tap just selects (React Flow does that); Ctrl+click deletes.
@@ -380,6 +379,13 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         onConnect={onConnect}
         onConnectEnd={onConnectEnd}
         onPaneClick={onPaneClick}
+        onPaneContextMenu={onPaneContextMenu}
+        // Drag on empty canvas draws a selection box; pan with two fingers, trackpad
+        // scroll or the middle/right mouse button; pinch or Ctrl+scroll zooms.
+        selectionOnDrag
+        selectionMode={SelectionMode.Partial}
+        panOnDrag={[1, 2]}
+        panOnScroll
         onNodeClick={onNodeClick}
         onNodeContextMenu={onNodeContextMenu}
         isValidConnection={isValidConnection}
@@ -395,17 +401,6 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       </ReactFlow>
       {nodes.length === 0 && (
         <div className="canvas-empty">Drag a sound in from Samples, or tap the canvas to add a node.</div>
-      )}
-      {fence && (
-        <div
-          className="fence"
-          style={{
-            left: Math.min(fence.x0, fence.x1) - fence.ox,
-            top: Math.min(fence.y0, fence.y1) - fence.oy,
-            width: Math.abs(fence.x1 - fence.x0),
-            height: Math.abs(fence.y1 - fence.y0)
-          }}
-        />
       )}
       {menu && (
         <ContextMenu
