@@ -288,6 +288,38 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       follow(node, { ...start, seq: node.data, seqLens: start.length }, new Set([node.id]))
     }
 
+  // Chains with a sound but no Notes/Slices sequencer: almost every node steps, so the
+  // stepping node nearest after the sound (else nearest before) says when it plays.
+  // Each set step is a hit (Key/Mode/Octave: the steps you set; Length/Velocity: every
+  // step). The whole chain's parameters still apply.
+  const STEPPING = new Set(['key', 'mode', 'octave', 'length', 'velocity'])
+  for (const end of nodes) {
+    if (active.has(end.id) || patternOuts(end.id).length) continue
+    const chain = paramChain(end.id, new Set())
+    if (!chain) continue
+    const si = chain.findIndex((n) => n.type === 'sample')
+    if (si < 0) continue
+    const clock =
+      chain.slice(si + 1).find((n) => STEPPING.has(n.type)) ??
+      [...chain.slice(0, si)].reverse().find((n) => STEPPING.has(n.type))
+    if (!clock || !('steps' in clock.data)) continue
+    // Walk the chain: parameters before the clock set what it steps at.
+    let ctx: Ctx = { ...empty, seq: null, base: null }
+    let clockLens: Lens = null
+    for (const n of chain) {
+      if (n.id === clock.id) clockLens = ctx.length
+      ctx = apply(ctx, n)
+      active.add(n.id)
+    }
+    const hits = (clock.data.steps as Step[]).map((v) => (v === null ? null : 0))
+    const seq: SequencerData = { kind: 'slice', steps: hits, resolution: STEP_RESOLUTION, octave: DEFAULT_OCTAVE, gain: 1, muted: false }
+    const code = finish({ ...ctx, seq, seqLens: clockLens })
+    if (code) {
+      lines.push(code)
+      layers.push(end.id)
+    }
+  }
+
   // Mixes: once a Mix's inputs are known, it continues as one chain. A Mix that feeds
   // another Mix is done first, so keep going until nothing new arrives.
   const mixes = nodes.filter((n) => n.type === 'mix')
