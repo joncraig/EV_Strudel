@@ -42,7 +42,8 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, mode: Mode
       break
     }
     case 'slice': {
-      const slices = stepPattern(seq.steps, (v) => String(v))
+      // Steps set before the slice count was lowered wrap around.
+      const slices = stepPattern(seq.steps, (v) => String(v % sample.slices))
       code = `s(${sound}).n(${sample.n}).slice(${sample.slices}, "${slices}")`
       break
     }
