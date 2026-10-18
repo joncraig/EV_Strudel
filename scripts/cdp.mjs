@@ -1,6 +1,6 @@
-// Dev tool: evaluate a JS expression in the running dev app's renderer over CDP (port 9224).
+// Dev tool: evaluate a JS expression in the running dev app's renderer over CDP (port 9225).
 // Usage: node scripts/cdp.mjs "document.title"
-const list = await (await fetch('http://127.0.0.1:9224/json/list')).json()
+const list = await (await fetch('http://127.0.0.1:9225/json/list')).json()
 const page = list.find((t) => t.type === 'page' && t.url.includes('localhost:5173'))
 if (!page) { console.log('no page', list.map((t) => t.url)); process.exit(1) }
 const ws = new WebSocket(page.webSocketDebuggerUrl)

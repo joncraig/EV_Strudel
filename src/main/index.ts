@@ -7,8 +7,8 @@ import { registerSampleScheme, registerSamplesIpc } from './samples'
 import { loadWindowState, trackWindowState } from './windowState'
 
 // Dev only: Chrome DevTools Protocol endpoint so tooling can read the renderer's console
-// and inspect state (compendium port-map convention; EV_Channels uses 9223).
-if (!app.isPackaged) app.commandLine.appendSwitch('remote-debugging-port', '9224')
+// and inspect state. Port is allocated in the compendium port map (9223/9224 are taken).
+if (!app.isPackaged) app.commandLine.appendSwitch('remote-debugging-port', '9225')
 
 registerSampleScheme()
 

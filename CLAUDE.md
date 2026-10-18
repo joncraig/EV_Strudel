@@ -29,7 +29,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Testing codegen in Node: stub `@kabelsalat/web` with a loader hook, import @strudel dist, `queryArc` the pattern.
 - Sample packs: catalog in `src/shared/samplePacks.ts`; main side `src/main/samples.ts`. No load/save buttons (Jon): a pack loads on demand (tap, drop, Play) and then saves itself to `Library/samples/<id>/` in the background (rewritten `strudel.json`, served via `evsamples://pack/<id>/`); saved packs load locally after that.
 - Dev restarts: Claude relaunches `npm run dev` itself whenever a change needs it (main/preload changes don't hot-reload). Stop only this project's node/electron PIDs (match the project path in the command line), then run `npm.cmd run dev` in the "dev" terminal tab (PowerShell blocks `npm.ps1`).
-- Inspecting the running app: dev builds open a CDP port on 9224 (`src/main/index.ts`; EV_Channels uses 9223). `node scripts/cdp.mjs "<js>"` evaluates in the renderer (e.g. query DOM classes, click Play). Hot-reloading a shared module like `canvas/playhead.ts` can split it into two copies; restart dev after editing it.
+- Inspecting the running app: dev builds open a CDP port on 9225 (`src/main/index.ts`). `node scripts/cdp.mjs "<js>"` evaluates in the renderer (e.g. query DOM classes, click Play). Hot-reloading a shared module like `canvas/playhead.ts` can split it into two copies; restart dev after editing it.
 - Touch: Jon is on a Surface touchscreen. HTML5 drag-and-drop does not start from touch in Chromium on Windows, so sounds drag with pointer events (`canvas/soundDrag.ts`). Keep touch targets large.
 - Library folder: `Documents/EV_Strudel Library/*.strudel`. Patch metadata is in leading
   `// @title`, `// @source`, `// @tags` comment lines (`src/shared/patch.ts`), so files stay runnable.
@@ -38,6 +38,14 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
   `https:` connect/media (remote sample maps).
 - Strudel packages have no TS types; stubbed in `src/renderer/src/strudel.d.ts`.
 - StrictMode removed in `main.tsx` (double-mount would create two Strudel engines).
+
+## Ports
+Local view; the compendium `port-map` topic is the source of truth.
+
+| Port | Bind | Purpose |
+|------|------|---------|
+| 5173 | localhost | Vite dev server (renderer) |
+| 9225 | 127.0.0.1 | Dev-only Chrome DevTools Protocol (`scripts/cdp.mjs`) |
 
 ## Skills
 The Stargate Compendium is available as an MCP server (`stargate-compendium`).
