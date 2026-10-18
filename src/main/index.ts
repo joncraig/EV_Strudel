@@ -4,14 +4,16 @@ import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerLibraryIpc } from './library'
 import { registerSampleScheme, registerSamplesIpc } from './samples'
+import { loadWindowState, trackWindowState } from './windowState'
 
 registerSampleScheme()
 
 function createWindow(): void {
-  // Create the browser window.
+  const windowState = loadWindowState()
   const mainWindow = new BrowserWindow({
-    width: 1280,
-    height: 800,
+    ...windowState.bounds,
+    minWidth: 800,
+    minHeight: 500,
     show: false,
     autoHideMenuBar: true,
     ...(process.platform === 'linux' ? { icon } : {}),
@@ -21,7 +23,10 @@ function createWindow(): void {
     }
   })
 
+  trackWindowState(mainWindow, windowState)
+
   mainWindow.on('ready-to-show', () => {
+    if (windowState.isMaximized) mainWindow.maximize()
     mainWindow.show()
   })
 
