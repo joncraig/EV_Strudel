@@ -109,16 +109,17 @@ export type VelocityNode = Node<VelocityData, 'velocity'>
 // Per-step note length, in steps: a step holds an index (1..8) into LENGTH_STEPS.
 // Becomes Strudel's clip, which multiplies each note's duration (one step) and cuts
 // samples off at the end: 2 = held for two steps, 0.5 = staccato.
-export const LENGTH_STEPS = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
-export const LENGTH_FULL_STEP = 3 // index of 1 step
-export const lengthLabel = (level: number): string => {
-  const v = LENGTH_STEPS[level - 1]
-  return v === 0.25 ? '¼' : v === 0.5 ? '½' : String(v)
-}
+// In steps (a step is a 1/16 note), shortest first: 1/16 up to a whole bar.
+export const LENGTH_STEPS = [1, 2, 3, 4, 6, 8, 12, 16]
+const LENGTH_NAMES = ['1/16', '1/8', '3/16', '1/4', '3/8', '1/2', '3/4', '1 bar']
+export const LENGTH_FULL_STEP = 1 // index of one step (1/16)
+export const lengthLabel = (level: number): string => LENGTH_NAMES[level - 1] ?? ''
 
 export interface LengthData extends Record<string, unknown> {
   steps: number[]
   resolution: number
+  // 2 = note-value table (1/16..1 bar). Older nodes used step fractions (1/4 step..8).
+  version?: number
 }
 
 export type LengthNode = Node<LengthData, 'length'>
@@ -242,7 +243,8 @@ export const newMode = (): ModeData => ({
 
 export const newLength = (length = 16): LengthData => ({
   steps: Array(length).fill(LENGTH_FULL_STEP),
-  resolution: STEP_RESOLUTION
+  resolution: STEP_RESOLUTION,
+  version: 2
 })
 
 // Fill holds: each empty step takes the last set value (wrapping, so the start of
@@ -286,6 +288,13 @@ export function migrateCanvas(state: CanvasState): CanvasState {
       // canvases had steps squeezed into one bar; they become 1/16 steps, by design.
       if ((node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length') && node.data.resolution !== STEP_RESOLUTION)
         node = { ...node, data: { ...node.data, resolution: STEP_RESOLUTION } } as CanvasNode
+      // Length table v1 was [1/4, 1/2, 1, 2, 3, 4, 6, 8] steps; map to the nearest v2 value.
+      if (node.type === 'length' && node.data.version !== 2) {
+        const V1 = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
+        const nearest = (steps: number): number =>
+          LENGTH_STEPS.reduce((best, s, i) => (Math.abs(s - steps) < Math.abs(LENGTH_STEPS[best] - steps) ? i : best), 0) + 1
+        node = { ...node, data: { ...node.data, version: 2, steps: node.data.steps.map((v) => nearest(V1[v - 1] ?? 1)) } } as CanvasNode
+      }
       return node
     }),
     edges: state.edges

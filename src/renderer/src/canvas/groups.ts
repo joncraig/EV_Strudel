@@ -89,3 +89,28 @@ export function removeNode(state: CanvasState, id: string): CanvasState {
 
 // Fired by a group's collapse arrow; the canvas owns the state and handles it.
 export const GROUP_TOGGLE_EVENT = 'ev-group-toggle'
+
+// Copy nodes (and the wires between them), offset so they're visible, and select
+// the copies. Groups aren't copied yet.
+export function duplicateNodes(state: CanvasState, ids: string[]): CanvasState {
+  const picked = state.nodes.filter((n) => ids.includes(n.id) && n.type !== 'group')
+  if (!picked.length) return state
+  const map = new Map(picked.map((n) => [n.id, nodeId(n.type ?? 'node')]))
+  const copies = picked.map(
+    (n) =>
+      ({
+        ...n,
+        id: map.get(n.id),
+        position: { x: n.position.x + 40, y: n.position.y + 40 },
+        data: structuredClone(n.data),
+        selected: true
+      }) as CanvasNode
+  )
+  const wires = state.edges
+    .filter((e) => map.has(e.source) && map.has(e.target))
+    .map((e) => ({ ...e, id: `${e.id}-copy-${map.get(e.source)}`, source: map.get(e.source)!, target: map.get(e.target)! }))
+  return {
+    nodes: [...state.nodes.map((n) => (n.selected ? { ...n, selected: false } : n)), ...copies],
+    edges: [...state.edges, ...wires]
+  }
+}

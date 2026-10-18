@@ -277,6 +277,7 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .length-node .node-header { background: #2a3d4d; }
 .length-node .cell.on { background: #6ab0e0; border-color: #6ab0e0; }
 .level-node .row-label { width: 12px; font-size: 9px; }
+.length-node .row-label { width: 30px; }
 .react-flow__selection { background: #8ab4f81a; border: 1px dashed #8ab4f8; }
 
 /* Blender-style insert: the wire a dragged node will splice into */
@@ -287,3 +288,10 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .mix-node .node-header { background: #3a3a3a; }
 .mix-count { color: #aaa; font-size: 12px; text-align: center; padding: 4px 0; }
 .mix-node .react-flow__handle-left { height: 24px; border-radius: 3px; }
+
+/* Nodes not on a playing chain */
+.react-flow__node.inactive > .node { opacity: 0.45; }
+.react-flow__node.inactive::after { content: 'not playing: wire a sequencer in'; position: absolute; left: 0; top: 100%; margin-top: 3px; white-space: nowrap; font-size: 10px; color: #c96; pointer-events: none; }
+.menu-search { flex-basis: 100%; padding: 4px 10px 6px; font-size: 12px; color: #666; border-bottom: 1px solid #333; margin-bottom: 4px; }
+.menu-search.active { color: #fc6; font-weight: 600; }
+.menu-empty { flex-basis: 100%; padding: 8px 10px; color: #888; font-size: 12px; }

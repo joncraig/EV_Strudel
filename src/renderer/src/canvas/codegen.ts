@@ -106,6 +106,8 @@ export interface Compiled {
   code: string
   // Ids of the node that ends each playing chain, in stack order.
   layers: string[]
+  // Every node on a playing chain; the rest are shown as not playing.
+  active: Set<string>
 }
 
 // Without a Sample in the chain, Notes play this synth; other sequencers stay silent.
@@ -149,9 +151,11 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
 
   const lines: string[] = []
   const layers: string[] = []
+  const active = new Set<string>()
   const mixMembers = new Map<string, string[]>()
 
   const follow = (node: CanvasNode, ctx: Ctx, seen: Set<string>): void => {
+    active.add(node.id)
     const outs = patternOuts(node.id).filter((n) => !seen.has(n.id))
     if (!outs.length) {
       const code = finish(ctx)
@@ -164,7 +168,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     for (const next of outs) {
       if (next.type === 'mix') {
         const code = finish(ctx)
-        if (code) mixMembers.set(next.id, [...(mixMembers.get(next.id) ?? []), code])
+        if (code) {
+          mixMembers.set(next.id, [...(mixMembers.get(next.id) ?? []), code])
+          active.add(next.id)
+        }
         continue
       }
       const c = { ...ctx }
@@ -205,5 +212,5 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     }
 
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
-  return { code, layers }
+  return { code, layers, active }
 }

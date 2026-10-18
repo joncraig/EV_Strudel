@@ -18,7 +18,7 @@ import {
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
 import { EffectNode, GroupNode, KeyNode, LengthNode, MixNode, ModeNode, SampleNode, SequencerNode, VelocityNode } from './nodes'
-import { GROUP_TOGGLE_EVENT, groupNodes, removeNode, setCollapsed, ungroup } from './groups'
+import { duplicateNodes, GROUP_TOGGLE_EVENT, groupNodes, removeNode, setCollapsed, ungroup } from './groups'
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
@@ -250,12 +250,29 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         onSelect: () => onChange(groupNodes(state, targets))
       })
     items.push({
+      label: targets.length > 1 ? `Duplicate ${targets.length} nodes` : 'Duplicate',
+      onSelect: () => onChange(duplicateNodes(state, targets))
+    })
+    items.push({
       label: targets.length > 1 ? `Delete ${targets.length} nodes` : 'Delete',
       danger: true,
       onSelect: () => onChange(targets.reduce((s, t) => removeNode(s, t), state))
     })
     return [{ items }]
   }
+
+  // Ctrl+D duplicates the selected nodes (not while typing in a field).
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => {
+      if (!(e.ctrlKey || e.metaKey) || e.key.toLowerCase() !== 'd') return
+      if ((e.target as HTMLElement).closest?.('input, textarea, select')) return
+      e.preventDefault()
+      const ids = stateRef.current.nodes.filter((n) => n.selected).map((n) => n.id)
+      if (ids.length) commit(duplicateNodes(stateRef.current, ids))
+    }
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [commit])
 
   // A group's collapse arrow.
   useEffect(() => {
@@ -440,6 +457,14 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
   }, [])
 
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
+  // Dim nodes that aren't on a playing chain (display only; not saved).
+  const shown = useMemo(
+    () =>
+      nodes.map((n) =>
+        n.type === 'group' || compiled.active.has(n.id) ? n : { ...n, className: 'inactive' }
+      ),
+    [nodes, compiled]
+  )
 
   return (
     <div className="canvas" ref={rootRef} onPointerDownCapture={onPointerDownCapture}>
@@ -450,7 +475,7 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
         </button>
       </div>
       <ReactFlow
-        nodes={nodes}
+        nodes={shown}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
@@ -489,6 +514,7 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
           x={menu.x}
           y={menu.y}
           sections={menu.type === 'add' ? addSections(menu) : nodeSections(menu.nodeId)}
+          searchable={menu.type === 'add'}
           onClose={closeMenu}
         />
       )}

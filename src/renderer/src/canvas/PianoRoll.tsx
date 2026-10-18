@@ -67,7 +67,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   } else if (node.type === 'velocity' || node.type === 'length') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
     labels = rows.map((v) =>
-      node.type === 'length' ? `${lengthLabel(v)} step${lengthLabel(v) === '1' ? '' : 's'}` : `${Math.round((v / VELOCITY_LEVELS) * 100)}%`
+      node.type === 'length' ? lengthLabel(v) : `${Math.round((v / VELOCITY_LEVELS) * 100)}%`
     )
     bars = true
   } else if (node.data.kind === 'degree') {
