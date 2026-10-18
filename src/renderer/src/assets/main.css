@@ -172,6 +172,4 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .group-frame.collapsed .group-header { border-radius: 8px; }
 .group-toggle { border: none; background: none; width: 30px; height: 30px; padding: 0; font-size: 14px; color: #ccd; }
 .sample-chip { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; }
-.slice-count { display: flex; align-items: center; gap: 2px; font-size: 12px; font-weight: normal; color: #9ab; }
-.slice-count button { width: 26px; height: 26px; padding: 0; font-size: 13px; }
-.slice-count span { min-width: 30px; text-align: center; }
+.slice-count { font-size: 12px; font-weight: normal; color: #9ab; background: #0004; border-radius: 8px; padding: 1px 7px; }

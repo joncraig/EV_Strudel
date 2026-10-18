@@ -50,7 +50,7 @@ type Menu =
   | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
-  const { screenToFlowPosition, getIntersectingNodes } = useReactFlow()
+  const { screenToFlowPosition, getIntersectingNodes, updateNodeData } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const { nodes, edges } = state
@@ -179,7 +179,16 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       danger: true,
       onSelect: () => onChange(targets.reduce((s, t) => removeNode(s, t), state))
     })
-    return [{ items }]
+    const sections: MenuSection[] = [{ items }]
+    if (node.type === 'sample' && targets.length === 1)
+      sections.unshift({
+        title: 'Slices',
+        items: [1, 2, 4, 8, 16, 32, 64].map((n) => ({
+          label: n === node.data.slices ? `${n}  ✓` : String(n),
+          onSelect: () => updateNodeData(id, { slices: n })
+        }))
+      })
+    return sections
   }
 
   // A group's collapse arrow.

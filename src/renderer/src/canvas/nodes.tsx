@@ -24,18 +24,12 @@ function Header({ title }: { title: string }): React.JSX.Element {
 
 // A sound on the canvas: just its name and an output. Picking files, slicing etc.
 // will be separate nodes wired after it.
-export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Element {
-  const { updateNodeData } = useReactFlow()
-  const setSlices = (n: number): void => updateNodeData(id, { slices: Math.min(64, Math.max(1, n)) })
+export function SampleNode({ data }: NodeProps<SampleNodeT>): React.JSX.Element {
   return (
     <div className="node sample-chip" title={data.pack ? `${data.s} (${data.pack})` : data.s}>
       <span>{data.label ?? data.s}</span>
-      {/* How many equal pieces a Slices sequencer cuts this into. */}
-      <span className="slice-count nodrag" title="Slices">
-        <button onClick={() => setSlices(data.slices / 2)}>−</button>
-        <span>÷{data.slices}</span>
-        <button onClick={() => setSlices(data.slices * 2)}>+</button>
-      </span>
+      {/* How many equal pieces a Slices sequencer cuts this into; change it from the node menu. */}
+      <span className="slice-count">{data.slices}</span>
       <Handle type="source" position={Position.Right} id="sound" />
     </div>
   )
