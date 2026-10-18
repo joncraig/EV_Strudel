@@ -246,3 +246,14 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 /* Playhead: one translucent bar per grid, moved with transform (no re-render, no glow) */
 .step-grid { position: relative; }
 .playhead-bar { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: 16px; background: #ffcc6640; border: 1px solid #ffcc66aa; border-radius: 2px; pointer-events: none; will-change: transform; z-index: 1; }
+
+/* Piano roll in the panel */
+.panel.with-roll { flex-direction: column; gap: 8px; max-height: 50vh; }
+.panel-top { display: flex; gap: 18px; align-items: flex-start; width: 100%; }
+.piano-roll { width: 100%; overflow: auto; padding-bottom: 4px; }
+.step-grid.roll { gap: 3px; }
+.step-grid.roll .grid-row { gap: 3px; }
+.step-grid.roll .row-label { width: 110px; min-width: 110px; text-align: right; font-size: 12px; color: #aab; margin-right: 6px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; position: sticky; left: 0; background: #151515; z-index: 2; padding-right: 4px; }
+.step-grid.roll .cell { width: 30px; height: 26px; border-radius: 3px; }
+.step-grid.roll .cell.barline { margin-left: 8px; }
+.step-grid.roll .playhead-bar { border-radius: 3px; }

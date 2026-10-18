@@ -13,12 +13,14 @@ interface Props {
   // Level bars: a cell is lit when its row is at or below the step's value, and a
   // step always has a value (no rests).
   bars?: boolean
+  // Large piano-roll cells with bar lines (bottom panel).
+  roll?: boolean
 }
 
 // Press a cell and slide across others to paint. The first cell decides the stroke:
 // turning a cell on paints "on" (that row) along the way; turning one off erases.
 // In bar mode every column touched takes the level under the pointer.
-function StepGrid({ steps, rows, labels, onChange, timing, bars = false }: Props): React.JSX.Element {
+function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = false }: Props): React.JSX.Element {
   // Latest steps for the stroke handlers, which outlive a render.
   const stepsRef = useRef(steps)
   useEffect(() => {
@@ -47,6 +49,7 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false }: Props
         return
       }
       bar.style.display = 'block'
+      bar.style.width = `${cell.offsetWidth}px`
       bar.style.transform = `translateX(${cell.offsetLeft}px)`
     })
   }, [length, resolution, muted])
@@ -94,7 +97,7 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false }: Props
   }
 
   return (
-    <div className="step-grid nodrag" ref={gridRef} onPointerDown={onPointerDown}>
+    <div className={`step-grid nodrag ${roll ? 'roll' : ''}`} ref={gridRef} onPointerDown={onPointerDown}>
       <div className="playhead-bar" ref={barRef} />
       {rows.map((v, r) => (
         <div className="grid-row" key={v}>
@@ -104,7 +107,7 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false }: Props
               key={i}
               data-i={i}
               data-v={v}
-              className={`cell ${(bars ? s !== null && v <= s : s === v) ? 'on' : ''} ${i % 4 === 0 ? 'beat' : ''}`}
+              className={`cell ${(bars ? s !== null && v <= s : s === v) ? 'on' : ''} ${i % 4 === 0 ? 'beat' : ''} ${i % 16 === 0 ? 'barline' : ''}`}
             />
           ))}
         </div>

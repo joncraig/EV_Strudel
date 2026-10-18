@@ -1,4 +1,5 @@
-import { useReactFlow } from '@xyflow/react'
+import { Edge, useReactFlow } from '@xyflow/react'
+import PianoRoll from './PianoRoll'
 import {
   CanvasNode,
   EFFECTS,
@@ -89,7 +90,7 @@ function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange:
   )
 }
 
-function Panel({ nodes }: { nodes: CanvasNode[] }): React.JSX.Element {
+function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
   const selected = nodes.filter((n) => n.selected)
 
@@ -243,10 +244,18 @@ function Panel({ nodes }: { nodes: CanvasNode[] }): React.JSX.Element {
     }
   }
 
+  const roll =
+    node.type === 'sequencer' || node.type === 'velocity' ? (
+      <PianoRoll node={node} nodes={nodes} edges={edges} onSteps={(steps) => set({ steps })} />
+    ) : null
+
   return (
-    <div className="panel">
-      <div className="ptitle">{title}</div>
-      <div className="pbody">{body}</div>
+    <div className={`panel ${roll ? 'with-roll' : ''}`}>
+      <div className="panel-top">
+        <div className="ptitle">{title}</div>
+        <div className="pbody">{body}</div>
+      </div>
+      {roll}
     </div>
   )
 }

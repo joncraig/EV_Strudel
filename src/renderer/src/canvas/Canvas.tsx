@@ -44,6 +44,9 @@ interface Props {
   onSoundDropped: (sound: DraggedSound) => void
 }
 
+// Hold this long without moving to open a node's menu.
+const LONG_PRESS_MS = 500
+
 const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mode: ModeNode, velocity: VelocityNode, effect: EffectNode, group: GroupNode }
 
 // Handles only connect to the same-named handle: sound→sound, mode→mode.
@@ -254,21 +257,50 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
 
   // With several nodes selected, a tap on a selected node acts on the selection:
   // its controls (grid, faders) don't edit, and the node menu opens instead.
+  // Tap a node to select it; long-press (or right-click) opens its menu.
+  // Long-press works on the node's own surface (title bar, chip), not on controls
+  // like the grid or faders, which use the press themselves.
   const onPointerDownCapture = (e: React.PointerEvent): void => {
-    const el = (e.target as HTMLElement).closest<HTMLElement>('.react-flow__node')
-    const id = el?.dataset.id
-    if (!id || !(e.target as HTMLElement).closest('.nodrag')) return
+    const target = e.target as HTMLElement
+    const id = target.closest<HTMLElement>('.react-flow__node')?.dataset.id
+    if (!id) return
+    const onControl = !!target.closest('.nodrag')
+
+    // With several nodes selected, presses on a selected node's controls don't edit it.
     const selected = nodes.filter((n) => n.selected)
-    if (selected.length < 2 || !selected.some((n) => n.id === id)) return
-    e.stopPropagation()
-    e.preventDefault()
-    setMenu({ type: 'node', x: e.clientX, y: e.clientY, nodeId: id })
+    if (onControl && selected.length > 1 && selected.some((n) => n.id === id)) {
+      e.stopPropagation()
+      e.preventDefault()
+    } else if (onControl) return
+
+    const { pointerId, clientX: x, clientY: y } = e
+    const timer = setTimeout(() => {
+      cleanup()
+      setMenu({ type: 'node', x, y, nodeId: id })
+    }, LONG_PRESS_MS)
+    const move = (ev: PointerEvent): void => {
+      // Moving means a drag, not a long-press.
+      if (ev.pointerId === pointerId && Math.hypot(ev.clientX - x, ev.clientY - y) > 8) cleanup()
+    }
+    const cleanup = (): void => {
+      clearTimeout(timer)
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', cleanup)
+      window.removeEventListener('pointercancel', cleanup)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', cleanup)
+    window.addEventListener('pointercancel', cleanup)
   }
 
   const onNodeClick = (e: React.MouseEvent, node: CanvasNode): void => {
-    // Taps on a node's own controls (grid cells, buttons, selects) aren't node taps.
+    // A plain tap just selects (React Flow does that); Ctrl+click deletes.
     if ((e.target as HTMLElement).closest('.nodrag, button, select, input, label')) return
-    if (e.ctrlKey || e.metaKey) return remove(node.id)
+    if (e.ctrlKey || e.metaKey) remove(node.id)
+  }
+
+  const onNodeContextMenu = (e: React.MouseEvent, node: CanvasNode): void => {
+    e.preventDefault()
     setMenu({ type: 'node', x: e.clientX, y: e.clientY, nodeId: node.id })
   }
 
@@ -325,6 +357,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         onConnectEnd={onConnectEnd}
         onPaneClick={onPaneClick}
         onNodeClick={onNodeClick}
+        onNodeContextMenu={onNodeContextMenu}
         isValidConnection={isValidConnection}
         // How near a dropped wire must land to snap to an input, in screen px (default 20).
         connectionRadius={44}
@@ -359,7 +392,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         />
       )}
       {showCode && <pre className="code-view">{compiled.code}</pre>}
-      <Panel nodes={nodes} />
+      <Panel nodes={nodes} edges={edges} />
     </div>
   )
 }
