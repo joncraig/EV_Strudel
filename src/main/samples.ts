@@ -3,7 +3,7 @@ import { promises as fs } from 'fs'
 import { dirname, join, normalize, sep } from 'path'
 import { pathToFileURL } from 'url'
 import { libraryDir } from './library'
-import { DownloadProgress, PackStatus, SAMPLE_PACKS, countSounds } from '../shared/samplePacks'
+import { DownloadProgress, PackSounds, PackStatus, SAMPLE_PACKS, listSounds } from '../shared/samplePacks'
 
 // Downloaded packs live in <library>/samples/<pack id>/ and are served to the
 // renderer as evsamples://pack/<pack id>/..., so Strudel loads them like any URL.
@@ -74,12 +74,12 @@ async function loadUrl(id: string): Promise<string> {
   return (await exists(localMapPath(id))) ? `${localBase(id)}strudel.json` : pack.url
 }
 
-async function sounds(id: string): Promise<Record<string, number>> {
+async function sounds(id: string): Promise<PackSounds> {
   const pack = findPack(id)
   const map = (await exists(localMapPath(id)))
     ? JSON.parse(await fs.readFile(localMapPath(id), 'utf8'))
     : await remoteMap(pack.url)
-  return countSounds(map)
+  return listSounds(map)
 }
 
 // Turn a remote file reference into a safe relative path inside the pack folder.

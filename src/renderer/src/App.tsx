@@ -8,6 +8,7 @@ import Samples from './components/Samples'
 import Canvas from './canvas/Canvas'
 import { compile } from './canvas/codegen'
 import { SYNTH_PACKS } from './canvas/model'
+import { AUDITION_EVENT, AuditionDetail } from './canvas/packSounds'
 import type { CanvasState, DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
 
@@ -110,6 +111,19 @@ function App(): React.JSX.Element {
     ctx.resume()
     superdough({ s, n, gain: 0.8 }, ctx.currentTime + 0.05, 1)
   }
+
+  // Canvas nodes ask to preview a sound (see canvas/packSounds.ts).
+  useEffect(() => {
+    const listener = (e: Event): void => {
+      const { s, n, pack } = (e as CustomEvent<AuditionDetail>).detail
+      Promise.resolve(readyRef.current)
+        .then(() => (pack ? loadPack(pack) : undefined))
+        .then(() => playSound(s, n))
+        .catch((err) => setEvalError(String(err)))
+    }
+    window.addEventListener(AUDITION_EVENT, listener)
+    return () => window.removeEventListener(AUDITION_EVENT, listener)
+  }, [loadPack])
 
   const compiled = useMemo(() => current.codeOnly ?? compile(canvas.nodes, canvas.edges).code, [canvas, current.codeOnly])
 

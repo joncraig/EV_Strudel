@@ -1,5 +1,8 @@
+import { useEffect, useState } from 'react'
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import StepGrid from './StepGrid'
+import { packSounds, requestAudition } from './packSounds'
+import type { SoundInfo } from '../../../shared/samplePacks'
 import {
   DEGREE_ROWS,
   MODES,
@@ -35,34 +38,59 @@ function Header({ title, id }: { title: string; id: string }): React.JSX.Element
 
 export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Element {
   const update = useUpdate<SampleData>(id)
+  const [info, setInfo] = useState<SoundInfo | null>(null)
+
+  useEffect(() => {
+    if (!data.pack) return
+    let live = true
+    packSounds(data.pack)
+      .then((all) => live && setInfo(all[data.s] ?? null))
+      .catch(() => {})
+    return () => {
+      live = false
+    }
+  }, [data.pack, data.s])
+
+  const files = info && !info.multisample ? info.variants : []
+  const pick = (n: number): void => {
+    const next = (n + files.length) % files.length
+    update({ n: next })
+    requestAudition({ s: data.s, n: next, pack: data.pack })
+  }
+
   return (
     <div className="node sample-node">
-      <Header title="Sample" id={id} />
-      <div className="node-body">
-        <div className="sound-label" title={data.pack}>
-          {data.s}
+      <Header title={info?.multisample ? 'Instrument' : 'Sample'} id={id} />
+      <div className="node-body nodrag">
+        <div className="sample-title">
+          <button title="Play" onClick={() => requestAudition({ s: data.s, n: data.n, pack: data.pack })}>
+            ▶
+          </button>
+          <span className="sound-label">{data.s}</span>
         </div>
-        <label>
-          variant
-          <input
-            className="nodrag"
-            type="number"
-            min={0}
-            value={data.n}
-            onChange={(e) => update({ n: Math.max(0, Number(e.target.value) || 0) })}
-          />
-        </label>
-        <label title="Cut into this many equal slices for slice sequencers">
-          slices
-          <input
-            className="nodrag"
-            type="number"
-            min={1}
-            max={64}
-            value={data.slices}
-            onChange={(e) => update({ slices: Math.min(64, Math.max(1, Number(e.target.value) || 1)) })}
-          />
-        </label>
+        {files.length > 1 && (
+          <div className="variant-picker">
+            <button onClick={() => pick(data.n - 1)}>◀</button>
+            <select value={data.n} onChange={(e) => pick(Number(e.target.value))}>
+              {files.map((f, n) => (
+                <option key={n} value={n}>
+                  {n} · {f}
+                </option>
+              ))}
+            </select>
+            <button onClick={() => pick(data.n + 1)}>▶</button>
+          </div>
+        )}
+        {files.length === 1 && <div className="file-label">{files[0]}</div>}
+        {!info?.multisample && (
+          <div className="seq-controls" title="Cut the sample into equal slices for a Slices sequencer">
+            <span>cut into</span>
+            <button onClick={() => update({ slices: Math.max(1, data.slices - 1) })}>−</button>
+            <span className="value">{data.slices}</span>
+            <button onClick={() => update({ slices: Math.min(64, data.slices + 1) })}>+</button>
+            <span>slices</span>
+          </div>
+        )}
       </div>
       <Handle type="source" position={Position.Right} id="sound" />
     </div>

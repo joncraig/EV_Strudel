@@ -12,8 +12,15 @@ export interface PackStatus extends SamplePack {
   downloaded: boolean
 }
 
-// sound name -> number of variants (n)
-export type PackSounds = Record<string, number>
+export interface SoundInfo {
+  // File label for each variant (n = index).
+  variants: string[]
+  // Pitched multisample (note -> file): Strudel picks the file by pitch, not by n.
+  multisample: boolean
+}
+
+// sound name -> its variants
+export type PackSounds = Record<string, SoundInfo>
 
 export interface DownloadProgress {
   id: string
@@ -71,14 +78,25 @@ export const SAMPLE_PACKS: SamplePack[] = [
   pack('algorave-dave', 'Algorave Dave', 'Vocal and loop samples.', raw('algorave-dave/samples'))
 ]
 
+function label(file: string): string {
+  const base = file.split(/[\\/]/).pop() ?? file
+  let name = base
+  try {
+    name = decodeURIComponent(base)
+  } catch {
+    // Some file names contain a literal '%'; keep them as-is.
+  }
+  return name.replace(/\.[^.]+$/, '')
+}
+
 // Sample maps hold strings, arrays of strings, or { note: string | string[] } objects.
-export function countSounds(map: Record<string, unknown>): PackSounds {
+export function listSounds(map: Record<string, unknown>): PackSounds {
   const out: PackSounds = {}
   for (const [key, value] of Object.entries(map)) {
     if (key.startsWith('_')) continue
-    if (typeof value === 'string') out[key] = 1
-    else if (Array.isArray(value)) out[key] = value.length
-    else if (value && typeof value === 'object') out[key] = Object.keys(value).length
+    if (typeof value === 'string') out[key] = { variants: [label(value)], multisample: false }
+    else if (Array.isArray(value)) out[key] = { variants: value.map((v) => label(String(v))), multisample: false }
+    else if (value && typeof value === 'object') out[key] = { variants: Object.keys(value), multisample: true }
   }
   return out
 }
