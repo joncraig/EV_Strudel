@@ -7,7 +7,6 @@ import {
   MODES,
   MAX_STEPS,
   pieceCount,
-  RESOLUTIONS,
   SequencerKind,
   TONICS,
   VELOCITY_LEVELS
@@ -82,23 +81,6 @@ function Slider({
   )
 }
 
-function ResolutionPicker({ value, onChange }: { value: number; onChange: (v: number) => void }): React.JSX.Element {
-  return (
-    <div className="pfield">
-      <span className="plabel">step size</span>
-      <div className="seg">
-        {RESOLUTIONS.map((r) => (
-          <button key={r.value} className={r.value === value ? 'on' : ''} onClick={() => onChange(r.value)}>
-            {r.label}
-          </button>
-        ))}
-        {/* Migrated patterns can have a size not in the list; show it so nothing is hidden. */}
-        {!RESOLUTIONS.some((r) => r.value === value) && <button className="on">1/{value}</button>}
-      </div>
-    </div>
-  )
-}
-
 function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }): React.JSX.Element {
   return (
     <button className={`ptoggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)}>
@@ -156,7 +138,6 @@ function Panel({ nodes }: { nodes: CanvasNode[] }): React.JSX.Element {
             max={MAX_STEPS}
             onChange={(n) => set({ steps: resize(d.steps, n, null) })}
           />
-          <ResolutionPicker value={d.resolution || d.steps.length} onChange={(resolution) => set({ resolution })} />
           {d.kind === 'degree' && (
             <Stepper label="octave" value={d.octave} min={0} max={7} onChange={(octave) => set({ octave })} />
           )}
@@ -182,7 +163,6 @@ function Panel({ nodes }: { nodes: CanvasNode[] }): React.JSX.Element {
             max={MAX_STEPS}
             onChange={(n) => set({ steps: resize(d.steps, n, VELOCITY_LEVELS) })}
           />
-          <ResolutionPicker value={d.resolution || d.steps.length} onChange={(resolution) => set({ resolution })} />
         </>
       )
       break

@@ -87,7 +87,7 @@ export const VELOCITY_LEVELS = 8
 
 export const newVelocity = (length = 16): VelocityData => ({
   steps: Array(length).fill(VELOCITY_LEVELS),
-  resolution: 16
+  resolution: STEP_RESOLUTION
 })
 
 export type VelocityNode = Node<VelocityData, 'velocity'>
@@ -169,15 +169,8 @@ export interface CanvasState {
   edges: Edge[]
 }
 
-// Step sizes, as steps per bar. A bar is one Strudel cycle.
-export const RESOLUTIONS: { value: number; label: string }[] = [
-  { value: 4, label: '1/4' },
-  { value: 8, label: '1/8' },
-  { value: 12, label: '1/8T' },
-  { value: 16, label: '1/16' },
-  { value: 24, label: '1/16T' },
-  { value: 32, label: '1/32' }
-]
+// Steps per bar (a bar is one Strudel cycle): every step is a 1/16.
+export const STEP_RESOLUTION = 16
 
 export const MAX_STEPS = 64
 
@@ -192,7 +185,7 @@ export const DEGREE_ROWS = [8, 7, 6, 5, 4, 3, 2, 1]
 export const newSequencer = (kind: SequencerKind, length = 16): SequencerData => ({
   kind,
   steps: Array(length).fill(null),
-  resolution: 16,
+  resolution: STEP_RESOLUTION,
   octave: kind === 'degree' ? 3 : 0,
   gain: 0.8,
   muted: false
@@ -229,9 +222,10 @@ export function migrateCanvas(state: CanvasState): CanvasState {
   return {
     nodes: state.nodes.map((n) => {
       let node = (n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n
-      // Before resolution existed, a pattern's steps filled one bar. Keep it sounding the same.
-      if ((node.type === 'sequencer' || node.type === 'velocity') && !node.data.resolution)
-        node = { ...node, data: { ...node.data, resolution: node.data.steps.length } } as CanvasNode
+      // Every step is a 1/16 for now (a note-length node may change that later). Older
+      // canvases had steps squeezed into one bar; they become 1/16 steps, by design.
+      if ((node.type === 'sequencer' || node.type === 'velocity') && node.data.resolution !== STEP_RESOLUTION)
+        node = { ...node, data: { ...node.data, resolution: STEP_RESOLUTION } } as CanvasNode
       return node
     }),
     edges: state.edges
