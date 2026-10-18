@@ -1,4 +1,4 @@
-import { app, shell, BrowserWindow } from 'electron'
+import { app, shell, BrowserWindow, powerMonitor } from 'electron'
 import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
@@ -28,6 +28,21 @@ function createWindow(): void {
   })
 
   trackWindowState(mainWindow, windowState)
+
+  // Dev only: after sleep, Vite's client can reload the page while Windows still has
+  // networking suspended (net::ERR_NETWORK_IO_SUSPENDED), leaving a blank window.
+  // On wake, reload once the network is back, but only if the app never mounted.
+  if (is.dev) {
+    powerMonitor.on('resume', () => {
+      setTimeout(async () => {
+        if (mainWindow.isDestroyed()) return
+        const blank = await mainWindow.webContents
+          .executeJavaScript("!document.getElementById('root')?.children.length")
+          .catch(() => true)
+        if (blank) mainWindow.webContents.reload()
+      }, 3000)
+    })
+  }
 
   mainWindow.on('ready-to-show', () => {
     if (windowState.isMaximized) mainWindow.maximize()
