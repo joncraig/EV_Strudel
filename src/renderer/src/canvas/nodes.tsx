@@ -130,8 +130,9 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
         // Show slices top-down from the highest, so the grid reads like a piano roll.
         const all = Array.from({ length: slices }, (_, i) => slices - 1 - i)
         const used = new Set(data.steps.map((v) => (v === null ? v : v % slices)))
-        const rows = data.folded ? all.filter((v) => used.has(v)) : all
-        if (!rows.length) return <div className="hint">Nothing placed yet. Unfold to pick slices.</div>
+        // Fold shows only rows in use (all rows while nothing is placed).
+        const usedRows = all.filter((v) => used.has(v))
+        const rows = data.folded && usedRows.length ? usedRows : all
         return <StepGrid steps={data.steps} rows={rows} onChange={(steps) => update({ steps })} timing={timing} />
       }
     }
@@ -157,7 +158,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
             </button>
           )}
         </div>
-        {!sample && data.kind !== 'degree' && <div className="hint">No sound yet: wire a Sample in or after.</div>}
         {/* Grid, then the gain fader; the right edge drags the step count. */}
         <div className="seq-main">
           {grid}
@@ -288,7 +288,8 @@ function HarmonyNode({
   }
   const allRows = kind === 'key' ? KEY_ROWS : kind === 'mode' ? MODE_ROWS : OCTAVE_ROWS
   const used = new Set(data.steps.filter((v) => v !== null))
-  const rows = data.folded ? allRows.filter((v) => used.has(v)) : allRows
+  const usedRows = allRows.filter((v) => used.has(v))
+  const rows = data.folded && usedRows.length ? usedRows : allRows
   const labels = rows.map((v) =>
     kind === 'key' ? TONICS[v] : kind === 'mode' ? MODES[v].label.replace(/ (.*)/, '') : `oct ${v}`
   )
@@ -305,19 +306,14 @@ function HarmonyNode({
           <button className={`fold ${data.folded ? 'on' : ''}`} onClick={() => update({ folded: !data.folded })}>
             Fold
           </button>
-          <span className="hint-inline">empty steps hold</span>
         </div>
-        {rows.length ? (
-          <StepGrid
-            steps={data.steps}
-            rows={rows}
-            labels={labels}
-            timing={{ resolution: data.resolution, lens }}
-            onChange={(steps) => update({ steps })}
-          />
-        ) : (
-          <div className="hint">Nothing placed yet. Unfold to pick.</div>
-        )}
+        <StepGrid
+          steps={data.steps}
+          rows={rows}
+          labels={labels}
+          timing={{ resolution: data.resolution, lens }}
+          onChange={(steps) => update({ steps })}
+        />
       </div>
     </div>
   )

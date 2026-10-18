@@ -92,12 +92,8 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
   const { updateNodeData } = useReactFlow()
   const selected = nodes.filter((n) => n.selected)
 
-  if (selected.length !== 1)
-    return (
-      <div className="panel empty">
-        {selected.length > 1 ? `${selected.length} nodes selected` : 'Tap a node to see its settings here.'}
-      </div>
-    )
+  // Always the same size: with nothing (or several things) selected it's just empty.
+  if (selected.length !== 1) return <div className="panel empty" />
 
   const node = selected[0]
   const set = (patch: Record<string, unknown>): void => updateNodeData(node.id, patch)
@@ -235,7 +231,7 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     ) : null
 
   return (
-    <div className={`panel ${roll ? 'with-roll' : ''}`}>
+    <div className="panel">
       <div className="panel-top">
         <div className="ptitle">{title}</div>
         <div className="pbody">{body}</div>

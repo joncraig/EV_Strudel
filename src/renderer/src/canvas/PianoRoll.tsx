@@ -68,13 +68,13 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
       node.type === 'key' ? [...TONICS] : node.type === 'mode' ? MODES.map((m) => m.label) : OCTAVES.map((o) => `octave ${o}`)
     const all = names.map((_, i) => names.length - 1 - i)
     const used = new Set(node.data.steps.filter((v) => v !== null))
-    rows = node.data.folded ? all.filter((v) => used.has(v)) : all
+    rows = node.data.folded && all.some((v) => used.has(v)) ? all.filter((v) => used.has(v)) : all
     labels = rows.map((v) => names[v])
     // Octave rows hold octave numbers, not indexes.
     if (node.type === 'octave') {
       const all2 = [...OCTAVES].reverse()
       const used2 = new Set(node.data.steps.filter((v) => v !== null))
-      rows = node.data.folded ? all2.filter((v) => used2.has(v)) : all2
+      rows = node.data.folded && all2.some((v) => used2.has(v)) ? all2.filter((v) => used2.has(v)) : all2
       labels = rows.map((v) => `octave ${v}`)
     }
   } else if (node.type === 'velocity' || node.type === 'length') {
@@ -103,7 +103,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     const count = sample ? pieceCount(sample) : 8
     const all = Array.from({ length: count }, (_, i) => count - 1 - i)
     const used = new Set(node.data.steps.map((v) => (v === null ? v : v % count)))
-    rows = node.data.folded ? all.filter((v) => used.has(v)) : all
+    rows = node.data.folded && all.some((v) => used.has(v)) ? all.filter((v) => used.has(v)) : all
     labels = rows.map((v) => (sample && isBank(sample) ? (files?.[v] ?? `file ${v}`) : `slice ${v + 1}`))
   }
 
@@ -111,28 +111,24 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   const lens = useStepLens(node.id)
   return (
     <div className="piano-roll">
-      {rows.length ? (
-        <StepGrid
-          steps={node.data.steps}
-          rows={rows}
-          labels={labels}
-          bars={bars}
-          noRests={node.type === 'velocity' || node.type === 'length'}
-          roll
-          timing={{ resolution: node.data.resolution, muted, lens }}
-          onChange={(steps) =>
-            onSteps(
-              node.type === 'velocity'
-                ? steps.map((v) => v ?? VELOCITY_LEVELS)
-                : node.type === 'length'
-                  ? steps.map((v) => v ?? LENGTH_FULL_STEP)
-                  : steps
-            )
-          }
-        />
-      ) : (
-        <div className="hint">Nothing placed yet. Turn Fold off to pick slices.</div>
-      )}
+      <StepGrid
+        steps={node.data.steps}
+        rows={rows}
+        labels={labels}
+        bars={bars}
+        noRests={node.type === 'velocity' || node.type === 'length'}
+        roll
+        timing={{ resolution: node.data.resolution, muted, lens }}
+        onChange={(steps) =>
+          onSteps(
+            node.type === 'velocity'
+              ? steps.map((v) => v ?? VELOCITY_LEVELS)
+              : node.type === 'length'
+                ? steps.map((v) => v ?? LENGTH_FULL_STEP)
+                : steps
+          )
+        }
+      />
     </div>
   )
 }

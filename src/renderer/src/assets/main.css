@@ -205,8 +205,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 
 
 /* Parameter panel for the selected node, docked under the canvas */
-.panel { flex: none; min-height: 84px; max-height: 40vh; overflow: auto; border-top: 1px solid #333; background: #151515; padding: 8px 14px 10px; display: flex; gap: 18px; align-items: flex-start; }
-.panel.empty { align-items: center; color: #666; font-size: 13px; }
 .ptitle { font-weight: 600; font-size: 13px; color: #ccd; min-width: 130px; padding-top: 6px; }
 .pbody { display: flex; flex-wrap: wrap; gap: 14px 22px; align-items: center; flex: 1; }
 .pfield { display: flex; flex-direction: column; gap: 4px; }
@@ -242,7 +240,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .playhead-bar { display: none; position: absolute; left: 0; top: 0; bottom: 0; width: 16px; background: #ffcc6640; border: 1px solid #ffcc66aa; border-radius: 2px; pointer-events: none; will-change: transform; z-index: 1; }
 
 /* Piano roll in the panel */
-.panel.with-roll { flex-direction: column; gap: 8px; max-height: 50vh; }
 .panel-top { display: flex; gap: 18px; align-items: flex-start; width: 100%; }
 .piano-roll { width: 100%; overflow: auto; padding-bottom: 4px; }
 .step-grid.roll { gap: 3px; }
@@ -292,3 +289,13 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .menu-search { flex-basis: 100%; padding: 4px 10px 6px; font-size: 12px; color: #666; border-bottom: 1px solid #333; margin-bottom: 4px; }
 .menu-search.active { color: #fc6; font-weight: 600; }
 .menu-empty { flex-basis: 100%; padding: 8px 10px; color: #888; font-size: 12px; }
+
+/* Bottom panel: always docked, always the same height; content scrolls inside */
+.panel-dock { flex: none; position: relative; height: 260px; border-top: 1px solid #333; background: #151515; }
+.panel-dock.closed { height: 0; border-top-color: #444; }
+.panel-toggle { position: absolute; z-index: 5; right: 10px; top: -22px; width: 36px; height: 22px; padding: 0; border-radius: 4px 4px 0 0; border-bottom: none; background: #1b1b1b; color: #aaa; font-size: 12px; }
+.panel { height: 100%; box-sizing: border-box; overflow: auto; padding: 8px 14px 10px; display: flex; flex-direction: column; gap: 8px; }
+
+/* Add menu items carry their node's colour; Octave gets its own title colour */
+.context-menu button { border-left: 4px solid transparent; }
+.octave-node .node-header { background: #2d2a4d; }

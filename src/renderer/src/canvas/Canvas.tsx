@@ -42,7 +42,7 @@ import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import Panel from './Panel'
 import { StepLensContext } from './stepLens'
-import { TOGGLE_CODE_EVENT } from '../events'
+import { TOGGLE_CODE_EVENT, TOGGLE_PANEL_EVENT } from '../events'
 import {
   CanvasNode,
   CanvasState,
@@ -66,6 +66,27 @@ interface Props {
   onChange: (state: CanvasState) => void
   // Called before a dropped sound is used, so its pack is registered with Strudel.
   onSoundDropped: (sound: DraggedSound) => void
+}
+
+const PANEL_KEY = 'ev-strudel:panel'
+
+// Same colours as the node title bars (main.css), so the add menu reads like the canvas.
+const NODE_COLORS = {
+  sequencer: '#3a5a8a',
+  velocity: '#8a6a3a',
+  length: '#3a6a8a',
+  effect: '#3a7a7a',
+  key: '#7a4a9a',
+  mode: '#9a4a7a',
+  octave: '#5a4a9a',
+  sample: '#3a7a4a',
+  mix: '#777777'
+}
+function kindColor(kind: string): string {
+  if (kind.startsWith('fx:')) return NODE_COLORS.effect
+  if (kind.startsWith('synth:')) return NODE_COLORS.sample
+  if (kind === 'degree' || kind === 'slice') return NODE_COLORS.sequencer
+  return NODE_COLORS[kind as keyof typeof NODE_COLORS] ?? '#555'
 }
 
 // Hold this long without moving to open a node's menu.
@@ -114,6 +135,27 @@ type Menu =
 function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const { screenToFlowPosition, updateNodeData } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
+  const [panelOpen, setPanelOpen] = useState(() => {
+    try {
+      return localStorage.getItem(PANEL_KEY) !== 'closed'
+    } catch {
+      return true
+    }
+  })
+  const togglePanel = useCallback(() => {
+    setPanelOpen((open) => {
+      try {
+        localStorage.setItem(PANEL_KEY, open ? 'closed' : 'open')
+      } catch {
+        // Convenience only.
+      }
+      return !open
+    })
+  }, [])
+  useEffect(() => {
+    window.addEventListener(TOGGLE_PANEL_EVENT, togglePanel)
+    return () => window.removeEventListener(TOGGLE_PANEL_EVENT, togglePanel)
+  }, [togglePanel])
   useEffect(() => {
     const toggle = (): void => setShowCode((s) => !s)
     window.addEventListener(TOGGLE_CODE_EVENT, toggle)
@@ -263,6 +305,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       title: g.title,
       items: g.kinds.map(([kind, label]) => ({
         label,
+        color: kindColor(kind),
         onSelect: () => {
           const node = makeNode(kind, m.flow)
           if (!pending) return add(node)
@@ -619,7 +662,13 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
           />
         )}
         {showCode && <pre className="code-view">{compiled.code}</pre>}
-        <Panel nodes={nodes} edges={edges} />
+        {/* Fixed-height dock (like Ableton's detail view); hidden only when the user hides it. */}
+      <div className={`panel-dock ${panelOpen ? '' : 'closed'}`}>
+        <button className="panel-toggle" title={panelOpen ? 'Hide panel' : 'Show panel'} onClick={togglePanel}>
+          {panelOpen ? '▾' : '▴'}
+        </button>
+        {panelOpen && <Panel nodes={nodes} edges={edges} />}
+      </div>
       </div>
     </StepLensContext.Provider>
   )

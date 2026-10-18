@@ -4,6 +4,8 @@ export interface MenuItem {
   label: string
   onSelect: () => void
   danger?: boolean
+  // Matches the colour of the node it adds.
+  color?: string
 }
 
 export interface MenuSection {
@@ -95,6 +97,7 @@ function ContextMenu({ x, y, sections, onClose, searchable = false }: Props): Re
             <button
               key={item.label}
               className={item.danger ? 'danger' : ''}
+              style={item.color ? { borderLeftColor: item.color } : undefined}
               onClick={() => {
                 item.onSelect()
                 onClose()

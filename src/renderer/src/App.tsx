@@ -24,7 +24,7 @@ import { useHistory } from './canvas/useHistory'
 import type { CanvasState, DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
 import type { MenuCommand } from '../../shared/menu'
-import { TOGGLE_CODE_EVENT } from './events'
+import { TOGGLE_CODE_EVENT, TOGGLE_PANEL_EVENT } from './events'
 
 interface Current {
   file: string | null
@@ -371,7 +371,10 @@ function App(): React.JSX.Element {
   const toggleCode = (): void => {
     window.dispatchEvent(new Event(TOGGLE_CODE_EVENT))
   }
-  const menuHandlers = { new: newPatch, open: () => setTab('library'), save: () => save(), saveAs: () => save(true), showFolder: () => window.api.library.openFolder(), undo, redo, toggleCode }
+  const togglePanel = (): void => {
+    window.dispatchEvent(new Event(TOGGLE_PANEL_EVENT))
+  }
+  const menuHandlers = { new: newPatch, open: () => setTab('library'), save: () => save(), saveAs: () => save(true), showFolder: () => window.api.library.openFolder(), undo, redo, toggleCode, togglePanel }
   const menuRef = useRef(menuHandlers)
   useEffect(() => {
     menuRef.current = menuHandlers

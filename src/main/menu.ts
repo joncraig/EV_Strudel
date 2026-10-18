@@ -41,6 +41,7 @@ export function installMenu(win: BrowserWindow, dev: boolean): void {
       label: 'View',
       submenu: [
         item('Show Code', 'toggleCode'),
+        item('Show Panel', 'togglePanel'),
         { type: 'separator' },
         { role: 'togglefullscreen' },
         ...(dev ? ([{ role: 'reload' }, { role: 'toggleDevTools' }] as MenuItemConstructorOptions[]) : [])
