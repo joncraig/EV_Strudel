@@ -24,8 +24,14 @@ import {
 
 const MAX_STEPS = 32
 
-function Header({ title }: { title: string }): React.JSX.Element {
-  return <div className="node-header">{title}</div>
+// Title bar (drags the node). `right` holds header controls like the step grip.
+function Header({ title, right }: { title: string; right?: React.ReactNode }): React.JSX.Element {
+  return (
+    <div className="node-header">
+      <span className="node-title">{title}</span>
+      {right}
+    </div>
+  )
 }
 
 // ---- Sample ----
@@ -104,7 +110,10 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
       <Handle type="target" position={Position.Left} id="sound" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
       {data.kind === 'degree' && <Handle type="target" position={Position.Top} id="mode" />}
-      <Header title={KIND_LABEL[data.kind]} />
+      <Header
+        title={KIND_LABEL[data.kind]}
+        right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
+      />
       <div className="node-body">
         <div className="seq-controls nodrag">
           {data.kind === 'degree' && (
@@ -134,7 +143,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
           <Fader label="gain" value={data.gain} max={1.5} onChange={(gain) => update({ gain })} />
         </div>
       </div>
-      <StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />
     </div>
   )
 }
@@ -155,7 +163,10 @@ export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.
     <div className="node velocity-node">
       <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
-      <Header title="Velocity" />
+      <Header
+        title="Velocity"
+        right={<StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />}
+      />
       <div className="node-body">
         <StepGrid
           steps={data.steps}
@@ -166,7 +177,6 @@ export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.
           onChange={(steps) => updateNodeData(id, { steps: steps.map((v) => v ?? VELOCITY_LEVELS) })}
         />
       </div>
-      <StepWidthGrip steps={data.steps.length} max={MAX_STEPS} onChange={setLength} />
     </div>
   )
 }

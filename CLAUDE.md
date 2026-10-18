@@ -37,7 +37,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Undo: `canvas/useHistory.ts`, serialized snapshots; a burst of changes (drag, paint, fader) settles after 400ms into one step; selection is not recorded. Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, plus toolbar buttons.
 - Parameter panel: `canvas/Panel.tsx`, docked under the canvas, settings for the single selected node (steps, gain, octave, mute/fold/clear; effect sliders + bypass; mode list; group name). Edits go through updateNodeData so they undo.
 - Multi-selection: a tap on a selected node's controls (with 2+ selected) opens the node menu instead of editing (capture handler in Canvas.tsx).
-- Sequencer controls: step count = drag the bottom-right corner grip (`canvas/controls.tsx`); gain = vertical fader; grids paint by sliding (first cell decides on/erase).
+- Sequencer controls: step count = drag the ↔ pill in the node header (`canvas/controls.tsx`); gain = vertical fader; grids paint by sliding (first cell decides on/erase).
 - Touch: Jon is on a Surface touchscreen. HTML5 drag-and-drop does not start from touch in Chromium on Windows, so sounds drag with pointer events (`canvas/soundDrag.ts`). Keep touch targets large.
 - Library folder: `Documents/EV_Strudel Library/*.strudel`. Patch metadata is in leading
   `// @title`, `// @source`, `// @tags` comment lines (`src/shared/patch.ts`), so files stay runnable.

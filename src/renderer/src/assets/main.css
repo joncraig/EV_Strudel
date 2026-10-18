@@ -213,11 +213,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .param-label { font-size: 10px; color: #888; }
 .effect-node .fader-fill { background: linear-gradient(#7cc, #3a7a7a); }
 
-/* Step-count grip: a corner handle just outside the bottom-right corner, showing the count */
-.width-grip { position: absolute; right: -14px; bottom: -14px; width: 30px; height: 30px; z-index: 1; border-radius: 50%; background: #2a2a2a; border: 1px solid #555; cursor: ew-resize; touch-action: none; display: flex; align-items: center; justify-content: center; box-shadow: 0 1px 4px #0008; }
-.width-grip::before { content: ''; position: absolute; inset: -8px; border-radius: 50%; }
-.width-grip:hover { border-color: #8ab4f8; background: #23344d; }
-.width-grip span { font-size: 11px; color: #ccc; font-weight: 600; }
 
 /* Parameter panel for the selected node, docked under the canvas */
 .panel { flex: none; min-height: 84px; max-height: 40vh; overflow: auto; border-top: 1px solid #333; background: #151515; padding: 8px 14px 10px; display: flex; gap: 18px; align-items: flex-start; }
@@ -239,3 +234,10 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .pmode { display: flex; gap: 4px; }
 .pmode select, .pname { height: 34px; background: #222; border: 1px solid #444; color: #ddd; border-radius: 3px; padding: 0 6px; }
 .pmode button { width: 30px; height: 34px; padding: 0; }
+
+/* Step-count grip: a pill in the header; drag it sideways to change the step count */
+.node-header { gap: 8px; }
+.node-title { flex: 1; min-width: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.width-grip { flex: none; display: flex; align-items: center; gap: 3px; height: 24px; padding: 0 8px; border-radius: 12px; background: #0005; border: 1px solid #ffffff22; cursor: ew-resize; touch-action: none; font-weight: 600; font-size: 12px; color: #ddd; }
+.width-grip::before { content: '↔'; font-size: 11px; color: #9ab; }
+.width-grip:hover { border-color: #8ab4f8; background: #8ab4f822; }
