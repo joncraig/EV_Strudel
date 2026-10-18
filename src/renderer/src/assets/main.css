@@ -173,3 +173,4 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .group-toggle { border: none; background: none; width: 30px; height: 30px; padding: 0; font-size: 14px; color: #ccd; }
 .sample-chip { display: flex; align-items: center; gap: 10px; padding: 6px 8px 6px 14px; }
 .slice-count { font-size: 12px; font-weight: normal; color: #9ab; background: #0004; border-radius: 8px; padding: 1px 7px; }
+.seq-controls button.fold.on { background: #23344d; border-color: #8ab4f8; }

@@ -54,6 +54,8 @@ export interface SequencerData extends Record<string, unknown> {
   octave: number
   gain: number
   muted: boolean
+  // Slices: show only rows that have hits (like Ableton's Fold).
+  folded?: boolean
 }
 
 export interface ModeData extends Record<string, unknown> {

@@ -71,7 +71,10 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
         return <StepGrid steps={data.steps} rows={[1]} labels={['●']} onChange={(steps) => update({ steps })} />
       case 'slice': {
         // Show slices top-down from the highest, so the grid reads like a piano roll.
-        const rows = Array.from({ length: slices }, (_, i) => slices - 1 - i)
+        const all = Array.from({ length: slices }, (_, i) => slices - 1 - i)
+        const used = new Set(data.steps.map((v) => (v === null ? v : v % slices)))
+        const rows = data.folded ? all.filter((v) => used.has(v)) : all
+        if (!rows.length) return <div className="hint">Nothing placed yet. Unfold to pick slices.</div>
         return <StepGrid steps={data.steps} rows={rows} onChange={(steps) => update({ steps })} />
       }
     }
@@ -99,6 +102,11 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
           <button className={data.muted ? 'on' : ''} onClick={() => update({ muted: !data.muted })}>
             M
           </button>
+          {data.kind === 'slice' && (
+            <button className={`fold ${data.folded ? 'on' : ''}`} onClick={() => update({ folded: !data.folded })}>
+              Fold
+            </button>
+          )}
           <button title="Clear" onClick={() => update({ steps: data.steps.map(() => null) })}>
             ⌫
           </button>
