@@ -10,6 +10,7 @@ import { compile } from './canvas/codegen'
 import { migrateCanvas, SYNTH_PACKS } from './canvas/model'
 import { AUDITION_EVENT, AuditionDetail } from './canvas/packSounds'
 import { setPlayhead } from './canvas/playhead'
+import { useHistory } from './canvas/useHistory'
 import type { CanvasState, DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
 
@@ -195,14 +196,30 @@ function App(): React.JSX.Element {
   }, [compiled, evaluate])
 
   // ---- Canvas state ----
-  const onCanvasChange = useCallback((s: CanvasState) => {
+  const history = useHistory(serialize(canvas))
+  const { record, undo: popUndo, redo: popRedo } = history
+
+  const applyCanvas = useCallback((s: CanvasState): string => {
     setCanvas(s)
+    const json = serialize(s)
     try {
-      localStorage.setItem(AUTOSAVE_KEY, serialize(s))
+      localStorage.setItem(AUTOSAVE_KEY, json)
     } catch {
       // Autosave is a convenience only.
     }
+    return json
   }, [])
+
+  const onCanvasChange = useCallback((s: CanvasState) => record(applyCanvas(s)), [applyCanvas, record])
+
+  const undo = useCallback(() => {
+    const prev = popUndo()
+    if (prev) applyCanvas(JSON.parse(prev))
+  }, [popUndo, applyCanvas])
+  const redo = useCallback(() => {
+    const next = popRedo()
+    if (next) applyCanvas(JSON.parse(next))
+  }, [popRedo, applyCanvas])
 
   const onSoundDropped = (sound: DraggedSound): void => {
     if (sound.pack && !loaded.has(sound.pack)) loadPack(sound.pack).catch((e) => setEvalError(String(e)))
@@ -259,6 +276,17 @@ function App(): React.JSX.Element {
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
+      // Leave text fields their own undo.
+      const typing = (e.target as HTMLElement).closest?.('input, textarea, select')
+      if ((e.ctrlKey || e.metaKey) && !typing && e.key.toLowerCase() === 'z') {
+        e.preventDefault()
+        if (e.shiftKey) redo()
+        else undo()
+      }
+      if ((e.ctrlKey || e.metaKey) && !typing && e.key.toLowerCase() === 'y') {
+        e.preventDefault()
+        redo()
+      }
       if ((e.ctrlKey || e.metaKey) && e.key === 's') {
         e.preventDefault()
         save()
@@ -267,7 +295,7 @@ function App(): React.JSX.Element {
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
-  }, [save])
+  }, [save, undo, redo])
 
   const remove = async (file: string): Promise<void> => {
     await window.api.library.remove(file)
@@ -305,6 +333,12 @@ function App(): React.JSX.Element {
         />
         <button onClick={save} disabled={!!current.codeOnly}>
           {dirty ? 'Save •' : 'Save'}
+        </button>
+        <button onClick={undo} disabled={!history.canUndo} title="Undo (Ctrl+Z)">
+          ↶ Undo
+        </button>
+        <button onClick={redo} disabled={!history.canRedo} title="Redo (Ctrl+Shift+Z)">
+          ↷ Redo
         </button>
         <button onClick={newPatch}>New</button>
         <button onClick={() => window.api.library.openFolder()}>Open folder</button>

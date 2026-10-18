@@ -34,7 +34,9 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Inspecting the running app: dev builds open a CDP port on 9225 (`src/main/index.ts`). `node scripts/cdp.mjs "<js>"` evaluates in the renderer (e.g. query DOM classes, click Play). Hot-reloading a shared module like `canvas/playhead.ts` can split it into two copies; restart dev after editing it.
 - Effects: one `effect` node type; kinds + params in `EFFECTS` (model.ts), each param a Strudel control on a vertical fader (log for cutoffs). Delay and reverb are per-orbit in Strudel (shared by everything on that orbit), which is where busses will come in.
 - Naming (Jon): call them Gain (level fader) and Velocity (per-step sequencer), never "volume". Old saved `volume` nodes migrate in `migrateCanvas` (model.ts).
-- Sequencer controls: step count = drag the right-edge grip (`canvas/controls.tsx`); gain = vertical fader; grids paint by sliding (first cell decides on/erase).
+- Undo: `canvas/useHistory.ts`, serialized snapshots; a burst of changes (drag, paint, fader) settles after 400ms into one step; selection is not recorded. Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, plus toolbar buttons.
+- Multi-selection: a tap on a selected node's controls (with 2+ selected) opens the node menu instead of editing (capture handler in Canvas.tsx).
+- Sequencer controls: step count = drag the bottom-right corner grip (`canvas/controls.tsx`); gain = vertical fader; grids paint by sliding (first cell decides on/erase).
 - Touch: Jon is on a Surface touchscreen. HTML5 drag-and-drop does not start from touch in Chromium on Windows, so sounds drag with pointer events (`canvas/soundDrag.ts`). Keep touch targets large.
 - Library folder: `Documents/EV_Strudel Library/*.strudel`. Patch metadata is in leading
   `// @title`, `// @source`, `// @tags` comment lines (`src/shared/patch.ts`), so files stay runnable.

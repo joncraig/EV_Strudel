@@ -251,6 +251,19 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     openAdd(e.clientX, e.clientY)
   }
 
+  // With several nodes selected, a tap on a selected node acts on the selection:
+  // its controls (grid, faders) don't edit, and the node menu opens instead.
+  const onPointerDownCapture = (e: React.PointerEvent): void => {
+    const el = (e.target as HTMLElement).closest<HTMLElement>('.react-flow__node')
+    const id = el?.dataset.id
+    if (!id || !(e.target as HTMLElement).closest('.nodrag')) return
+    const selected = nodes.filter((n) => n.selected)
+    if (selected.length < 2 || !selected.some((n) => n.id === id)) return
+    e.stopPropagation()
+    e.preventDefault()
+    setMenu({ type: 'node', x: e.clientX, y: e.clientY, nodeId: id })
+  }
+
   const onNodeClick = (e: React.MouseEvent, node: CanvasNode): void => {
     // Taps on a node's own controls (grid cells, buttons, selects) aren't node taps.
     if ((e.target as HTMLElement).closest('.nodrag, button, select, input, label')) return
@@ -294,7 +307,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
 
   return (
-    <div className="canvas" ref={rootRef}>
+    <div className="canvas" ref={rootRef} onPointerDownCapture={onPointerDownCapture}>
       <div className="canvas-tools">
         <span className="spacer" />
         <button className={showCode ? 'on' : ''} onClick={() => setShowCode(!showCode)}>
