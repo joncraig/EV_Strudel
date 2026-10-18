@@ -20,9 +20,10 @@ const lensAt = (lens: Lens, i: number): number => (lens?.length ? lens[i % lens.
 
 // Tokens as one loop, each step lasting its length: "a@4 b@4 ~@8" (mini-notation
 // weights), stretched so a 1/16 is a 1/16: "[...]/bars".
-function stepped(tokens: string[], lens: Lens): string {
-  // The same value throughout is just that value.
-  if (tokens.length && tokens.every((tk) => tk === tokens[0]) && tokens[0] !== '~') return tokens[0]
+// collapse: a value that's the same on every step can be written once (velocity, clip),
+// but a hit pattern can't: every step must still be its own hit.
+function stepped(tokens: string[], lens: Lens, collapse = true): string {
+  if (collapse && tokens.length && tokens.every((tk) => tk === tokens[0]) && tokens[0] !== '~') return tokens[0]
   const weights = tokens.map((_, i) => lensAt(lens, i))
   const total = weights.reduce((a, b) => a + b, 0)
   const body = tokens.map((tk, i) => (weights[i] === 1 ? tk : `${tk}@${weights[i]}`)).join(' ')
@@ -88,7 +89,7 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens
   switch (seq.kind) {
     case 'degree': {
       // UI degrees are 1-based; Strudel's are 0-based.
-      const degrees = stepped(steps(seq.steps, (v) => String(v - 1)), lens)
+      const degrees = stepped(steps(seq.steps, (v) => String(v - 1)), lens, false)
       code = `n("${degrees}")${SCALE}.s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
       if (sample.n) code += `.n(${sample.n})`
@@ -97,7 +98,7 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens
     case 'slice': {
       // Steps set before the piece count was lowered wrap around.
       const count = pieceCount(sample)
-      const picks = stepped(steps(seq.steps, (v) => String(v % count)), lens)
+      const picks = stepped(steps(seq.steps, (v) => String(v % count)), lens, false)
       // A multi-file sound picks files; a single file is cut into equal slices.
       code = isBank(sample)
         ? `n("${picks}").s(${sound})`
@@ -178,6 +179,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     mods: string // appended controls: .velocity() .clip() .delay() ...
   }
 
+  let cutGroup = 0
+
   // Step lengths each stepping node ends up using, for its playhead.
   const stepLens = new Map<string, Lens>()
 
@@ -188,8 +191,12 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (!sample) return null
     const code = sequencerCode(ctx.seq, sample, ctx.seqLens)
     if (!code) return null
+    // Sample hits (Slices, or a sound triggered by a stepping node) cut the chain's
+    // previous hit, so a loop longer than its step restarts instead of stacking. Notes
+    // stay polyphonic. One cut group per playing chain.
+    const cut = ctx.seq.kind === 'slice' ? `.cut(${++cutGroup})` : ''
     const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.octave, ctx.seq.octave ?? DEFAULT_OCTAVE)}")`
-    return code.replace(SCALE, scale) + ctx.mods
+    return code.replace(SCALE, scale) + cut + ctx.mods
   }
 
   // Parameter nodes set values that hold until something later overrides them.
@@ -290,9 +297,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
 
   // Chains with a sound but no Notes/Slices sequencer: almost every node steps, so the
   // stepping node nearest after the sound (else nearest before) says when it plays.
-  // Each set step is a hit (Key/Mode/Octave: the steps you set; Length/Velocity: every
-  // step). The whole chain's parameters still apply.
-  const STEPPING = new Set(['key', 'mode', 'octave', 'length', 'velocity'])
+  // Each set step is a hit (Key/Mode/Octave: the steps you set; Velocity: every step).
+  // Length never triggers; it sets how long things are. The whole chain's parameters still apply.
+  // Length only sets durations, it never triggers.
+  const STEPPING = new Set(['key', 'mode', 'octave', 'velocity'])
   for (const end of nodes) {
     if (active.has(end.id) || patternOuts(end.id).length) continue
     const chain = paramChain(end.id, new Set())
@@ -313,7 +321,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     }
     const hits = (clock.data.steps as Step[]).map((v) => (v === null ? null : 0))
     const seq: SequencerData = { kind: 'slice', steps: hits, resolution: STEP_RESOLUTION, octave: DEFAULT_OCTAVE, gain: 1, muted: false }
-    const code = finish({ ...ctx, seq, seqLens: clockLens })
+    // A held Length sets how long each hit sounds: a full step at that length.
+    const held = clockLens ? { ...ctx, mods: '.clip(1)' + ctx.mods } : ctx
+    const code = finish({ ...held, seq, seqLens: clockLens })
     if (code) {
       lines.push(code)
       layers.push(end.id)

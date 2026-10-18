@@ -115,7 +115,7 @@ export const VELOCITY_LEVELS = 8
 export const velocityDb = (level: number): number => -6 * (VELOCITY_LEVELS - level)
 export const velocityGain = (level: number): number => Math.pow(10, velocityDb(level) / 20)
 
-export const newVelocity = (length = 16): VelocityData => ({
+export const newVelocity = (length = 1): VelocityData => ({
   steps: Array(length).fill(VELOCITY_LEVELS),
   resolution: STEP_RESOLUTION
 })
@@ -253,7 +253,8 @@ export function stepAtLens(cycle: number, length: number, lens: number[]): numbe
 // Degree rows shown in the grid, top to bottom.
 export const DEGREE_ROWS = [8, 7, 6, 5, 4, 3, 2, 1]
 
-export const newSequencer = (kind: SequencerKind, length = 16): SequencerData => ({
+// Every new node starts as one step; drag its length pill to make it longer.
+export const newSequencer = (kind: SequencerKind, length = 1): SequencerData => ({
   kind,
   steps: Array(length).fill(null),
   resolution: STEP_RESOLUTION,
@@ -262,15 +263,15 @@ export const newSequencer = (kind: SequencerKind, length = 16): SequencerData =>
   muted: false
 })
 
-// One bar long, set on the first step (C, Ionian); empty steps hold.
+// One step, set (C, Ionian); lengthen it to sequence changes.
 export const newKey = (): KeyData => ({
-  steps: [0, ...Array(15).fill(null)],
+  steps: [0],
   resolution: STEP_RESOLUTION
 })
 // One octave unless lengthened into a sequence.
 export const newOctave = (): OctaveData => ({ steps: [DEFAULT_OCTAVE], resolution: STEP_RESOLUTION })
 export const newMode = (): ModeData => ({
-  steps: [0, ...Array(15).fill(null)],
+  steps: [0],
   resolution: STEP_RESOLUTION
 })
 
