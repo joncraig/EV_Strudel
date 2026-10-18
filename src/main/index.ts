@@ -3,6 +3,9 @@ import { join } from 'path'
 import { electronApp, optimizer, is } from '@electron-toolkit/utils'
 import icon from '../../resources/icon.png?asset'
 import { registerLibraryIpc } from './library'
+import { registerSampleScheme, registerSamplesIpc } from './samples'
+
+registerSampleScheme()
 
 function createWindow(): void {
   // Create the browser window.
@@ -51,6 +54,7 @@ app.whenReady().then(() => {
   })
 
   registerLibraryIpc()
+  registerSamplesIpc()
 
   createWindow()
 

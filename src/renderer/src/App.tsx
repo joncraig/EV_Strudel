@@ -6,11 +6,13 @@ import {
   initAudioOnFirstClick,
   registerSynthSounds,
   samples,
+  superdough,
   webaudioOutput
 } from '@strudel/webaudio'
 import { StrudelMirror } from '@strudel/codemirror'
 import Library from './components/Library'
 import Browse from './components/Browse'
+import Samples from './components/Samples'
 import type { PatchSummary } from '../../shared/patch'
 
 const initialCode = `note("<c3 eb3 g3 bb3>*2").s("sawtooth").lpf(sine.range(400, 2000).slow(4))`
@@ -23,7 +25,19 @@ interface Current {
   savedCode: string
 }
 
-const blank = (code = initialCode): Current => ({
+const PINNED_KEY = 'ev-strudel:auto-load-packs'
+
+function readPinned(): Set<string> {
+  try {
+    const raw = localStorage.getItem(PINNED_KEY)
+    if (raw) return new Set(JSON.parse(raw))
+  } catch {
+    // Fall through to the default.
+  }
+  return new Set(['dirt-samples'])
+}
+
+const blank =(code = initialCode): Current => ({
   file: null,
   title: 'Untitled',
   tags: '',
@@ -38,8 +52,46 @@ function App(): React.JSX.Element {
   const [patches, setPatches] = useState<PatchSummary[]>([])
   const [current, setCurrent] = useState<Current>(blank())
   const [dirty, setDirty] = useState(false)
-  const [tab, setTab] = useState<'library' | 'browse'>('library')
+  const [tab, setTab] = useState<'samples' | 'library' | 'browse'>('samples')
   const [auditioning, setAuditioning] = useState<string | null>(null)
+
+  // ---- Sample packs ----
+  const [pinned, setPinned] = useState<Set<string>>(readPinned)
+  const [loaded, setLoaded] = useState<Set<string>>(new Set())
+  const pinnedRef = useRef(pinned)
+
+  const loadPack = useCallback(async (id: string) => {
+    await samples(await window.api.samples.loadUrl(id))
+    setLoaded((s) => new Set(s).add(id))
+  }, [])
+  // prebake runs once at startup, so it reads these through refs.
+  const loadPackRef = useRef(loadPack)
+
+  const togglePin = (id: string): void => {
+    const next = new Set(pinned)
+    if (next.has(id)) next.delete(id)
+    else next.add(id)
+    setPinned(next)
+    pinnedRef.current = next
+    try {
+      localStorage.setItem(PINNED_KEY, JSON.stringify([...next]))
+    } catch {
+      // Not fatal: the pin just won't survive a restart.
+    }
+  }
+
+  const playSound = (s: string, n: number): void => {
+    const ctx = getAudioContext()
+    ctx.resume()
+    superdough({ s, n, gain: 0.8 }, ctx.currentTime + 0.05, 1)
+  }
+
+  const insertSound = (s: string): void => {
+    const view = mirrorRef.current?.editor
+    if (!view) return
+    view.dispatch(view.state.replaceSelection(`s("${s}")`))
+    view.focus()
+  }
 
   const refresh = useCallback(async () => setPatches(await window.api.library.list()), [])
 
@@ -68,7 +120,7 @@ function App(): React.JSX.Element {
             import('@strudel/codemirror')
           ),
           registerSynthSounds(),
-          samples('github:tidalcycles/dirt-samples')
+          ...[...pinnedRef.current].map((id) => loadPackRef.current(id).catch(console.error))
         ])
       }
     })
@@ -195,14 +247,26 @@ function App(): React.JSX.Element {
       <div className="main">
         <div className="sidebar">
           <div className="tabs">
+            <button className={tab === 'samples' ? 'on' : ''} onClick={() => setTab('samples')}>
+              Samples
+            </button>
             <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}>
-              Library
+              Patches
             </button>
             <button className={tab === 'browse' ? 'on' : ''} onClick={() => setTab('browse')}>
               Browse
             </button>
           </div>
-          {tab === 'library' ? (
+          {tab === 'samples' ? (
+            <Samples
+              pinned={pinned}
+              loaded={loaded}
+              onLoad={loadPack}
+              onTogglePin={togglePin}
+              onAudition={playSound}
+              onInsert={insertSound}
+            />
+          ) : tab === 'library' ? (
             <Library
               patches={patches}
               current={current.file}

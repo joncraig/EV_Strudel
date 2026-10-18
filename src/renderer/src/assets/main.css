@@ -58,3 +58,16 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .browse .items li.empty { color: #666; cursor: default; }
 .browse .keep { position: absolute; right: 4px; top: 2px; padding: 0 6px; border: none; background: none; color: #8ab4f8; }
 .browse .keep:disabled { color: #6c6; opacity: 1; }
+
+.badge { margin-left: 6px; font-size: 10px; padding: 0 5px; border-radius: 8px; background: #23344d; color: #8ab4f8; font-weight: normal; }
+.badge.local { background: #233d2a; color: #7c7; }
+.pack-actions { display: flex; gap: 4px; margin-top: 4px; flex-wrap: wrap; }
+.pack-actions button { padding: 1px 6px; font-size: 11px; }
+.pack-actions button.on { color: #fc6; border-color: #765; }
+.samples .items li { padding-left: 18px; }
+.sound-row { display: flex; gap: 6px; align-items: baseline; }
+.sound-name { flex: 1; cursor: pointer; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.sound-name:hover { color: #fff; }
+.sound-row .count { color: #888; cursor: pointer; font-size: 11px; }
+.variants { display: flex; flex-wrap: wrap; gap: 3px; padding: 4px 0; }
+.variants button { padding: 0 5px; font-size: 11px; min-width: 22px; }

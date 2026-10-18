@@ -5,11 +5,11 @@ Electron UI frontend for Strudel (live-coding music). A nice editor built on the
 License: AGPL-3.0-or-later (required because Strudel is AGPL).
 
 ## Current Session Status
-2026-10-18: Patch library v1 + Browse tab (catalog of ~1 official + 25 GitHub collections, ~2.5k patches) pushed. Typecheck + build pass.
+2026-10-18: Jon clarified "patches" meant SAMPLES. Added Samples tab (36 verified sample packs: audition, auto-load, download for offline). Patch library + Browse tab kept for now (ask Jon whether to keep). Typecheck + build pass; nothing verified in the running app yet.
 NOT yet verified in the running app (audio, import, save/load). Jon to test with `npm run dev`.
 
 ## Active TODO
-- Verify in `npm run dev`: audio, save/open/delete, import (strudel.cc long URL, gist, GitHub file, raw URL, pasted code)
+- Verify in `npm run dev`: Samples tab (play sound, variants, insert, download + offline load), audio, save/open/delete, import (strudel.cc long URL, gist, GitHub file, raw URL, pasted code)
 - Short strudel.cc links (`?id`) unsupported (stored in their Supabase). Could add later.
 - Feature vision (discuss before building):
   - Novel interfaces for navigating chords and modes
@@ -18,6 +18,7 @@ NOT yet verified in the running app (audio, import, save/load). Jon to test with
   - Compounding modulators (modulators modulating modulators)
 
 ## Notes
+- Sample packs: catalog in `src/shared/samplePacks.ts`; main side `src/main/samples.ts`. Downloads go to `Library/samples/<id>/` with a rewritten `strudel.json`, served via the `evsamples://pack/<id>/` protocol. Auto-load list is in localStorage (`ev-strudel:auto-load-packs`, default dirt-samples).
 - Library folder: `Documents/EV_Strudel Library/*.strudel`. Patch metadata is in leading
   `// @title`, `// @source`, `// @tags` comment lines (`src/shared/patch.ts`), so files stay runnable.
 - Catalog list: `src/shared/catalog.ts` (add repos there). Browse uses unauthenticated GitHub tree API (60 req/hr), cached per session. Official tunes parsed from Codeberg `tunes.mjs` (29 of 32 parse).

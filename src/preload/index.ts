@@ -2,6 +2,7 @@ import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PatchMeta, PatchSummary } from '../shared/patch'
 import type { CatalogItem, Collection } from '../shared/catalog'
+import type { DownloadProgress, PackSounds, PackStatus } from '../shared/samplePacks'
 
 // Custom APIs for renderer
 const api = {
@@ -14,6 +15,18 @@ const api = {
     remove: (file: string): Promise<void> => ipcRenderer.invoke('library:delete', file),
     import: (input: string): Promise<string[]> => ipcRenderer.invoke('library:import', input),
     openFolder: (): Promise<string> => ipcRenderer.invoke('library:open-folder')
+  },
+  samples: {
+    list: (): Promise<PackStatus[]> => ipcRenderer.invoke('samples:list'),
+    loadUrl: (id: string): Promise<string> => ipcRenderer.invoke('samples:load-url', id),
+    sounds: (id: string): Promise<PackSounds> => ipcRenderer.invoke('samples:sounds', id),
+    download: (id: string): Promise<DownloadProgress> => ipcRenderer.invoke('samples:download', id),
+    remove: (id: string): Promise<void> => ipcRenderer.invoke('samples:remove', id),
+    onProgress: (cb: (p: DownloadProgress) => void): (() => void) => {
+      const listener = (_: unknown, p: DownloadProgress): void => cb(p)
+      ipcRenderer.on('samples:progress', listener)
+      return () => ipcRenderer.removeListener('samples:progress', listener)
+    }
   },
   catalog: {
     list: (): Promise<Collection[]> => ipcRenderer.invoke('catalog:list'),
