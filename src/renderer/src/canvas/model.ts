@@ -36,6 +36,8 @@ export interface SampleData extends Record<string, unknown> {
   s: string
   n: number
   pack?: string
+  // Shown on the chip: the file name when a single variant was dragged.
+  label?: string
   // Number of equal slices to cut the sample into (for slice sequencers).
   slices: number
 }
@@ -93,6 +95,8 @@ export const nodeId = (prefix: string): string => `${prefix}-${Date.now().toStri
 export interface DraggedSound {
   s: string
   pack?: string
+  // Shown on the chip: the file name when a single variant was dragged.
+  label?: string
   // Sample variant; 0 when not given.
   n?: number
 }

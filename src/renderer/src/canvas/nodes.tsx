@@ -1,8 +1,5 @@
-import { useEffect, useState } from 'react'
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import StepGrid from './StepGrid'
-import { packSounds, requestAudition } from './packSounds'
-import type { SoundInfo } from '../../../shared/samplePacks'
 import {
   DEGREE_ROWS,
   MODES,
@@ -17,81 +14,18 @@ import {
 
 const MAX_STEPS = 32
 
-function useUpdate<T extends Record<string, unknown>>(id: string): (patch: Partial<T>) => void {
-  const { updateNodeData } = useReactFlow()
-  return (patch) => updateNodeData(id, patch)
-}
-
-function Header({ title, id }: { title: string; id: string }): React.JSX.Element {
-  const { deleteElements } = useReactFlow()
-  return (
-    <div className="node-header">
-      <span>{title}</span>
-      <button className="node-x nodrag" title="Delete" onClick={() => deleteElements({ nodes: [{ id }] })}>
-        ×
-      </button>
-    </div>
-  )
+function Header({ title }: { title: string }): React.JSX.Element {
+  return <div className="node-header">{title}</div>
 }
 
 // ---- Sample ----
 
-export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Element {
-  const update = useUpdate<SampleData>(id)
-  const [info, setInfo] = useState<SoundInfo | null>(null)
-
-  useEffect(() => {
-    if (!data.pack) return
-    let live = true
-    packSounds(data.pack)
-      .then((all) => live && setInfo(all[data.s] ?? null))
-      .catch(() => {})
-    return () => {
-      live = false
-    }
-  }, [data.pack, data.s])
-
-  const files = info && !info.multisample ? info.variants : []
-  const pick = (n: number): void => {
-    const next = (n + files.length) % files.length
-    update({ n: next })
-    requestAudition({ s: data.s, n: next, pack: data.pack })
-  }
-
+// A sound on the canvas: just its name and an output. Picking files, slicing etc.
+// will be separate nodes wired after it.
+export function SampleNode({ data }: NodeProps<SampleNodeT>): React.JSX.Element {
   return (
-    <div className="node sample-node">
-      <Header title={info?.multisample ? 'Instrument' : 'Sample'} id={id} />
-      <div className="node-body nodrag">
-        <div className="sample-title">
-          <button title="Play" onClick={() => requestAudition({ s: data.s, n: data.n, pack: data.pack })}>
-            ▶
-          </button>
-          <span className="sound-label">{data.s}</span>
-        </div>
-        {files.length > 1 && (
-          <div className="variant-picker">
-            <button onClick={() => pick(data.n - 1)}>◀</button>
-            <select value={data.n} onChange={(e) => pick(Number(e.target.value))}>
-              {files.map((f, n) => (
-                <option key={n} value={n}>
-                  {n} · {f}
-                </option>
-              ))}
-            </select>
-            <button onClick={() => pick(data.n + 1)}>▶</button>
-          </div>
-        )}
-        {files.length === 1 && <div className="file-label">{files[0]}</div>}
-        {!info?.multisample && (
-          <div className="seq-controls" title="Cut the sample into equal slices for a Slices sequencer">
-            <span>cut into</span>
-            <button onClick={() => update({ slices: Math.max(1, data.slices - 1) })}>−</button>
-            <span className="value">{data.slices}</span>
-            <button onClick={() => update({ slices: Math.min(64, data.slices + 1) })}>+</button>
-            <span>slices</span>
-          </div>
-        )}
-      </div>
+    <div className="node sample-chip" title={data.pack ? `${data.s} (${data.pack})` : data.s}>
+      {data.label ?? data.s}
       <Handle type="source" position={Position.Right} id="sound" />
     </div>
   )
@@ -139,7 +73,7 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
     <div className={`node sequencer-node ${data.muted ? 'muted' : ''}`}>
       <Handle type="target" position={Position.Left} id="sound" style={{ top: 40 }} />
       {data.kind === 'degree' && <Handle type="target" position={Position.Top} id="mode" />}
-      <Header title={KIND_LABEL[data.kind]} id={id} />
+      <Header title={KIND_LABEL[data.kind]} />
       <div className="node-body">
         <div className="seq-controls nodrag">
           <span>steps</span>
@@ -189,7 +123,7 @@ export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element 
 
   return (
     <div className="node mode-node">
-      <Header title="Mode sequence" id={id} />
+      <Header title="Mode sequence" />
       <div className="node-body nodrag">
         {data.steps.map((step, i) => (
           <div className="mode-step" key={i}>

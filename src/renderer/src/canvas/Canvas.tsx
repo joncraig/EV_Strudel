@@ -10,6 +10,7 @@ import {
   EdgeChange,
   IsValidConnection,
   NodeChange,
+  OnConnectEnd,
   ReactFlow,
   useReactFlow
 } from '@xyflow/react'
@@ -17,17 +18,8 @@ import '@xyflow/react/dist/style.css'
 import { ModeNode, SampleNode, SequencerNode } from './nodes'
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
-import {
-  CanvasNode,
-  CanvasState,
-  DraggedSound,
-  newMode,
-  newSequencer,
-  nodeId,
-  SequencerKind,
-  SYNTHS
-} from './model'
-
+import ContextMenu, { MenuSection } from './ContextMenu'
+import { CanvasNode, CanvasState, DraggedSound, newMode, newSequencer, nodeId, SequencerKind, SYNTHS } from './model'
 
 interface Props {
   state: CanvasState
@@ -36,14 +28,29 @@ interface Props {
   onSoundDropped: (sound: DraggedSound) => void
 }
 
-// Handles only connect to the same-named handle: sound→sound, mode→mode.
 const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mode: ModeNode }
 
+// Handles only connect to the same-named handle: sound→sound, mode→mode.
 const isValidConnection: IsValidConnection = (c) => c.sourceHandle === c.targetHandle && c.source !== c.target
+
+// What the add menu can create: a sequencer kind, a mode node, or a synth sound.
+type NewKind = SequencerKind | 'mode' | `synth:${string}`
+
+// A wire dragged out of a handle and dropped on empty canvas.
+interface Pending {
+  nodeId: string
+  handle: 'sound' | 'mode'
+  handleType: 'source' | 'target'
+}
+
+type Menu =
+  | { type: 'add'; x: number; y: number; flow: { x: number; y: number }; pending?: Pending }
+  | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const { screenToFlowPosition } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
+  const rootRef = useRef<HTMLDivElement>(null)
   const { nodes, edges } = state
 
   const onNodesChange = useCallback(
@@ -63,32 +70,120 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     [nodes, edges, onChange]
   )
 
-  const add = (node: CanvasNode): void => onChange({ nodes: [...nodes, node], edges })
-
-  // New nodes go near the middle of the visible canvas, staggered so they don't stack.
-  const spawnPosition = (): { x: number; y: number } => {
-    const p = screenToFlowPosition({ x: window.innerWidth / 2, y: window.innerHeight / 2 })
-    return { x: p.x + (nodes.length % 5) * 30, y: p.y + (nodes.length % 5) * 30 }
+  const add = (node: CanvasNode, edge?: Edge): void => {
+    // A new wire into an input replaces whatever was wired there.
+    const kept = edge ? edges.filter((e) => !(e.target === edge.target && e.targetHandle === edge.targetHandle)) : edges
+    onChange({ nodes: [...nodes, node], edges: edge ? [...kept, edge] : edges })
   }
 
-  const addSequencer = (kind: SequencerKind): void =>
-    add({ id: nodeId('seq'), type: 'sequencer', position: spawnPosition(), data: newSequencer(kind) })
+  const remove = (id: string): void =>
+    onChange({
+      nodes: nodes.filter((n) => n.id !== id),
+      edges: edges.filter((e) => e.source !== id && e.target !== id)
+    })
 
-  // Sounds arrive from the Samples tab as window events (see soundDrag.ts).
-  const rootRef = useRef<HTMLDivElement>(null)
+  // ---- Menus: tap empty canvas = add, tap a node = node menu, drop a wire on empty = add + connect ----
+  const [menu, setMenu] = useState<Menu | null>(null)
+  const closeMenu = useCallback(() => setMenu(null), [])
+
+  const makeNode = (kind: NewKind, position: { x: number; y: number }): CanvasNode => {
+    if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
+    if (kind.startsWith('synth:'))
+      return { id: nodeId('sample'), type: 'sample', position, data: { s: kind.slice(6), n: 0, slices: 8 } }
+    return { id: nodeId('seq'), type: 'sequencer', position, data: newSequencer(kind as SequencerKind) }
+  }
+
+  // What can be added, given the wire (if any) being dropped.
+  const addSections = (m: Extract<Menu, { type: 'add' }>): MenuSection[] => {
+    const sequencers: [NewKind, string][] = [
+      ['degree', 'Notes sequencer'],
+      ['trigger', 'Rhythm sequencer'],
+      ['slice', 'Slices sequencer']
+    ]
+    const mode: [NewKind, string] = ['mode', 'Mode sequence']
+    const synths: [NewKind, string][] = SYNTHS.map((s) => [`synth:${s}`, s])
+    const { pending } = m
+
+    let groups: { title: string; kinds: [NewKind, string][] }[]
+    if (!pending)
+      groups = [
+        { title: 'Sequencers', kinds: sequencers },
+        { title: 'Harmony', kinds: [mode] },
+        { title: 'Synths', kinds: synths }
+      ]
+    else if (pending.handleType === 'source')
+      groups =
+        pending.handle === 'sound'
+          ? [{ title: 'Play it with', kinds: sequencers }]
+          : [{ title: 'Apply to', kinds: [sequencers[0]] }]
+    else
+      groups =
+        pending.handle === 'sound'
+          ? [{ title: 'Sound from', kinds: synths }]
+          : [{ title: 'Mode from', kinds: [mode] }]
+
+    return groups.map((g) => ({
+      title: g.title,
+      items: g.kinds.map(([kind, label]) => ({
+        label,
+        onSelect: () => {
+          const node = makeNode(kind, m.flow)
+          if (!pending) return add(node)
+          const [source, target] =
+            pending.handleType === 'source' ? [pending.nodeId, node.id] : [node.id, pending.nodeId]
+          add(node, {
+            id: `e-${source}-${target}-${pending.handle}`,
+            source,
+            target,
+            sourceHandle: pending.handle,
+            targetHandle: pending.handle,
+            animated: pending.handle === 'mode'
+          })
+        }
+      }))
+    }))
+  }
+
+  const nodeSections = (id: string): MenuSection[] => [
+    { items: [{ label: 'Delete', danger: true, onSelect: () => remove(id) }] }
+  ]
+
+  const openAdd = (x: number, y: number, pending?: Pending): void =>
+    setMenu({ type: 'add', x, y, flow: screenToFlowPosition({ x, y }), pending })
+
+  const onPaneClick = (e: React.MouseEvent): void => openAdd(e.clientX, e.clientY)
+
+  const onNodeClick = (e: React.MouseEvent, node: CanvasNode): void => {
+    // Taps on a node's own controls (grid cells, buttons, selects) aren't node taps.
+    if ((e.target as HTMLElement).closest('button, select, input, label')) return
+    if (e.ctrlKey || e.metaKey) return remove(node.id)
+    setMenu({ type: 'node', x: e.clientX, y: e.clientY, nodeId: node.id })
+  }
+
+  const onConnectEnd: OnConnectEnd = (e, conn) => {
+    if (conn.isValid || !conn.fromNode || !conn.fromHandle?.id) return
+    const p = 'changedTouches' in e ? e.changedTouches[0] : e
+    openAdd(p.clientX, p.clientY, {
+      nodeId: conn.fromNode.id,
+      handle: conn.fromHandle.id as Pending['handle'],
+      handleType: conn.fromHandle.type
+    })
+  }
+
+  // ---- Sounds dragged in from the Samples tab (window events, see soundDrag.ts) ----
   const dropRef = useRef<(d: SoundDropDetail) => void>(() => {})
   useEffect(() => {
     dropRef.current = ({ sound, point }) => {
-      if (point) {
-        const r = rootRef.current?.getBoundingClientRect()
-        if (!r || point.x < r.left || point.x > r.right || point.y < r.top || point.y > r.bottom) return
-      }
+      const r = rootRef.current?.getBoundingClientRect()
+      if (!r) return
+      if (point && (point.x < r.left || point.x > r.right || point.y < r.top || point.y > r.bottom)) return
       onSoundDropped(sound)
+      const at = point ?? { x: r.left + r.width / 2, y: r.top + r.height / 2 }
       add({
         id: nodeId('sample'),
         type: 'sample',
-        position: point ? screenToFlowPosition(point) : spawnPosition(),
-        data: { s: sound.s, pack: sound.pack, n: sound.n ?? 0, slices: 8 }
+        position: screenToFlowPosition(at),
+        data: { s: sound.s, pack: sound.pack, label: sound.label, n: sound.n ?? 0, slices: 8 }
       })
     }
   })
@@ -103,29 +198,6 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   return (
     <div className="canvas" ref={rootRef}>
       <div className="canvas-tools">
-        <button onClick={() => addSequencer('degree')}>+ Notes</button>
-        <button onClick={() => addSequencer('trigger')}>+ Rhythm</button>
-        <button onClick={() => addSequencer('slice')}>+ Slices</button>
-        <button onClick={() => add({ id: nodeId('mode'), type: 'mode', position: spawnPosition(), data: newMode() })}>
-          + Mode sequence
-        </button>
-        <select
-          value=""
-          onChange={(e) => {
-            if (!e.target.value) return
-            add({
-              id: nodeId('sample'),
-              type: 'sample',
-              position: spawnPosition(),
-              data: { s: e.target.value, n: 0, slices: 8 }
-            })
-          }}
-        >
-          <option value="">+ Synth…</option>
-          {SYNTHS.map((s) => (
-            <option key={s}>{s}</option>
-          ))}
-        </select>
         <span className="spacer" />
         <button className={showCode ? 'on' : ''} onClick={() => setShowCode(!showCode)}>
           {'</>'} Code
@@ -133,11 +205,14 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       </div>
       <ReactFlow
         nodes={nodes}
-        edges={edges as Edge[]}
+        edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}
         onEdgesChange={onEdgesChange}
         onConnect={onConnect}
+        onConnectEnd={onConnectEnd}
+        onPaneClick={onPaneClick}
+        onNodeClick={onNodeClick}
         isValidConnection={isValidConnection}
         colorMode="dark"
         fitView
@@ -148,9 +223,15 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         <Controls />
       </ReactFlow>
       {nodes.length === 0 && (
-        <div className="canvas-empty">
-          Drag a sound from the Samples tab onto the canvas, add a sequencer, and wire the sample into it.
-        </div>
+        <div className="canvas-empty">Drag a sound in from Samples, or tap the canvas to add a node.</div>
+      )}
+      {menu && (
+        <ContextMenu
+          x={menu.x}
+          y={menu.y}
+          sections={menu.type === 'add' ? addSections(menu) : nodeSections(menu.nodeId)}
+          onClose={closeMenu}
+        />
       )}
       {showCode && <pre className="code-view">{compiled.code}</pre>}
     </div>

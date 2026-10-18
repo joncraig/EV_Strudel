@@ -149,13 +149,13 @@ function Samples({ loaded, onLoad, onAudition }: Props): React.JSX.Element {
                                 <span
                                   className="grip"
                                   title="Drag onto the canvas"
-                                  onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id, n })}
+                                  onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id, n, label: file })}
                                 >
                                   ⠿
                                 </span>
                                 <span
                                   className="sound-name"
-                                  onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id, n }, 'x')}
+                                  onPointerDown={(e) => startSoundDrag(e, { s: name, pack: p.id, n, label: file }, 'x')}
                                   onClick={() => !wasDragging() && audition(p.id, name, n)}
                                 >
                                   ▶ <span className="variant-n">{n}</span> {file}
