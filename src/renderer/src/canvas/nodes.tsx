@@ -138,6 +138,8 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
 
   return (
     <div className={`node sequencer-node ${data.muted ? 'muted' : ''}`}>
+      {/* Parameter chains (Length, Key, Mode ...) wired in set values for this sequencer's notes. */}
+      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
       <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
       <Header
         title={KIND_LABEL[data.kind]}

@@ -109,19 +109,15 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const onConnect = useCallback(
     (c: Connection) => {
       const { nodes: ns, edges: es } = stateRef.current
-      const multi = ns.find((n) => n.id === c.target)?.type === 'mix'
-      const kept = multi ? es : es.filter((e) => !(e.target === c.target && e.targetHandle === c.targetHandle))
-      commit({ nodes: ns, edges: addEdge(c, kept) })
+      // Inputs take several wires: parameter chains and playing chains combine there.
+      commit({ nodes: ns, edges: addEdge(c, es) })
     },
     [commit]
   )
 
   const add = (node: CanvasNode, edge?: Edge): void => {
-    // A new wire into an input replaces whatever was wired there.
-    const multi = edge && nodes.find((n) => n.id === edge.target)?.type === 'mix'
-    const kept =
-      edge && !multi ? edges.filter((e) => !(e.target === edge.target && e.targetHandle === edge.targetHandle)) : edges
-    onChange({ nodes: [...nodes, node], edges: edge ? [...kept, edge] : edges })
+    // Inputs take several wires; a new one is added alongside.
+    onChange({ nodes: [...nodes, node], edges: edge ? [...edges, edge] : edges })
   }
 
   const remove = (id: string): void => onChange(removeNode(state, id))
@@ -187,7 +183,12 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         sound: [{ title: 'Sound from', kinds: synths }],
         key: [{ title: 'Key from', kinds: [key] }],
         mode: [{ title: 'Mode from', kinds: [mode] }],
-        pattern: [{ title: 'Pattern from', kinds: sequencers }, { title: 'Route', kinds: [mix] }]
+        pattern: [
+          { title: 'Pattern from', kinds: sequencers },
+          { title: 'Shape', kinds: [velocity, length] },
+          { title: 'Harmony', kinds: [key, mode] },
+          { title: 'Route', kinds: [mix] }
+        ]
       }[pending.handle]
 
     return groups.map((g) => ({
@@ -360,10 +361,10 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
   const onConnectStart: OnConnectStart = (_e, { nodeId, handleId, handleType }) => {
     detachedRef.current = false
     if (handleType !== 'target' || !nodeId) return
-    if (stateRef.current.nodes.find((n) => n.id === nodeId)?.type === 'mix') return
     const { nodes: ns, edges: es } = stateRef.current
+    // Only a single wire is picked up; with several, the drag starts a new wire.
     const wired = es.filter((e) => e.target === nodeId && e.targetHandle === handleId)
-    if (!wired.length) return
+    if (wired.length !== 1) return
     detachedRef.current = true
     commit({ nodes: ns, edges: es.filter((e) => !wired.includes(e)) })
   }
@@ -457,14 +458,6 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
   }, [])
 
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
-  // Dim nodes that aren't on a playing chain (display only; not saved).
-  const shown = useMemo(
-    () =>
-      nodes.map((n) =>
-        n.type === 'group' || compiled.active.has(n.id) ? n : { ...n, className: 'inactive' }
-      ),
-    [nodes, compiled]
-  )
 
   return (
     <div className="canvas" ref={rootRef} onPointerDownCapture={onPointerDownCapture}>
@@ -475,7 +468,7 @@ function longPress(e: React.PointerEvent, onHold: (x: number, y: number) => void
         </button>
       </div>
       <ReactFlow
-        nodes={shown}
+        nodes={nodes}
         edges={edges}
         nodeTypes={nodeTypes}
         onNodesChange={onNodesChange}

@@ -113,6 +113,8 @@ export interface Compiled {
 // Without a Sample in the chain, Notes play this synth; other sequencers stay silent.
 const DEFAULT_NOTE_SOUND: SampleData = { s: 'triangle', n: 0, slices: 8 }
 
+// Parameter chains (no sequencer) wired into a sequencer or any node of a playing
+// chain set values there, held until overridden later in the chain.
 // A chain starts at a sequencer (when) and every node after it adds a dimension of
 // what: Sample (sound), Key, Mode, Length, Velocity, effects, each with its own
 // length. Only chain ends play. A Mix gathers several chains, stacks them, and
@@ -149,6 +151,46 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     return code.replace(SCALE, scale) + ctx.mods
   }
 
+  // Parameter nodes set values that hold until something later overrides them.
+  const apply = (ctx: Ctx, n: CanvasNode): Ctx => {
+    const c = { ...ctx }
+    if (n.type === 'sample') {
+      // The first sound sets how the sequencer plays (files, slices); later ones re-voice it.
+      if (!c.sample && !c.base) c.sample = n.data
+      else c.mods += `.s(${quote(n.data.s)}).n(${n.data.n})`
+    } else if (n.type === 'key') c.key = n.data
+    else if (n.type === 'mode') c.mode = n.data
+    else if (n.type === 'velocity') c.mods += velocityCode(n.data)
+    else if (n.type === 'length') c.mods += lengthCode(n.data)
+    else if (n.type === 'effect') c.mods += effectCode(n.data)
+    return c
+  }
+
+  // A parameter chain is a run of parameter nodes with no sequencer upstream
+  // (e.g. Length -> Key -> Mode). Wired into a node, its values apply there, in
+  // order, before that node's own; returns null if a sequencer is upstream (that's
+  // a playing chain, handled by follow).
+  const paramChain = (id: string, seen: Set<string>): CanvasNode[] | null => {
+    const n = byId.get(id)
+    if (!n || n.type === 'sequencer' || n.type === 'mix' || seen.has(id)) return null
+    const before: CanvasNode[] = []
+    for (const e of edges.filter((e) => e.target === id && e.sourceHandle === 'pattern')) {
+      const up = paramChain(e.source, new Set(seen).add(id))
+      if (up === null) return null
+      before.push(...up)
+    }
+    return [...before, n]
+  }
+  // Apply the parameter chains wired into id (skipping the edge the flow arrived on).
+  const applySide = (ctx: Ctx, id: string, from: string | null): Ctx => {
+    let c = ctx
+    for (const e of edges.filter((e) => e.target === id && e.sourceHandle === 'pattern' && e.source !== from)) {
+      const chain = paramChain(e.source, new Set([id]))
+      if (chain) for (const p of chain) c = apply(c, p)
+    }
+    return c
+  }
+
   const lines: string[] = []
   const layers: string[] = []
   const active = new Set<string>()
@@ -174,16 +216,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         }
         continue
       }
-      const c = { ...ctx }
-      if (next.type === 'sample') {
-        // The first sound sets how the sequencer plays (files, slices); later ones re-voice it.
-        if (!c.sample && !c.base) c.sample = next.data
-        else c.mods += `.s(${quote(next.data.s)}).n(${next.data.n})`
-      } else if (next.type === 'key') c.key = next.data
-      else if (next.type === 'mode') c.mode = next.data
-      else if (next.type === 'velocity') c.mods += velocityCode(next.data)
-      else if (next.type === 'length') c.mods += lengthCode(next.data)
-      else if (next.type === 'effect') c.mods += effectCode(next.data)
+      // Parameter chains wired into this node apply here, then the node itself.
+      let c = applySide(ctx, next.id, node.id)
+      c = apply(c, next)
       follow(next, c, new Set(seen).add(next.id))
     }
   }
@@ -191,7 +226,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const empty = { sample: null, key: null, mode: null, mods: '' }
   for (const node of nodes)
     if (node.type === 'sequencer' && !node.data.muted)
-      follow(node, { ...empty, seq: node.data, base: null }, new Set([node.id]))
+      follow(node, applySide({ ...empty, seq: node.data, base: null }, node.id, null), new Set([node.id]))
 
   // Mixes: once a Mix's inputs are known, it continues as one chain. A Mix that feeds
   // another Mix is done first, so keep going until nothing new arrives.

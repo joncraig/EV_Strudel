@@ -12,13 +12,14 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 
 ## Active TODO
 - Verify in `npm run dev`: canvas (drag sample in, wire, play, live edits), Samples tab (play, variants, download + offline), Patches save/open/import
-- Canvas next steps (not built): measure paging (nodes show one measure, page through several, like Ableton clips), Slice node (sets cut count for a single file; no slice controls on chips or menus), Extract node (narrow a bank to chosen pieces), chords (stacked degrees), per-step variant/velocity, modulator nodes
+- Canvas next steps (not built): Output nodes so a chain can output mid-chain (today the only output is each chain's last unconnected node), measure paging (nodes show one measure, page through several, like Ableton clips), Slice node (sets cut count for a single file; no slice controls on chips or menus), Extract node (narrow a bank to chosen pieces), chords (stacked degrees), per-step variant/velocity, modulator nodes
 - Short strudel.cc links (`?id`) unsupported (stored in their Supabase). Could add later.
 - Feature vision (discuss before building):
   - Happy accidents (controlled randomness / mutation)
   - Compounding modulators (modulators modulating modulators)
 
 ## Notes
+- Parameters (Jon): Key, Mode, Length, Velocity, effects, Sample are parameters that hold until overridden, in any order. A parameter-only chain (no sequencer) wired into any node (incl. a sequencer's input) applies there (`paramChain`/`applySide` in codegen). Every input takes several wires. Sound comes out at each chain's last unconnected output.
 - Chains: a sequencer (when) starts a chain; every node after it adds a dimension (Sample = sound, Key, Mode, Length, Velocity, effects), each with its own length. Only chain ends play; forks play each branch. Mix: many inputs, one output; stacks its chains on its own orbit (2+) so effects after it (and its delay/reverb) are shared by its inputs. Old sound wires migrate in `chainSamples`. Notes with no Sample play `triangle`. Velocity = Strudel `velocity` (0..1, multiplies with gain); future: outs route to busses.
 - Canvas: `src/renderer/src/canvas/`, React Flow (`@xyflow/react`). `codegen.ts` turns the graph into a
   `stack()`. Degrees are 1-based in the UI, 0-based in Strudel. Mode node becomes
@@ -39,7 +40,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 - Naming (Jon): call them Gain (level fader) and Velocity (per-step sequencer), never "volume". Old saved `volume` nodes migrate in `migrateCanvas` (model.ts).
 - Undo: `canvas/useHistory.ts`, serialized snapshots; a burst of changes (drag, paint, fader) settles after 400ms into one step; selection is not recorded. Ctrl+Z / Ctrl+Shift+Z / Ctrl+Y, plus toolbar buttons.
 - Parameter panel: `canvas/Panel.tsx`, docked under the canvas, settings for the single selected node (steps, gain, octave, mute/fold/clear; effect sliders + bypass; mode list; group name). Edits go through updateNodeData so they undo.
-- Feedback: nodes not on a playing chain are dimmed with "not playing" (compile returns `active`). Ctrl+D / node menu Duplicate copies selected nodes and their inner wires. Add menu: type to filter (keys captured so Backspace never deletes nodes), Enter picks first.
+- Feedback: no "not playing" warnings (Jon: parameter chains are not errors). Ctrl+D / node menu Duplicate copies selected nodes and their inner wires. Add menu: type to filter (keys captured so Backspace never deletes nodes), Enter picks first.
 - Blender-style wiring: dragging from a connected input picks the wire up (drop on empty = disconnect, on an output = reconnect); dragging a free chain node over a pattern wire highlights it and splices the node in on drop.
 - Testing on Jon's live canvas: record node ids and verify by id; never undo by count (an over-undo once rolled back his edits; recovered with redo).
 - Gestures: tap selects (node) / clears selection (empty canvas); long-press (500ms) or right-click opens the node menu or the add menu; drag on empty canvas = selection box (React Flow selectionOnDrag); pan = two fingers, trackpad scroll, middle/right mouse; pinch or Ctrl+scroll zooms; Ctrl+click deletes. Synthetic events can't test the selection box (pointer capture): use CDP Input.dispatchMouseEvent.
