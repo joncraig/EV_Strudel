@@ -40,7 +40,13 @@ export interface SampleData extends Record<string, unknown> {
   label?: string
   // Number of equal slices to cut the sample into (for slice sequencers).
   slices: number
+  // Set when a whole multi-file sound was dragged: its files are the pieces.
+  files?: number
 }
+
+// What a Slices sequencer picks from: the sound's files, or cuts of one file.
+export const isBank = (s: SampleData): boolean => (s.files ?? 0) > 1
+export const pieceCount = (s: SampleData): number => (isBank(s) ? (s.files as number) : s.slices)
 
 export interface SequencerData extends Record<string, unknown> {
   kind: SequencerKind
@@ -108,4 +114,6 @@ export interface DraggedSound {
   label?: string
   // Sample variant; 0 when not given.
   n?: number
+  // File count, when a whole multi-file sound is dragged.
+  files?: number
 }

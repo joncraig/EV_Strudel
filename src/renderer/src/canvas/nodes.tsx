@@ -11,6 +11,8 @@ import {
   SequencerNode as SequencerNodeT,
   Step,
   GroupNode as GroupNodeT,
+  isBank,
+  pieceCount,
   TONICS
 } from './model'
 
@@ -29,7 +31,9 @@ export function SampleNode({ data }: NodeProps<SampleNodeT>): React.JSX.Element 
     <div className="node sample-chip" title={data.pack ? `${data.s} (${data.pack})` : data.s}>
       <span>{data.label ?? data.s}</span>
       {/* How many equal pieces a Slices sequencer cuts this into; change it from the node menu. */}
-      <span className="slice-count">{data.slices}</span>
+      <span className="slice-count" title={isBank(data) ? 'files' : 'slices'}>
+        {pieceCount(data)}
+      </span>
       <Handle type="source" position={Position.Right} id="sound" />
     </div>
   )
@@ -58,7 +62,7 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
     update({ steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? null) })
   }
 
-  const slices = sample?.slices ?? 8
+  const slices = sample ? pieceCount(sample) : 8
   const grid = (() => {
     switch (data.kind) {
       case 'degree':

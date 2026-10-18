@@ -6,6 +6,7 @@
 // sequencer squeezes its steps into one cycle, so different lengths give polyrhythms.
 
 import type { Edge } from '@xyflow/react'
+import { isBank, pieceCount } from './model'
 import type { CanvasNode, ModeData, SampleData, SequencerData, Step } from './model'
 
 const DEFAULT_MODE: ModeData = { steps: [{ tonic: 'C', mode: 'major' }], cyclesPerStep: 1 }
@@ -42,9 +43,13 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, mode: Mode
       break
     }
     case 'slice': {
-      // Steps set before the slice count was lowered wrap around.
-      const slices = stepPattern(seq.steps, (v) => String(v % sample.slices))
-      code = `s(${sound}).n(${sample.n}).slice(${sample.slices}, "${slices}")`
+      // Steps set before the piece count was lowered wrap around.
+      const count = pieceCount(sample)
+      const picks = stepPattern(seq.steps, (v) => String(v % count))
+      // A multi-file sound picks files; a single file is cut into equal slices.
+      code = isBank(sample)
+        ? `n("${picks}").s(${sound})`
+        : `s(${sound}).n(${sample.n}).slice(${count}, "${picks}")`
       break
     }
   }

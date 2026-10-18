@@ -21,7 +21,17 @@ import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import { useLongPressFence } from './useLongPressFence'
-import { CanvasNode, CanvasState, DraggedSound, newMode, newSequencer, nodeId, SequencerKind, SYNTHS } from './model'
+import {
+  CanvasNode,
+  CanvasState,
+  DraggedSound,
+  isBank,
+  newMode,
+  newSequencer,
+  nodeId,
+  SequencerKind,
+  SYNTHS
+} from './model'
 
 interface Props {
   state: CanvasState
@@ -180,7 +190,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       onSelect: () => onChange(targets.reduce((s, t) => removeNode(s, t), state))
     })
     const sections: MenuSection[] = [{ items }]
-    if (node.type === 'sample' && targets.length === 1)
+    if (node.type === 'sample' && targets.length === 1 && !isBank(node.data))
       sections.unshift({
         title: 'Slices',
         items: [1, 2, 4, 8, 16, 32, 64].map((n) => ({
@@ -252,7 +262,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         id: nodeId('sample'),
         type: 'sample',
         position: screenToFlowPosition(at),
-        data: { s: sound.s, pack: sound.pack, label: sound.label, n: sound.n ?? 0, slices: 8 }
+        data: { s: sound.s, pack: sound.pack, label: sound.label, n: sound.n ?? 0, slices: 8, files: sound.files }
       })
     }
   })
