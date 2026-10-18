@@ -25,7 +25,6 @@ import {
   CanvasNode,
   CanvasState,
   DraggedSound,
-  isBank,
   newMode,
   newSequencer,
   nodeId,
@@ -60,7 +59,7 @@ type Menu =
   | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
-  const { screenToFlowPosition, getIntersectingNodes, updateNodeData } = useReactFlow()
+  const { screenToFlowPosition, getIntersectingNodes } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
   const rootRef = useRef<HTMLDivElement>(null)
   const { nodes, edges } = state
@@ -189,16 +188,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       danger: true,
       onSelect: () => onChange(targets.reduce((s, t) => removeNode(s, t), state))
     })
-    const sections: MenuSection[] = [{ items }]
-    if (node.type === 'sample' && targets.length === 1 && !isBank(node.data))
-      sections.unshift({
-        title: 'Slices',
-        items: [1, 2, 4, 8, 16, 32, 64].map((n) => ({
-          label: n === node.data.slices ? `${n}  ✓` : String(n),
-          onSelect: () => updateNodeData(id, { slices: n })
-        }))
-      })
-    return sections
+    return [{ items }]
   }
 
   // A group's collapse arrow.
