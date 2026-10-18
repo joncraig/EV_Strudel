@@ -30,7 +30,8 @@ function serveSamples(): void {
     const rel = normalize(decodeURIComponent(url.pathname)).replace(/^[\\/]+/, '')
     const full = join(samplesDir(), rel)
     if (!full.startsWith(samplesDir() + sep)) return new Response('Forbidden', { status: 403 })
-    return net.fetch(pathToFileURL(full).toString())
+    // A file that failed or never finished downloading is a plain 404, not a thrown error.
+    return net.fetch(pathToFileURL(full).toString()).catch(() => new Response('Not found', { status: 404 }))
   })
 }
 
@@ -154,8 +155,9 @@ async function downloadPack(id: string, sender: WebContents): Promise<DownloadPr
     }
     await Promise.all(Array.from({ length: 8 }, worker))
 
-    // Write the map last: its presence means "downloaded".
-    await fs.writeFile(localMapPath(id), JSON.stringify(localMap, null, 1), 'utf8')
+    // Write the map last: its presence means "downloaded". If any file failed, leave it
+    // unwritten so the pack keeps streaming from the web and the save retries next load.
+    if (!progress.failed) await fs.writeFile(localMapPath(id), JSON.stringify(localMap, null, 1), 'utf8')
     report()
     return progress
   }
