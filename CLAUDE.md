@@ -12,7 +12,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
 
 ## Active TODO
 - Verify in `npm run dev`: canvas (drag sample in, wire, play, live edits), Samples tab (play, variants, download + offline), Patches save/open/import
-- Canvas next steps (not built): Output nodes so a chain can output mid-chain (today the only output is each chain's last unconnected node), measure paging (nodes show one measure, page through several, like Ableton clips), Slice node (sets cut count for a single file; no slice controls on chips or menus), Extract node (narrow a bank to chosen pieces), chords (stacked degrees), per-step variant/velocity, modulator nodes
+- Canvas next steps (not built): Freeze/Cache node (render a chain once with Strudel's offline renderer, renderPatternAudio, and loop the buffer to save audio-thread CPU; unfreezes on edit; loop length = lcm of the chain's lengths; wrap reverb/delay tails), Output nodes so a chain can output mid-chain (today the only output is each chain's last unconnected node), measure paging (nodes show one measure, page through several, like Ableton clips), Slice node (sets cut count for a single file; no slice controls on chips or menus), Extract node (narrow a bank to chosen pieces), chords (stacked degrees), per-step variant/velocity, modulator nodes
 - Short strudel.cc links (`?id`) unsupported (stored in their Supabase). Could add later.
 - Feature vision (discuss before building):
   - Happy accidents (controlled randomness / mutation)
