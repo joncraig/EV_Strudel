@@ -1,13 +1,15 @@
 // Compile the canvas graph to Strudel code.
 //
-//   sample ──▶ sequencer ◀── mode
+//   sample ──▶ sequencer ──▶ volume ──▶ (plays)
+//                  ▲
+//                 mode
 //
 // Each sequencer with a sound connected becomes one layer of a stack(). Every
 // sequencer squeezes its steps into one cycle, so different lengths give polyrhythms.
 
 import type { Edge } from '@xyflow/react'
-import { isBank, pieceCount } from './model'
-import type { CanvasNode, ModeData, SampleData, SequencerData, Step } from './model'
+import { isBank, pieceCount, VOLUME_LEVELS } from './model'
+import type { CanvasNode, ModeData, SampleData, SequencerData, Step, VolumeData } from './model'
 
 const DEFAULT_MODE: ModeData = { steps: [{ tonic: 'C', mode: 'major' }], cyclesPerStep: 1 }
 
@@ -56,12 +58,21 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, mode: Mode
   return `${code}.gain(${seq.gain})`
 }
 
+// Strudel's velocity is 0..1 and multiplies with gain, so accents scale the channel level.
+export function volumeCode(data: VolumeData): string {
+  const levels = data.steps.map((v) => +(v / VOLUME_LEVELS).toFixed(3)).join(' ')
+  return `.velocity("${levels}")`
+}
+
 export interface Compiled {
   code: string
-  // Sequencer ids that produced a layer, in stack order.
+  // Ids of the node that ends each playing chain, in stack order.
   layers: string[]
 }
 
+// Sequencers make patterns; nodes on their `pattern` output (Volume, later others)
+// modify them. Only the end of each chain plays, so a sequencer feeding a Volume
+// node is heard once, with the volume applied. A fork plays each branch.
 export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const inputs = (id: string, type: CanvasNode['type']): CanvasNode | undefined =>
@@ -69,23 +80,34 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       .filter((e) => e.target === id)
       .map((e) => byId.get(e.source))
       .find((n) => n?.type === type)
+  const patternOuts = (id: string): CanvasNode[] =>
+    edges
+      .filter((e) => e.source === id && e.sourceHandle === 'pattern')
+      .map((e) => byId.get(e.target))
+      .filter((n): n is CanvasNode => n?.type === 'volume')
 
   const lines: string[] = []
   const layers: string[] = []
+  const follow = (node: CanvasNode, code: string, seen: Set<string>): void => {
+    const outs = patternOuts(node.id).filter((n) => !seen.has(n.id))
+    if (!outs.length) {
+      lines.push(code)
+      layers.push(node.id)
+      return
+    }
+    for (const next of outs) {
+      const applied = next.type === 'volume' ? code + volumeCode(next.data) : code
+      follow(next, applied, new Set(seen).add(next.id))
+    }
+  }
+
   for (const node of nodes) {
     if (node.type !== 'sequencer' || node.data.muted) continue
     const sample = inputs(node.id, 'sample')
     if (!sample) continue
     const mode = inputs(node.id, 'mode')
-    const code = sequencerCode(
-      node.data,
-      sample.data as SampleData,
-      mode ? (mode.data as ModeData) : null
-    )
-    if (code) {
-      lines.push(code)
-      layers.push(node.id)
-    }
+    const code = sequencerCode(node.data, sample.data as SampleData, mode ? (mode.data as ModeData) : null)
+    if (code) follow(node, code, new Set([node.id]))
   }
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
   return { code, layers }

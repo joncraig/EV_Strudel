@@ -19,6 +19,7 @@ NOTHING verified in the running app yet (canvas, audio, samples, patches). Jon t
   - Compounding modulators (modulators modulating modulators)
 
 ## Notes
+- Chains: sequencers have a `pattern` output; modifier nodes (Volume so far) take a `pattern` input and pass it on. Codegen plays only chain ends (`compile` in codegen.ts follows `pattern` edges); forks play each branch. Volume = Strudel `velocity` (0..1, multiplies with gain); future: outs route to busses.
 - Canvas: `src/renderer/src/canvas/`, React Flow (`@xyflow/react`). `codegen.ts` turns the graph into a
   `stack()`. Degrees are 1-based in the UI, 0-based in Strudel. Mode node becomes
   `.scale("<D3:dorian ...>")`, one entry per cycle. Each sequencer fits its steps into one cycle,

@@ -182,3 +182,9 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .mode-step.now select { border-color: #c9a0f0; }
 .sample-chip { transition: box-shadow 60ms, background 60ms; }
 .sample-chip.hit { background: #2c4a33; box-shadow: 0 0 10px #7c7a; }
+
+/* Volume */
+.volume-node .node-header { background: #4d3a23; }
+.volume-node .cell.on { background: #e0a050; border-color: #e0a050; }
+.volume-node .cell.on.now { background: #fc6; border-color: #fc6; }
+.volume-node .row-label { width: 4px; }

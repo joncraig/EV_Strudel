@@ -14,7 +14,9 @@ import {
   GroupNode as GroupNodeT,
   isBank,
   pieceCount,
-  TONICS
+  TONICS,
+  VOLUME_LEVELS,
+  VolumeNode as VolumeNodeT
 } from './model'
 
 const MAX_STEPS = 32
@@ -97,6 +99,7 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
   return (
     <div className={`node sequencer-node ${data.muted ? 'muted' : ''}`}>
       <Handle type="target" position={Position.Left} id="sound" style={{ top: 40 }} />
+      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
       {data.kind === 'degree' && <Handle type="target" position={Position.Top} id="mode" />}
       <Header title={KIND_LABEL[data.kind]} />
       <div className="node-body">
@@ -138,6 +141,43 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
             onChange={(e) => update({ gain: Number(e.target.value) })}
           />
         </label>
+      </div>
+    </div>
+  )
+}
+
+// ---- Volume ----
+
+const LEVEL_ROWS = Array.from({ length: VOLUME_LEVELS }, (_, i) => VOLUME_LEVELS - i)
+
+// Per-step loudness for whatever pattern is wired in; passes the result on.
+export function VolumeNode({ id, data }: NodeProps<VolumeNodeT>): React.JSX.Element {
+  const { updateNodeData } = useReactFlow()
+  const current = useStepIndex(data.steps.length)
+  const setLength = (len: number): void => {
+    const n = Math.min(MAX_STEPS, Math.max(1, len))
+    updateNodeData(id, { steps: Array.from({ length: n }, (_, i) => data.steps[i] ?? VOLUME_LEVELS) })
+  }
+  return (
+    <div className="node volume-node">
+      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
+      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
+      <Header title="Volume" />
+      <div className="node-body">
+        <div className="seq-controls nodrag">
+          <span>steps</span>
+          <button onClick={() => setLength(data.steps.length - 1)}>−</button>
+          <span className="value">{data.steps.length}</span>
+          <button onClick={() => setLength(data.steps.length + 1)}>+</button>
+        </div>
+        <StepGrid
+          steps={data.steps}
+          rows={LEVEL_ROWS}
+          labels={LEVEL_ROWS.map(() => '')}
+          bars
+          current={current}
+          onChange={(steps) => updateNodeData(id, { steps: steps.map((v) => v ?? VOLUME_LEVELS) })}
+        />
       </div>
     </div>
   )

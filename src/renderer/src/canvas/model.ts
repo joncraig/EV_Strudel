@@ -74,9 +74,20 @@ export interface GroupData extends Record<string, unknown> {
   height: number
 }
 
+// Per-step loudness, applied to whatever pattern is wired into it. Steps are levels
+// 1..VOLUME_LEVELS (top = full). Its own step count, so accents can run polymetric.
+export interface VolumeData extends Record<string, unknown> {
+  steps: number[]
+}
+
+export const VOLUME_LEVELS = 8
+
+export const newVolume = (length = 8): VolumeData => ({ steps: Array(length).fill(VOLUME_LEVELS) })
+
+export type VolumeNode = Node<VolumeData, 'volume'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | ModeNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | ModeNode | VolumeNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]

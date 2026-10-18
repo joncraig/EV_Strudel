@@ -15,7 +15,7 @@ import {
   useReactFlow
 } from '@xyflow/react'
 import '@xyflow/react/dist/style.css'
-import { GroupNode, ModeNode, SampleNode, SequencerNode } from './nodes'
+import { GroupNode, ModeNode, SampleNode, SequencerNode, VolumeNode } from './nodes'
 import { GROUP_TOGGLE_EVENT, groupNodes, removeNode, setCollapsed, ungroup } from './groups'
 import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
@@ -27,6 +27,7 @@ import {
   DraggedSound,
   newMode,
   newSequencer,
+  newVolume,
   nodeId,
   SequencerKind,
   SYNTHS
@@ -39,18 +40,18 @@ interface Props {
   onSoundDropped: (sound: DraggedSound) => void
 }
 
-const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mode: ModeNode, group: GroupNode }
+const nodeTypes = { sample: SampleNode, sequencer: SequencerNode, mode: ModeNode, volume: VolumeNode, group: GroupNode }
 
 // Handles only connect to the same-named handle: sound→sound, mode→mode.
 const isValidConnection: IsValidConnection = (c) => c.sourceHandle === c.targetHandle && c.source !== c.target
 
 // What the add menu can create: a sequencer kind, a mode node, or a synth sound.
-type NewKind = SequencerKind | 'mode' | `synth:${string}`
+type NewKind = SequencerKind | 'mode' | 'volume' | `synth:${string}`
 
 // A wire dragged out of a handle and dropped on empty canvas.
 interface Pending {
   nodeId: string
-  handle: 'sound' | 'mode'
+  handle: 'sound' | 'mode' | 'pattern'
   handleType: 'source' | 'target'
 }
 
@@ -102,6 +103,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
 
   const makeNode = (kind: NewKind, position: { x: number; y: number }): CanvasNode => {
     if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
+    if (kind === 'volume') return { id: nodeId('vol'), type: 'volume', position, data: newVolume() }
     if (kind.startsWith('synth:'))
       return { id: nodeId('sample'), type: 'sample', position, data: { s: kind.slice(6), n: 0, slices: 8 } }
     return { id: nodeId('seq'), type: 'sequencer', position, data: newSequencer(kind as SequencerKind) }
@@ -115,6 +117,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       ['slice', 'Slices sequencer']
     ]
     const mode: [NewKind, string] = ['mode', 'Mode sequence']
+    const volume: [NewKind, string] = ['volume', 'Volume sequencer']
     const synths: [NewKind, string][] = SYNTHS.map((s) => [`synth:${s}`, s])
     const { pending } = m
 
@@ -122,19 +125,22 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     if (!pending)
       groups = [
         { title: 'Sequencers', kinds: sequencers },
+        { title: 'Shape', kinds: [volume] },
         { title: 'Harmony', kinds: [mode] },
         { title: 'Synths', kinds: synths }
       ]
     else if (pending.handleType === 'source')
-      groups =
-        pending.handle === 'sound'
-          ? [{ title: 'Play it with', kinds: sequencers }]
-          : [{ title: 'Apply to', kinds: [sequencers[0]] }]
+      groups = {
+        sound: [{ title: 'Play it with', kinds: sequencers }],
+        mode: [{ title: 'Apply to', kinds: [sequencers[0]] }],
+        pattern: [{ title: 'Then', kinds: [volume] }]
+      }[pending.handle]
     else
-      groups =
-        pending.handle === 'sound'
-          ? [{ title: 'Sound from', kinds: synths }]
-          : [{ title: 'Mode from', kinds: [mode] }]
+      groups = {
+        sound: [{ title: 'Sound from', kinds: synths }],
+        mode: [{ title: 'Mode from', kinds: [mode] }],
+        pattern: [{ title: 'Pattern from', kinds: sequencers }]
+      }[pending.handle]
 
     return groups.map((g) => ({
       title: g.title,
