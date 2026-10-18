@@ -2,7 +2,6 @@ import { app, ipcMain, shell } from 'electron'
 import { promises as fs } from 'fs'
 import { join, basename } from 'path'
 import { parsePatch, serializePatch, PatchMeta, PatchSummary } from '../shared/patch'
-import { CATALOG, CatalogItem, Collection, STRUDEL_TUNES_URL, parseTunes } from '../shared/catalog'
 
 const EXT = '.strudel'
 
@@ -100,14 +99,6 @@ async function resolve(input: string): Promise<Fetched[]> {
     return [{ title: 'Pasted patch', code: input }]
   }
 
-  // One tune out of the official tunes file: <tunes url>#<name>.
-  if (url.href.split('#')[0] === STRUDEL_TUNES_URL && url.hash.length > 1) {
-    const name = url.hash.slice(1)
-    const code = (await officialTunes())[name]
-    if (code === undefined) throw new Error(`No tune named "${name}" in the Strudel examples.`)
-    return [{ title: name, code }]
-  }
-
   // strudel.cc share link: the code is base64 in the hash.
   if (url.hostname.endsWith('strudel.cc')) {
     if (url.hash.length > 1) {
@@ -139,56 +130,6 @@ async function resolve(input: string): Promise<Fetched[]> {
   return [{ title: titleFromPath(url.pathname), code: body }]
 }
 
-// ---- Browsing the catalog ----
-// Cached for the session: unauthenticated GitHub API allows 60 requests an hour.
-
-let tunesCache: Promise<Record<string, string>> | null = null
-function officialTunes(): Promise<Record<string, string>> {
-  tunesCache ??= fetchText(STRUDEL_TUNES_URL).then(parseTunes)
-  tunesCache.catch(() => (tunesCache = null))
-  return tunesCache
-}
-
-const browseCache = new Map<string, Promise<CatalogItem[]>>()
-
-async function listCollection(c: Collection): Promise<CatalogItem[]> {
-  if (c.kind === 'strudel-tunes') {
-    return Object.keys(await officialTunes()).map((name) => ({ title: name, url: `${c.url}#${name}` }))
-  }
-  const tree = JSON.parse(
-    await fetchText(`https://api.github.com/repos/${c.repo}/git/trees/HEAD?recursive=1`)
-  ) as { tree: { path: string; type: string }[] }
-  return tree.tree
-    .filter((e) => e.type === 'blob' && e.path.endsWith(EXT))
-    .map((e) => ({
-      title: e.path.replace(/\.strudel$/, ''),
-      url: `https://raw.githubusercontent.com/${c.repo}/HEAD/${e.path.split('/').map(encodeURIComponent).join('/')}`
-    }))
-    .sort((a, b) => a.title.localeCompare(b.title))
-}
-
-function browse(id: string): Promise<CatalogItem[]> {
-  const c = CATALOG.find((x) => x.id === id)
-  if (!c) throw new Error(`Unknown collection ${id}`)
-  let p = browseCache.get(id)
-  if (!p) {
-    p = listCollection(c)
-    browseCache.set(id, p)
-    p.catch(() => browseCache.delete(id))
-  }
-  return p
-}
-
-// Fetch without saving, so a patch can be auditioned first.
-async function preview(input: string): Promise<{ meta: PatchMeta; code: string }> {
-  const [f] = await resolve(input.trim())
-  const { meta, code } = parsePatch(f.code)
-  return {
-    meta: { title: meta.title ?? f.title, source: meta.source ?? input.trim(), tags: meta.tags ?? [] },
-    code
-  }
-}
-
 async function importPatches(raw: string): Promise<string[]> {
   const input = raw.trim()
   const isUrl = /^https?:\/\//i.test(input)
@@ -213,9 +154,6 @@ export function registerLibraryIpc(): void {
   )
   ipcMain.handle('library:delete', (_, file: string) => shell.trashItem(safePath(file)))
   ipcMain.handle('library:import', (_, input: string) => importPatches(input))
-  ipcMain.handle('catalog:list', () => CATALOG)
-  ipcMain.handle('catalog:browse', (_, id: string) => browse(id))
-  ipcMain.handle('catalog:preview', (_, url: string) => preview(url))
   ipcMain.handle('library:open-folder', async () => {
     await fs.mkdir(libraryDir(), { recursive: true })
     return shell.openPath(libraryDir())

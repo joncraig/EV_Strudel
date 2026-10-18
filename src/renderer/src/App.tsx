@@ -11,7 +11,6 @@ import {
 } from '@strudel/webaudio'
 import { StrudelMirror } from '@strudel/codemirror'
 import Library from './components/Library'
-import Browse from './components/Browse'
 import Samples from './components/Samples'
 import type { PatchSummary } from '../../shared/patch'
 
@@ -52,8 +51,7 @@ function App(): React.JSX.Element {
   const [patches, setPatches] = useState<PatchSummary[]>([])
   const [current, setCurrent] = useState<Current>(blank())
   const [dirty, setDirty] = useState(false)
-  const [tab, setTab] = useState<'samples' | 'library' | 'browse'>('samples')
-  const [auditioning, setAuditioning] = useState<string | null>(null)
+  const [tab, setTab] = useState<'samples' | 'library'>('samples')
 
   // ---- Sample packs ----
   const [pinned, setPinned] = useState<Set<string>>(readPinned)
@@ -183,21 +181,6 @@ function App(): React.JSX.Element {
     refresh()
   }
 
-  // Load a catalog patch into the editor unsaved; Save keeps it.
-  const audition = async (url: string): Promise<void> => {
-    if (!confirmDiscard()) return
-    const { meta, code } = await window.api.catalog.preview(url)
-    mirrorRef.current.setCode(code)
-    setCurrent({ file: null, title: meta.title, tags: meta.tags.join(', '), source: meta.source, savedCode: code })
-    setDirty(false)
-    setAuditioning(url)
-  }
-
-  const keep = async (url: string): Promise<void> => {
-    await window.api.library.import(url)
-    refresh()
-  }
-
   const importPatches = async (input: string): Promise<void> => {
     const files = await window.api.library.import(input)
     await refresh()
@@ -253,9 +236,6 @@ function App(): React.JSX.Element {
             <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}>
               Patches
             </button>
-            <button className={tab === 'browse' ? 'on' : ''} onClick={() => setTab('browse')}>
-              Browse
-            </button>
           </div>
           {tab === 'samples' ? (
             <Samples
@@ -266,7 +246,7 @@ function App(): React.JSX.Element {
               onAudition={playSound}
               onInsert={insertSound}
             />
-          ) : tab === 'library' ? (
+          ) : (
             <Library
               patches={patches}
               current={current.file}
@@ -274,8 +254,6 @@ function App(): React.JSX.Element {
               onDelete={remove}
               onImport={importPatches}
             />
-          ) : (
-            <Browse onAudition={audition} onKeep={keep} auditioning={current.file ? null : auditioning} />
           )}
         </div>
         <div className="editor" ref={rootRef} onKeyUp={checkDirty} onInput={checkDirty} />

@@ -1,7 +1,6 @@
 import { contextBridge, ipcRenderer } from 'electron'
 import { electronAPI } from '@electron-toolkit/preload'
 import type { PatchMeta, PatchSummary } from '../shared/patch'
-import type { CatalogItem, Collection } from '../shared/catalog'
 import type { DownloadProgress, PackSounds, PackStatus } from '../shared/samplePacks'
 
 // Custom APIs for renderer
@@ -27,12 +26,6 @@ const api = {
       ipcRenderer.on('samples:progress', listener)
       return () => ipcRenderer.removeListener('samples:progress', listener)
     }
-  },
-  catalog: {
-    list: (): Promise<Collection[]> => ipcRenderer.invoke('catalog:list'),
-    browse: (id: string): Promise<CatalogItem[]> => ipcRenderer.invoke('catalog:browse', id),
-    preview: (url: string): Promise<{ meta: PatchMeta; code: string }> =>
-      ipcRenderer.invoke('catalog:preview', url)
   }
 }
 
