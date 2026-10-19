@@ -165,7 +165,7 @@ type Menu =
   | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React.JSX.Element {
-  const { screenToFlowPosition, updateNodeData } = useReactFlow()
+  const { screenToFlowPosition } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => {
     try {
@@ -453,20 +453,6 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
             },
             { label: 'Ungroup', onSelect: () => onChange(ungroup(state, id)) },
             { label: 'Delete group and contents', danger: true, onSelect: () => remove(id) }
-          ]
-        }
-      ]
-    if (node.type === 'effect')
-      return [
-        {
-          items: [
-            {
-              label: node.data.bypass ? 'Turn on' : 'Bypass',
-              onSelect: () => updateNodeData(id, { bypass: !node.data.bypass })
-            },
-            ...muteSoloItems(node, [id]),
-            { label: 'Group', onSelect: () => onChange(groupNodes(state, [id])) },
-            { label: 'Delete', danger: true, onSelect: () => remove(id) }
           ]
         }
       ]

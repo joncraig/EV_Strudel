@@ -166,7 +166,10 @@ export function applyModulation(
     glide(b.pan, b.data.pan ?? 0)
   }
 
-  const lfoNodes = nodes.filter((n): n is Extract<CanvasNode, { type: 'lfo' }> => n.type === 'lfo')
+  // A muted LFO is taken out: no modulation from it.
+  const lfoNodes = nodes.filter(
+    (n): n is Extract<CanvasNode, { type: 'lfo' }> => n.type === 'lfo' && !n.data.muted
+  )
   const wires = edges.filter((e) => e.sourceHandle === 'mod' && byId.get(e.source)?.type === 'lfo')
   // Rebuild when anything but depth changes; depth (and bus values above) update live.
   const key = JSON.stringify([

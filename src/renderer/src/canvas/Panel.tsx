@@ -169,7 +169,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
               onChange={(v) => set({ params: { ...d.params, [p.key]: v } })}
             />
           ))}
-          <Toggle label="Bypass" on={!!d.bypass} onChange={(bypass) => set({ bypass })} />
         </>
       )
       break

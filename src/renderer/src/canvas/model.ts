@@ -238,7 +238,9 @@ export type EffectKind = keyof typeof EFFECTS
 export interface EffectData extends Record<string, unknown> {
   kind: EffectKind
   params: Record<string, number>
+  // Older saves: Bypass, now Mute (migrateCanvas).
   bypass?: boolean
+  muted?: boolean
 }
 
 export const newEffect = (kind: EffectKind): EffectData => ({
@@ -548,6 +550,11 @@ export function migrateCanvas(state: CanvasState): CanvasState {
             )
           }
         } as CanvasNode
+      }
+      // Bypass and Mute are the same thing now (Mute takes a node out).
+      if (node.type === 'effect' && node.data.bypass !== undefined) {
+        const { bypass, ...rest } = node.data
+        node = { ...node, data: { ...rest, muted: !!bypass || !!rest.muted } } as CanvasNode
       }
       // Length table v1 was [1/4, 1/2, 1, 2, 3, 4, 6, 8] steps; map to the nearest v2 value.
       if (node.type === 'length' && node.data.version !== 2) {

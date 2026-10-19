@@ -365,7 +365,7 @@ export function EffectNode({ data }: NodeProps<EffectNodeT>): React.JSX.Element 
   const spec = EFFECTS[data.kind]
   return (
     <Card
-      className={`effect-node ${data.bypass ? 'muted' : ''}`}
+      className="effect-node"
       kind="Effect"
       big={spec.label}
       small={spec.params.map((p) => short(data.params[p.key] ?? p.value)).join(' · ')}

@@ -391,7 +391,6 @@ export function lengthCode(data: LengthData, noteLens: Lens, lens: Lens = null):
 
 // Each setting becomes its Strudel control, e.g. .delay(0.5).delaytime(0.25).
 export function effectCode(data: EffectData): string {
-  if (data.bypass) return ''
   return EFFECTS[data.kind].params
     .map((p) => `.${p.key}(${+(data.params[p.key] ?? p.value).toFixed(3)})`)
     .join('')
@@ -555,6 +554,12 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
 
   // Parameter nodes set values that hold until something later overrides them.
   const apply = (ctx: Ctx, n: CanvasNode): Ctx => {
+    // A muted effect, Velocity, Key ... is bypassed: the chain carries on without it.
+    if (
+      (n.data as { muted?: boolean }).muted &&
+      !['sequencer', 'sample', 'mix'].includes(n.type ?? '')
+    )
+      return ctx
     const c = { ...ctx }
     if (n.type === 'sample') {
       // The first sound sets how the sequencer plays (files, slices); later ones re-voice it.
@@ -661,9 +666,14 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const flag = (id: string, key: 'muted' | 'solo'): boolean =>
     !!(byId.get(id)?.data as { muted?: boolean; solo?: boolean } | undefined)?.[key]
   const anySolo = nodes.some((n) => flag(n.id, 'solo'))
+  // Mute takes a node out: a muted source (sequencer, sound, Bus) silences its chain;
+  // anything else is bypassed (see apply).
+  const SOURCES = new Set(['sequencer', 'sample', 'mix'])
+  const silences = (id: string): boolean =>
+    flag(id, 'muted') && SOURCES.has(byId.get(id)?.type ?? '')
   const plays = (path: Set<string>, soloAfter = false): boolean => {
     const ids = [...path]
-    if (ids.some((id) => flag(id, 'muted'))) return false
+    if (ids.some(silences)) return false
     return !anySolo || soloAfter || ids.some((id) => flag(id, 'solo'))
   }
 
