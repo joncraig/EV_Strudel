@@ -1,7 +1,6 @@
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
-import { useState } from 'react'
 import StepGrid from './StepGrid'
-import { chordName, EXTENSIONS, QUALITIES, SPREADS } from './chords'
+import { CHORD_TYPES, SPREADS } from './chords'
 import { ParamFader, StepWidthGrip } from './controls'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { usePlayhead } from './playhead'
@@ -38,9 +37,6 @@ import {
   SequencerKind,
   SequencerNode as SequencerNodeT,
   cellNotes,
-  downstream,
-  type KeyData,
-  type ModeData,
   GroupNode as GroupNodeT,
   isBank,
   pieceCount,
@@ -390,70 +386,22 @@ const KIND_LABEL: Record<SequencerKind, string> = {
   chord: 'Chords'
 }
 
-// Chord roots, top to bottom (scale degrees 1..7).
-const CHORD_ROWS = [7, 6, 5, 4, 3, 2, 1]
-const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII']
+// Chords rows: one chord type each (top: in key); Notes rows: scale degrees as roman
+// numerals (VIII = the octave above I).
+const CHORD_ROWS = CHORD_TYPES.map((_, i) => i)
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
 
-// Orchid-style chord buttons under a Chords grid: quality and extension for the step
-// last pressed, voicing for the whole node, and each step's chord name.
-function ChordControls({
+// Voicing for every chord of a Chords node: inversion, spread and an added bass note.
+function VoicingControls({
   id,
-  data,
-  selected
+  data
 }: {
   id: string
   data: SequencerNodeT['data']
-  selected: number
 }): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
-  const nodes = useNodes() as CanvasNode[]
-  const edges = useEdges()
-  const key =
-    (downstream(nodes, edges, id, 'key')?.data as KeyData | undefined)?.steps.find(
-      (v) => v !== null
-    ) ?? 0
-  const modeIx =
-    (downstream(nodes, edges, id, 'mode')?.data as ModeData | undefined)?.steps.find(
-      (v) => v !== null
-    ) ?? 0
-  const modeId = MODES[modeIx]?.id ?? 'major'
-  const setAt = (field: 'quality' | 'ext', value: string | null): void => {
-    const arr: (string | null)[] = Array.from(
-      { length: data.steps.length },
-      (_, i) => data[field]?.[i] ?? null
-    )
-    arr[selected] = value
-    updateNodeData(id, { [field]: arr })
-  }
-  const q = data.quality?.[selected] ?? null
-  const x = data.ext?.[selected] ?? null
   return (
     <div className="chord-controls nodrag">
-      <div className="chord-row">
-        <button className={q === null ? 'on' : ''} onClick={() => setAt('quality', null)}>
-          Key
-        </button>
-        {QUALITIES.map((o) => (
-          <button
-            key={o.id}
-            className={q === o.id ? 'on' : ''}
-            onClick={() => setAt('quality', q === o.id ? null : o.id)}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
-      <div className="chord-row">
-        {EXTENSIONS.map((o) => (
-          <button
-            key={o.id}
-            className={x === o.id ? 'on' : ''}
-            onClick={() => setAt('ext', x === o.id ? null : o.id)}
-          >
-            {o.label}
-          </button>
-        ))}
-      </div>
       <div className="chord-row">
         <button onClick={() => updateNodeData(id, { inversion: ((data.inversion ?? 0) + 1) % 4 })}>
           Inv {data.inversion ?? 0}
@@ -473,18 +421,6 @@ function ChordControls({
         >
           Bass
         </button>
-      </div>
-      <div className="chord-names">
-        {data.steps.map((c, i) => {
-          const d = cellNotes(c)[0]
-          return (
-            <span key={i} className={i === selected ? 'sel' : ''}>
-              {d === undefined
-                ? '·'
-                : chordName(d, key, modeId, data.quality?.[i] ?? null, data.ext?.[i] ?? null)}
-            </span>
-          )
-        })}
       </div>
     </div>
   )
@@ -510,8 +446,6 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
     lens: useStepLens(id),
     sounding: useSounding(id)
   }
-  // The Chords step the buttons act on (the last one pressed).
-  const [chordStep, setChordStep] = useState(0)
   const grid = (() => {
     switch (data.kind) {
       case 'chord':
@@ -520,16 +454,11 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
             <StepGrid
               steps={data.steps}
               rows={CHORD_ROWS}
-              labels={CHORD_ROWS.map((d) => ROMAN[d - 1])}
+              labels={CHORD_TYPES.map((t) => t.label)}
               onChange={(steps) => update({ steps })}
-              onPress={setChordStep}
               timing={timing}
             />
-            <ChordControls
-              id={id}
-              data={data}
-              selected={Math.min(chordStep, data.steps.length - 1)}
-            />
+            <VoicingControls id={id} data={data} />
           </>
         )
       case 'degree':
@@ -537,6 +466,7 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
           <StepGrid
             steps={data.steps}
             rows={DEGREE_ROWS}
+            labels={DEGREE_ROWS.map((d) => ROMAN[d - 1])}
             onChange={(steps) => update({ steps })}
             timing={timing}
             poly

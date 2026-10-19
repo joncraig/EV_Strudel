@@ -25,10 +25,41 @@ export const EXTENSIONS: { id: Extension; label: string }[] = [
 ]
 export const SPREADS: Spread[] = ['close', 'open', 'wide']
 
-// Chosen quality / extension per step (null = in key / none), and the node's voicing.
+// What a Chords step can be: each row of the Chords grid is one chord type. The root
+// comes from the notes played into the node (or I of the key with none). "Key" builds
+// the chord from the mode itself.
+export interface ChordType {
+  label: string
+  quality: Quality | null
+  ext: Extension | null
+}
+export const CHORD_TYPES: ChordType[] = [
+  { label: 'Key', quality: null, ext: null },
+  { label: 'Key7', quality: null, ext: '7' },
+  { label: 'Maj', quality: 'maj', ext: null },
+  { label: 'Min', quality: 'min', ext: null },
+  { label: '7', quality: 'maj', ext: '7' },
+  { label: 'Maj7', quality: 'maj', ext: 'maj7' },
+  { label: 'm7', quality: 'min', ext: '7' },
+  { label: '6', quality: 'maj', ext: '6' },
+  { label: 'add9', quality: 'maj', ext: 'add9' },
+  { label: '9', quality: 'maj', ext: '9' },
+  { label: 'Sus2', quality: 'sus2', ext: null },
+  { label: 'Sus4', quality: 'sus4', ext: null },
+  { label: 'Dim', quality: 'dim', ext: null },
+  { label: 'Aug', quality: 'aug', ext: null }
+]
+
+// The chord type nearest an older (quality, extension) step.
+export const chordTypeOf = (q: Quality | null, e: Extension | null): number => {
+  const exact = CHORD_TYPES.findIndex((t) => t.quality === q && t.ext === e)
+  if (exact >= 0) return exact
+  const sameQ = CHORD_TYPES.findIndex((t) => t.quality === q)
+  return Math.max(0, sameQ)
+}
+
+// The node's voicing.
 export interface ChordSettings {
-  quality?: (Quality | null)[]
-  ext?: (Extension | null)[]
   inversion?: number
   spread?: Spread
   bass?: boolean

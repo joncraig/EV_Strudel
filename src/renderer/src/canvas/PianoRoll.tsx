@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Edge } from '@xyflow/react'
 import StepGrid from './StepGrid'
+import { CHORD_TYPES } from './chords'
 import { useSounding, useStepLens } from './stepLens'
 import { packSounds } from './packSounds'
 import {
@@ -102,9 +103,9 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
       labels = keep.map(([, l]) => l)
     }
   } else if (node.data.kind === 'chord') {
-    // Chord roots (the chords themselves are named on the node).
-    rows = [7, 6, 5, 4, 3, 2, 1]
-    labels = rows.map((d) => ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][d - 1])
+    // Chord types (the roots come from the notes played in).
+    rows = CHORD_TYPES.map((_, i) => i)
+    labels = CHORD_TYPES.map((t) => t.label)
   } else if (node.data.kind === 'degree') {
     // Named from the first key and mode set in the wired sequencers (C Ionian if none).
     const tonic = TONICS[key?.steps.find((v) => v !== null) ?? 0]

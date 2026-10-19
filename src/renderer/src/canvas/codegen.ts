@@ -7,7 +7,7 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { chordTones, voice } from './chords'
+import { CHORD_TYPES, chordTones, voice } from './chords'
 import {
   DEFAULT_OCTAVE,
   EFFECTS,
@@ -268,24 +268,21 @@ function chordPattern(
   for (let t = 0, i = 0; t < total; t += fWeights[i % fn], i++) {
     const w = fWeights[i % fn]
     const s = feed ? stepAtTime(t) : i % seq.steps.length
-    const own = cellNotes(seq.steps[s])[0]
-    const degree = feed ? cellNotes(feed.steps[i % feed.steps.length])[0] : own
+    // This step's chord type; fed, an empty step means the chord in key.
+    const type = cellNotes(seq.steps[s])[0]
+    // The root: the note played in, or I of the key with nothing fed in.
+    const degree = feed
+      ? cellNotes(feed.steps[i % feed.steps.length])[0]
+      : type === undefined
+        ? undefined
+        : 1
     if (degree === undefined) {
       tokens.push(w === 1 ? '~' : `~@${w}`)
       continue
     }
-    // Fed: an empty Chords step means the chord in key.
-    const set = !feed || own !== undefined
+    const ct = CHORD_TYPES[type ?? 0] ?? CHORD_TYPES[0]
     const at = h.at(t)
-    const tones = voice(
-      chordTones(
-        degree,
-        at.modeId,
-        set ? (seq.quality?.[s] ?? null) : null,
-        set ? (seq.ext?.[s] ?? null) : null
-      ),
-      seq
-    )
+    const tones = voice(chordTones(degree, at.modeId, ct.quality, ct.ext), seq)
     const base = 12 * (at.octave + 1) + at.tonic
     const chord = performToken(
       tones.map((x) => String(base + x)),

@@ -3,7 +3,7 @@
 
 import type { Edge, Node } from '@xyflow/react'
 
-import type { ChordSettings } from './chords'
+import { chordTypeOf, type ChordSettings, type Extension, type Quality } from './chords'
 
 export const TONICS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const
 
@@ -68,6 +68,8 @@ export const pieceCount = (s: SampleData): number => (isBank(s) ? (s.files as nu
 
 // Chords keep a quality and extension per step, and voicing (see chords.ts).
 export interface SequencerData extends Record<string, unknown>, ChordSettings {
+  // Chords: 2 = steps are chord types (CHORD_TYPES); older saves held roots.
+  chordVersion?: number
   kind: SequencerKind
   // Length is steps.length; each step lasts 1/resolution of a bar (one Strudel cycle).
   steps: Cell[]
@@ -403,7 +405,8 @@ export const newSequencer = (kind: SequencerKind, length = 1): SequencerData => 
   steps: Array(length).fill(null),
   resolution: STEP_RESOLUTION,
   octave: kind === 'degree' ? 3 : 0,
-  muted: false
+  muted: false,
+  ...(kind === 'chord' ? { chordVersion: 2 } : {})
 })
 
 // One step, set (C, Ionian); lengthen it to sequence changes.
@@ -499,6 +502,25 @@ export function migrateCanvas(state: CanvasState): CanvasState {
             steps: node.data.steps.map((v) => (v === null ? null : v - DEFAULT_OCTAVE))
           }
         } as CanvasNode
+      // Chords steps were roots (1..7) with a quality/extension each; now each step is
+      // a chord type (the root comes from the notes played in).
+      if (node.type === 'sequencer' && node.data.kind === 'chord' && node.data.chordVersion !== 2) {
+        const d = node.data as SequencerData & {
+          quality?: (Quality | null)[]
+          ext?: (Extension | null)[]
+        }
+        const { quality, ext, ...rest } = d
+        node = {
+          ...node,
+          data: {
+            ...rest,
+            chordVersion: 2,
+            steps: d.steps.map((c, i) =>
+              c === null ? null : chordTypeOf(quality?.[i] ?? null, ext?.[i] ?? null)
+            )
+          }
+        } as CanvasNode
+      }
       // Length table v1 was [1/4, 1/2, 1, 2, 3, 4, 6, 8] steps; map to the nearest v2 value.
       if (node.type === 'length' && node.data.version !== 2) {
         const V1 = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
