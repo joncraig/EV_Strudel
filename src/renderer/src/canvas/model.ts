@@ -1,7 +1,34 @@
 // Canvas graph model. The canvas compiles to Strudel code (see codegen.ts); nothing
 // here talks to audio directly.
 
-import type { Edge, Node } from '@xyflow/react'
+// A node in a clip (it used to be a React Flow node; position is kept only so older
+// saves still load).
+export interface Node<
+  D extends Record<string, unknown> = Record<string, unknown>,
+  T extends string = string
+> {
+  id: string
+  type: T
+  position: { x: number; y: number }
+  data: D
+  parentId?: string
+  selected?: boolean
+  hidden?: boolean
+  style?: Record<string, unknown>
+  measured?: { width?: number; height?: number }
+}
+
+// How the compiler sees a clip's order: one node feeding the next (and LFOs into a
+// channel's strip). Never drawn any more.
+export interface Edge {
+  id: string
+  source: string
+  target: string
+  sourceHandle?: string | null
+  targetHandle?: string | null
+  animated?: boolean
+  className?: string
+}
 
 import { chordTypeOf, type ChordSettings, type Extension, type Quality } from './chords'
 
@@ -260,6 +287,8 @@ export interface MixData extends Record<string, unknown> {
   volume?: number
   // -1 (left) .. 1 (right).
   pan?: number
+  // Set for a channel routed into a Bus: its fader, applied in the code.
+  codeGain?: number
   // Mute / Solo (as in the node menu; see compile).
   muted?: boolean
   solo?: boolean
@@ -294,6 +323,8 @@ export interface LfoData extends Record<string, unknown> {
   depth: number
   // Where in the cycle it starts at bar 1, 0..1.
   phase: number
+  // In a song: which of its channel's controls it moves.
+  target?: 'volume' | 'pan'
 }
 
 export const newLfo = (): LfoData => ({ shape: 'sine', rate: 1, depth: 0.5, phase: 0 })

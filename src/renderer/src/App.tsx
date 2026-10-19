@@ -1,5 +1,4 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
-import { ReactFlowProvider } from '@xyflow/react'
 import { getAudioContext, initAudio, samples, superdough } from '@strudel/webaudio'
 import { getEngine, type Engine } from './audio/engine'
 import { installFastReverb } from './audio/fastReverb'
@@ -9,13 +8,13 @@ import Library from './components/Library'
 import Transport from './components/Transport'
 import { bpmToCps, DEFAULT_BPM } from './tempo'
 import Samples from './components/Samples'
-import Canvas from './canvas/Canvas'
-import { compile } from './canvas/codegen'
+import Session from './session/Session'
+import { compileSong, emptySong, isSong, songFromCanvas, type Song } from './session/song'
 import { migrateCanvas, SYNTH_PACKS } from './canvas/model'
 import { AUDITION_EVENT, AuditionDetail } from './canvas/packSounds'
 import { setPlayhead } from './canvas/playhead'
 import { useHistory } from './canvas/useHistory'
-import type { CanvasState, DraggedSound } from './canvas/model'
+import type { DraggedSound } from './canvas/model'
 import type { PatchSummary } from '../../shared/patch'
 import type { MenuCommand } from '../../shared/menu'
 import { TOGGLE_CODE_EVENT, TOGGLE_PANEL_EVENT } from './events'
@@ -35,7 +34,7 @@ interface Current {
   codeOnly?: string
 }
 
-const EMPTY: CanvasState = { nodes: [], edges: [] }
+const EMPTY: Song = emptySong()
 const AUTOSAVE_KEY = 'ev-strudel:canvas-autosave'
 const SIDEBAR_KEY = 'ev-strudel:sidebar'
 const BPM_KEY = 'ev-strudel:bpm'
@@ -49,37 +48,24 @@ function readBpm(): number {
   }
 }
 
-function readAutosave(): CanvasState {
+// A saved song, or an older wired canvas (converted to a song: a channel per chain).
+function toSong(json: unknown): Song {
+  if (isSong(json)) return json
+  const canvas = json as Parameters<typeof migrateCanvas>[0]
+  return canvas?.nodes ? songFromCanvas(migrateCanvas(canvas)) : emptySong()
+}
+
+function readAutosave(): Song {
   try {
     const raw = localStorage.getItem(AUTOSAVE_KEY)
-    if (raw) return migrateCanvas(JSON.parse(raw))
+    if (raw) return toSong(JSON.parse(raw))
   } catch {
     // Start empty.
   }
   return EMPTY
 }
 
-const serialize = (s: CanvasState): string =>
-  // Only what matters for the music and layout, not React Flow's runtime fields.
-  JSON.stringify({
-    nodes: s.nodes.map(({ id, type, position, data, parentId, hidden, style }) => ({
-      id,
-      type,
-      position,
-      data,
-      parentId,
-      hidden,
-      style
-    })),
-    edges: s.edges.map(({ id, source, target, sourceHandle, targetHandle, animated }) => ({
-      id,
-      source,
-      target,
-      sourceHandle,
-      targetHandle,
-      animated
-    }))
-  })
+const serialize = (s: Song): string => JSON.stringify(s)
 
 function readCurrent(): Current {
   try {
@@ -113,7 +99,7 @@ type Repl = Engine['repl']
 function App(): React.JSX.Element {
   const [patches, setPatches] = useState<PatchSummary[]>([])
   const [current, setCurrent] = useState<Current>(readCurrent)
-  const [canvas, setCanvas] = useState<CanvasState>(readAutosave)
+  const [canvas, setCanvas] = useState<Song>(readAutosave)
   const [tab, setTab] = useState<'samples' | 'library'>('samples')
   // The Samples / Patches sidebar can be hidden for more canvas; remembered.
   const [sidebar, setSidebar] = useState<boolean>(() => {
@@ -202,7 +188,7 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener(AUDITION_EVENT, listener)
   }, [loadPack])
 
-  const compiledCanvas = useMemo(() => compile(canvas.nodes, canvas.edges), [canvas])
+  const compiledCanvas = useMemo(() => compileSong(canvas), [canvas])
   const compiled = current.codeOnly ?? compiledCanvas.code
 
   // Bus Volume/Pan and LFOs act on the audio directly (audio/modulation.ts), so they
@@ -212,11 +198,16 @@ function App(): React.JSX.Element {
     Promise.resolve(readyRef.current).then(() => {
       const scheduler = replRef.current?.scheduler
       const cps = bpmToCps(bpm)
-      applyModulation(canvas.nodes, canvas.edges, compiledCanvas.busOrbits, {
-        playing,
-        cps,
-        heardCycle: () => (scheduler ? scheduler.now() - (scheduler.latency ?? 0) * cps : 0)
-      })
+      applyModulation(
+        compiledCanvas.graph.nodes,
+        compiledCanvas.graph.edges,
+        compiledCanvas.busOrbits,
+        {
+          playing,
+          cps,
+          heardCycle: () => (scheduler ? scheduler.now() - (scheduler.latency ?? 0) * cps : 0)
+        }
+      )
     })
   }, [canvas, compiledCanvas, playing, bpm, current.codeOnly])
 
@@ -226,7 +217,12 @@ function App(): React.JSX.Element {
   const neededPackList = useMemo(() => {
     if (current.codeOnly) return 'dirt-samples,tidal-drum-machines,piano'
     const ids = new Set<string>()
-    for (const node of canvas.nodes) {
+    // Every clip's sounds, not just the playing ones, so launching a clip is instant.
+    const all = canvas.channels.flatMap((c) => [
+      ...(c.nodes ?? []),
+      ...c.clips.flatMap((k) => k?.nodes ?? [])
+    ])
+    for (const node of all) {
       if (node.type !== 'sample') continue
       const pack = node.data.pack ?? SYNTH_PACKS[node.data.s]
       if (pack) ids.add(pack)
@@ -305,7 +301,7 @@ function App(): React.JSX.Element {
   }, [canvas])
   const { record, undo: popUndo, redo: popRedo } = history
 
-  const applyCanvas = useCallback((s: CanvasState): string => {
+  const applyCanvas = useCallback((s: Song): string => {
     setCanvas(s)
     const json = serialize(s)
     try {
@@ -316,21 +312,10 @@ function App(): React.JSX.Element {
     return json
   }, [])
 
-  const onCanvasChange = useCallback(
-    (s: CanvasState) => record(applyCanvas(s)),
-    [applyCanvas, record]
-  )
+  const onCanvasChange = useCallback((s: Song) => record(applyCanvas(s)), [applyCanvas, record])
 
-  // Snapshots don't store selection; keep what's selected now across undo/redo.
   const restore = useCallback(
-    (json: string) => {
-      const s = JSON.parse(json) as CanvasState
-      const selected = new Set(canvasRef.current.nodes.filter((n) => n.selected).map((n) => n.id))
-      applyCanvas({
-        nodes: s.nodes.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n)),
-        edges: s.edges
-      })
-    },
+    (json: string) => applyCanvas(JSON.parse(json) as Song),
     [applyCanvas]
   )
   const undo = useCallback(() => {
@@ -341,6 +326,45 @@ function App(): React.JSX.Element {
     const next = popRedo()
     if (next) restore(next)
   }, [popRedo, restore])
+
+  // ---- Launching clips: while playing, on the next bar (the code changes a look-ahead
+  // early so the switch is heard on the bar); stopped, at once. ----
+  const [queued, setQueued] = useState<Record<string, number | null>>({})
+  const pendingLaunch = useRef<Record<string, number | null>>({})
+  const launchTimer = useRef<ReturnType<typeof setTimeout> | null>(null)
+  const launch = useCallback(
+    (changes: Record<string, number | null>) => {
+      const apply = (ch: Record<string, number | null>): void =>
+        onCanvasChange({
+          ...canvasRef.current,
+          channels: canvasRef.current.channels.map((c) =>
+            c.id in ch ? { ...c, playing: ch[c.id] } : c
+          )
+        })
+      const scheduler = replRef.current?.scheduler
+      if (!playingRef.current || !scheduler) return apply(changes)
+      pendingLaunch.current = { ...pendingLaunch.current, ...changes }
+      setQueued({ ...pendingLaunch.current })
+      if (launchTimer.current) return
+      const cps = bpmToCps(bpmRef.current)
+      // Look-ahead, plus the re-evaluate debounce and a little margin.
+      const lead = (scheduler.latency ?? 0.5) + 0.25
+      const now = scheduler.now()
+      let bar = Math.ceil(now + 1e-6)
+      while ((bar - now) / cps < lead) bar += 1
+      launchTimer.current = setTimeout(
+        () => {
+          launchTimer.current = null
+          const ch = pendingLaunch.current
+          pendingLaunch.current = {}
+          setQueued({})
+          apply(ch)
+        },
+        ((bar - now) / cps - lead) * 1000
+      )
+    },
+    [onCanvasChange]
+  )
 
   const onSoundDropped = (sound: DraggedSound): void => {
     if (sound.pack && !loaded.has(sound.pack))
@@ -367,7 +391,7 @@ function App(): React.JSX.Element {
     const base = { file, title: meta.title, tags: meta.tags.join(', '), source: meta.source }
     if (meta.tempo) setBpm(meta.tempo)
     if (meta.canvas) {
-      const state = migrateCanvas(JSON.parse(meta.canvas))
+      const state = toSong(JSON.parse(meta.canvas))
       onCanvasChange(state)
       setCurrent({ ...base, savedCanvas: serialize(state) })
     } else {
@@ -400,7 +424,7 @@ function App(): React.JSX.Element {
           canvas: savedCanvas,
           tempo: bpm
         },
-        compile(canvas.nodes, canvas.edges).code
+        compileSong(canvas).code
       )
       setCurrent((c) => ({ ...c, file, savedCanvas }))
       refresh()
@@ -550,9 +574,14 @@ function App(): React.JSX.Element {
         >
           {sidebar ? '‹' : '›'}
         </button>
-        <ReactFlowProvider>
-          <Canvas state={canvas} onChange={onCanvasChange} onSoundDropped={onSoundDropped} />
-        </ReactFlowProvider>
+        <Session
+          song={canvas}
+          onChange={onCanvasChange}
+          compiled={compiledCanvas}
+          queued={queued}
+          onLaunch={launch}
+          onSoundDropped={onSoundDropped}
+        />
       </div>
     </div>
   )

@@ -1,4 +1,3 @@
-import { useStore } from '@xyflow/react'
 import { valueDrag } from '../drag'
 import { useNudge } from '../nudge'
 
@@ -15,7 +14,8 @@ function dragCanvas(
   valueDrag(e, (dx, dy) => onMove(dx / zoom, dy / zoom))
 }
 
-const useZoom = (): number => useStore((s) => s.transform[2])
+// Controls are drawn at their real size now (no zoomable canvas).
+const useZoom = (): number => 1
 
 // The node's right edge: drag it to change how many steps (columns) there are.
 export function StepWidthGrip({

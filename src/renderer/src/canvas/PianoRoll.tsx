@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react'
-import type { Edge } from '@xyflow/react'
+import type { Edge } from './model'
 import StepGrid from './StepGrid'
 import { valueDrag } from '../drag'
 import { CHORD_TYPES } from './chords'

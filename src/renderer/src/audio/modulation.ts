@@ -12,7 +12,7 @@
 import { getAudioContext, getSuperdoughAudioController } from '@strudel/webaudio'
 import type { CanvasNode, LfoData, LfoShape, MixData } from '../canvas/model'
 import { MOD_PREFIX } from '../canvas/model'
-import type { Edge } from '@xyflow/react'
+import type { Edge } from '../canvas/model'
 
 interface Orbit {
   summingNode: AudioNode

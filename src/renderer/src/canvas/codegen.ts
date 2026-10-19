@@ -6,7 +6,7 @@
 // fixed size (resolution, default 1/16) and length sets the loop, so different
 // lengths drift against each other (polymeter).
 
-import type { Edge } from '@xyflow/react'
+import type { Edge } from './model'
 import { CHORD_TYPES, chordTones, SPREADS, voice, type ChordSettings } from './chords'
 import {
   DEFAULT_OCTAVE,
@@ -841,7 +841,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       const soloAfter = [mix.id, ...reachableFrom(mix.id)].some((id) => flag(id, 'solo'))
       const members = (mixMembers.get(mix.id) ?? []).filter((m) => plays(m.path, soloAfter))
       if (!members.length) continue
-      const base = `stack(${members.map((m) => m.code).join(', ')}).orbit(${busOrbits.get(mix.id)})`
+      // A channel routed into a Bus carries its fader in the code (see session/song.ts).
+      const codeGain = (mix.data as { codeGain?: number }).codeGain
+      const gain = codeGain === undefined ? '' : `.gain(${+codeGain.toFixed(3)})`
+      const base = `stack(${members.map((m) => m.code).join(', ')})${gain}.orbit(${busOrbits.get(mix.id)})`
       follow(
         mix,
         { ...empty, seq: null, base },

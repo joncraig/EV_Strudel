@@ -1,6 +1,5 @@
-import { Edge, useReactFlow } from '@xyflow/react'
+import type { Edge } from './model'
 import PianoRoll from './PianoRoll'
-import { soloChanges } from './solo'
 import { VOICING_LABEL } from './model'
 import { valueDrag } from '../drag'
 import { useNudge } from '../nudge'
@@ -91,17 +90,25 @@ function Toggle({
   )
 }
 
-function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.JSX.Element {
-  const { updateNodeData } = useReactFlow()
-  const selected = nodes.filter((n) => n.selected)
-
-  // Always the same size: with nothing (or several things) selected it's just empty.
-  if (selected.length !== 1) return <div className="panel empty" />
-
-  const node = selected[0]
-  const set = (patch: Record<string, unknown>): void => updateNodeData(node.id, patch)
-
-  const muteSolo = node.data as { muted?: boolean; solo?: boolean }
+// One node's editor: its settings and (for sequencers) its grid. In the session's clip
+// editor these sit side by side, one per node of the selected clip. `nodes` / `edges`
+// are the graph the node is compiled in (for the piano roll's names and sounds).
+function NodeEditor({
+  node,
+  nodes,
+  edges,
+  onPatch,
+  grip
+}: {
+  node: CanvasNode
+  nodes: CanvasNode[]
+  edges: Edge[]
+  onPatch: (patch: Record<string, unknown>) => void
+  // The node's handle in the clip editor (drag to reorder, press for its menu).
+  grip?: React.ReactNode
+}): React.JSX.Element {
+  const set = onPatch
+  const muteSolo = node.data as { muted?: boolean }
   let title = ''
   let body: React.ReactNode = null
   switch (node.type) {
@@ -271,19 +278,20 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     }
     case 'duck': {
       const d = node.data
-      const buses = nodes.filter((n) => n.type === 'mix').map((n) => n.id)
+      // Channels it can dip (by name).
+      const buses = nodes.filter((n) => n.type === 'mix')
       const targets = d.targets ?? []
       title = 'Duck'
       body = (
         <>
           {/* Which Buses its notes dip (the Bus numbers on the strips). */}
-          {buses.map((b, i) => (
+          {buses.map((b) => (
             <Toggle
-              key={b}
-              label={`Bus ${i + 1}`}
-              on={targets.includes(b)}
+              key={b.id}
+              label={(b.data.label as string) ?? 'Channel'}
+              on={targets.includes(b.id)}
               onChange={(on) =>
-                set({ targets: on ? [...targets, b] : targets.filter((t) => t !== b) })
+                set({ targets: on ? [...targets, b.id] : targets.filter((t) => t !== b.id) })
               }
             />
           ))}
@@ -385,19 +393,10 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     <div className="panel">
       <div className="panel-top">
         <div className="ptitle">{title}</div>
-        {/* Mute and Solo: the same, in the same place, for every node. */}
+        {grip}
+        {/* Mute (takes the node out), the same place on every node. */}
         <div className="pms">
           <Toggle label="M" on={!!muteSolo.muted} onChange={(muted) => set({ muted })} />
-          <button
-            className={`ptoggle ${muteSolo.solo ? 'on' : ''}`}
-            title="Solo (Shift: add to the solo)"
-            onClick={(e) => {
-              for (const c of soloChanges(nodes, [node.id], e.shiftKey))
-                updateNodeData(c.id, { solo: c.solo })
-            }}
-          >
-            S
-          </button>
         </div>
         <div className="pbody">{body}</div>
       </div>
@@ -406,4 +405,4 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
   )
 }
 
-export default Panel
+export default NodeEditor
