@@ -7,7 +7,11 @@ export const CELL_PX = 18
 
 // Drag and report movement in canvas units (screen px / zoom). Uses a pointer lock with
 // a mouse, so the drag isn't stopped at the window or screen edge (see ../drag.ts).
-function dragCanvas(e: React.PointerEvent, zoom: number, onMove: (dx: number, dy: number) => void): void {
+function dragCanvas(
+  e: React.PointerEvent,
+  zoom: number,
+  onMove: (dx: number, dy: number) => void
+): void {
   valueDrag(e, (dx, dy) => onMove(dx / zoom, dy / zoom))
 }
 
@@ -109,13 +113,26 @@ export function ParamFader({
   display?: string
   onChange: (v: number) => void
 }): React.JSX.Element {
-  const toT = (v: number): number => (log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min))
+  const toT = (v: number): number =>
+    log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min)
   const fromT = (p: number): number => (log ? min * Math.pow(max / min, p) : min + p * (max - min))
-  const shown = display ?? (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value >= 100 ? value.toFixed(0) : value.toFixed(2))
+  const shown =
+    display ??
+    (value >= 1000
+      ? `${(value / 1000).toFixed(1)}k`
+      : value >= 100
+        ? value.toFixed(0)
+        : value.toFixed(2))
   return (
     <div className="param">
       <span className="param-value">{shown}</span>
-      <Fader label={label} display={shown} value={toT(value)} max={1} onChange={(p) => onChange(fromT(p))} />
+      <Fader
+        label={label}
+        display={shown}
+        value={toT(value)}
+        max={1}
+        onChange={(p) => onChange(fromT(p))}
+      />
       <span className="param-label">{label}</span>
     </div>
   )

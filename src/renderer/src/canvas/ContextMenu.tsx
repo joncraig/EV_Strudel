@@ -81,8 +81,10 @@ function ContextMenu({ x, y, sections, onClose, searchable = false }: Props): Re
     const el = ref.current
     if (!el) return
     const r = el.getBoundingClientRect()
-    if (r.right > window.innerWidth) el.style.left = `${Math.max(4, window.innerWidth - r.width - 4)}px`
-    if (r.bottom > window.innerHeight) el.style.top = `${Math.max(4, window.innerHeight - r.height - 4)}px`
+    if (r.right > window.innerWidth)
+      el.style.left = `${Math.max(4, window.innerWidth - r.width - 4)}px`
+    if (r.bottom > window.innerHeight)
+      el.style.top = `${Math.max(4, window.innerHeight - r.height - 4)}px`
   }, [x, y])
 
   return (

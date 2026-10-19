@@ -1,14 +1,15 @@
 import { useEffect, useRef } from 'react'
-import type { Step } from './model'
+import { cellNotes, toCell, type Cell } from './model'
 import { subscribeStep } from './playhead'
 import { useNudge } from '../nudge'
 
 interface Props {
-  steps: Step[]
+  // One value per step; with poly, a step can hold several (a chord).
+  steps: Cell[]
   // Row values top to bottom, and their labels.
   rows: number[]
   labels?: string[]
-  onChange: (steps: Step[]) => void
+  onChange: (steps: Cell[]) => void
   // Pattern timing, for the playhead bar. Omit (or muted) for no playhead.
   // sounding: the node is on a chain that's heard, so the playing step's set cells flash.
   timing?: { resolution: number; muted?: boolean; lens?: number[] | null; sounding?: boolean }
@@ -19,11 +20,14 @@ interface Props {
   noRests?: boolean
   // Large piano-roll cells with bar lines (bottom panel).
   roll?: boolean
+  // Chords: each cell toggles on its own, so a step can hold several rows (Notes).
+  poly?: boolean
 }
 
 // Press a cell and slide across others to paint. The first cell decides the stroke:
 // turning a cell on paints "on" (that row) along the way; turning one off erases.
-// In bar mode every column touched takes the level under the pointer.
+// In bar mode every column touched takes the level under the pointer. With poly, a
+// step keeps the notes it has: painting adds the row, erasing removes just that row.
 function StepGrid({
   steps,
   rows,
@@ -32,7 +36,8 @@ function StepGrid({
   timing,
   bars = false,
   roll = false,
-  noRests = false
+  noRests = false,
+  poly = false
 }: Props): React.JSX.Element {
   // Latest steps for the stroke handlers, which outlive a render.
   const stepsRef = useRef(steps)
@@ -40,18 +45,19 @@ function StepGrid({
     stepsRef.current = steps
   }, [steps])
 
-  // Up/Down arrows move the last painted step a row up or down the grid (Shift: 10).
+  // Up/Down arrows move the last painted step a row up or down the grid (Shift: 10);
+  // a chord moves as a whole, keeping its shape, as far as the grid allows.
   const lastRef = useRef<number | null>(null)
   const touch = useNudge((n) => {
     const i = lastRef.current
     const cur = stepsRef.current
-    if (i === null || i >= cur.length || cur[i] === null) return
-    const r = rows.indexOf(cur[i] as number)
-    if (r < 0) return
-    const v = rows[Math.min(rows.length - 1, Math.max(0, r - n))]
-    if (v === cur[i]) return
+    if (i === null || i >= cur.length) return
+    const at = cellNotes(cur[i]).map((v) => rows.indexOf(v))
+    if (!at.length || at.some((r) => r < 0)) return
+    const shift = Math.max(-Math.min(...at), Math.min(rows.length - 1 - Math.max(...at), -n))
+    if (!shift) return
     const copy = [...cur]
-    copy[i] = v
+    copy[i] = toCell(at.map((r) => rows[r + shift]))
     stepsRef.current = copy
     onChange(copy)
   })
@@ -111,15 +117,24 @@ function StepGrid({
     if (!start) return
     e.preventDefault()
     e.stopPropagation()
-    const erase = !bars && !noRests && stepsRef.current[start.i] === start.v
+    const erase = !bars && !noRests && cellNotes(stepsRef.current[start.i]).includes(start.v)
     const { pointerId } = e
     touch()
     lastRef.current = start.i
 
     const apply = ({ i, v }: { i: number; v: number }): void => {
       const cur = stepsRef.current
-      const next = bars ? v : erase ? (cur[i] === v ? null : cur[i]) : v
-      if (cur[i] === next) return
+      const notes = cellNotes(cur[i])
+      const next: Cell = bars
+        ? v
+        : poly
+          ? toCell(erase ? notes.filter((x) => x !== v) : [...notes, v])
+          : erase
+            ? cur[i] === v
+              ? null
+              : cur[i]
+            : v
+      if (JSON.stringify(cur[i]) === JSON.stringify(next)) return
       const copy = [...cur]
       copy[i] = next
       stepsRef.current = copy
@@ -161,7 +176,7 @@ function StepGrid({
               key={i}
               data-i={i}
               data-v={v}
-              className={`cell ${(bars ? s !== null && v <= s : s === v) ? 'on' : ''} ${i % 4 === 0 ? 'beat' : ''} ${i % 16 === 0 ? 'barline' : ''}`}
+              className={`cell ${(bars ? typeof s === 'number' && v <= s : cellNotes(s).includes(v)) ? 'on' : ''} ${i % 4 === 0 ? 'beat' : ''} ${i % 16 === 0 ? 'barline' : ''}`}
             />
           ))}
         </div>

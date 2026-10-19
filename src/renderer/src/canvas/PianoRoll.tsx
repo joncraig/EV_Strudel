@@ -27,6 +27,8 @@ import {
   pieceCount,
   SequencerNode,
   Step,
+  cellNotes,
+  type Cell,
   VELOCITY_LEVELS,
   velocityDb,
   VelocityNode
@@ -40,7 +42,7 @@ interface Props {
   node: SequencerNode | VelocityNode | LengthNode | KeyNode | ModeNode | OctaveNode
   nodes: CanvasNode[]
   edges: Edge[]
-  onSteps: (steps: Step[]) => void
+  onSteps: (steps: Cell[]) => void
 }
 
 function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
@@ -107,13 +109,14 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     const octave =
       ((downstream(nodes, edges, node.id, 'octave')?.data as OctaveData | undefined)?.steps.find(
         (v) => v !== null
-      ) ??
-      0) + (node.data.octave ?? DEFAULT_OCTAVE)
+      ) ?? 0) + (node.data.octave ?? DEFAULT_OCTAVE)
     labels = rows.map((d) => degreeName(d, tonic, modeId, octave))
   } else {
     const count = sample ? pieceCount(sample) : 8
     const all = Array.from({ length: count }, (_, i) => count - 1 - i)
-    const used = new Set(node.data.steps.map((v) => (v === null ? v : v % count)))
+    const used = new Set(
+      node.data.steps.map((v) => (v === null ? v : (cellNotes(v)[0] ?? 0) % count))
+    )
     rows = node.data.folded && all.some((v) => used.has(v)) ? all.filter((v) => used.has(v)) : all
     labels = rows.map((v) =>
       sample && isBank(sample) ? (files?.[v] ?? `file ${v}`) : `slice ${v + 1}`
@@ -153,13 +156,14 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
         bars={bars}
         noRests={node.type === 'velocity' || node.type === 'length'}
         roll
+        poly={node.type === 'sequencer' && node.data.kind === 'degree'}
         timing={{ resolution: node.data.resolution, muted, lens, sounding }}
         onChange={(steps) =>
           onSteps(
             node.type === 'velocity'
-              ? steps.map((v) => v ?? VELOCITY_LEVELS)
+              ? (steps as Step[]).map((v) => v ?? VELOCITY_LEVELS)
               : node.type === 'length'
-                ? steps.map((v) => v ?? LENGTH_FULL_STEP)
+                ? (steps as Step[]).map((v) => v ?? LENGTH_FULL_STEP)
                 : steps
           )
         }

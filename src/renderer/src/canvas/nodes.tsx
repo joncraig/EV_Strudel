@@ -34,7 +34,7 @@ import {
   SampleNode as SampleNodeT,
   SequencerKind,
   SequencerNode as SequencerNodeT,
-  Step,
+  cellNotes,
   GroupNode as GroupNodeT,
   isBank,
   pieceCount,
@@ -327,14 +327,17 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
           <StepGrid
             steps={data.steps}
             rows={DEGREE_ROWS}
-            onChange={(steps: Step[]) => update({ steps })}
+            onChange={(steps) => update({ steps })}
             timing={timing}
+            poly
           />
         )
       case 'slice': {
         // Show slices top-down from the highest, so the grid reads like a piano roll.
         const all = Array.from({ length: slices }, (_, i) => slices - 1 - i)
-        const used = new Set(data.steps.map((v) => (v === null ? v : v % slices)))
+        const used = new Set(
+          data.steps.map((v) => (v === null ? v : (cellNotes(v)[0] ?? 0) % slices))
+        )
         // Fold shows only rows in use (all rows while nothing is placed).
         const usedRows = all.filter((v) => used.has(v))
         const rows = data.folded && usedRows.length ? usedRows : all

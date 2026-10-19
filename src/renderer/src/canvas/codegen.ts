@@ -19,9 +19,11 @@ import {
   pieceCount,
   STEP_RESOLUTION,
   SYNTHS,
-  TONICS
+  TONICS,
+  cellNotes
 } from './model'
 import type {
+  Cell,
   CanvasNode,
   EffectData,
   KeyData,
@@ -66,6 +68,9 @@ function stepped(stepTokens: string[], lens: Lens, collapse = true): string {
   const bars = +(total / STEP_RESOLUTION).toFixed(6)
   return bars === 1 ? body : `[${body}]/${bars}`
 }
+
+// Mono steps (Slices): a chord's first note.
+const firstNotes = (cells: Cell[]): Step[] => cells.map((c) => cellNotes(c)[0] ?? null)
 
 const steps = (values: Step[], toToken: (v: number) => string): string[] =>
   values.map((v) => (v === null ? '~' : toToken(v)))
@@ -169,9 +174,12 @@ export function sequencerCode(
   let code: string
   switch (seq.kind) {
     case 'degree': {
-      // UI degrees are 1-based; Strudel's are 0-based.
+      // UI degrees are 1-based; Strudel's are 0-based. A chord is "[0,2,4]".
       const degrees = stepped(
-        steps(seq.steps, (v) => String(v - 1)),
+        seq.steps.map((c) => {
+          const d = cellNotes(c).map((v) => v - 1)
+          return d.length === 0 ? '~' : d.length === 1 ? String(d[0]) : `[${d.join(',')}]`
+        }),
         lens,
         false
       )
@@ -184,7 +192,7 @@ export function sequencerCode(
       // Steps set before the piece count was lowered wrap around.
       const count = pieceCount(sample)
       const picks = stepped(
-        steps(seq.steps, (v) => String(v % count)),
+        steps(firstNotes(seq.steps), (v) => String(v % count)),
         lens,
         false
       )
@@ -465,7 +473,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         if (next.data.muted) continue
         stepLens.set(next.id, ctx.length)
         const picks =
-          ctx.seq?.kind === 'slice' ? { steps: ctx.seq.steps, lens: ctx.seqLens } : ctx.picks
+          ctx.seq?.kind === 'slice'
+            ? { steps: firstNotes(ctx.seq.steps), lens: ctx.seqLens }
+            : ctx.picks
         follow(
           next,
           { ...ctx, seq: next.data, seqLens: ctx.length, picks },

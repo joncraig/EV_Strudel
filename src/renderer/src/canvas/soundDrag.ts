@@ -30,7 +30,11 @@ export const wasDragging = (): boolean => dragging
  * - axis 'x': only a mostly-horizontal move starts a drag, so vertical swipes keep
  *   scrolling the list. The element needs `touch-action: pan-y`.
  */
-export function startSoundDrag(e: React.PointerEvent, sound: DraggedSound, axis: 'any' | 'x' = 'any'): void {
+export function startSoundDrag(
+  e: React.PointerEvent,
+  sound: DraggedSound,
+  axis: 'any' | 'x' = 'any'
+): void {
   if (e.pointerType === 'mouse' && e.button !== 0) return
   const target = e.currentTarget as HTMLElement
   const { pointerId } = e

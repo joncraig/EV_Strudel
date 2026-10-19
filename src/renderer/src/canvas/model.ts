@@ -32,6 +32,19 @@ export type SequencerKind = 'degree' | 'slice'
 // A step is a degree (1-based), a piece index (0-based), or null for a rest.
 export type Step = number | null
 
+// A sequencer step: Notes steps can hold a chord (several degrees); Slices are one
+// piece. A one-note step is stored as a plain number, so older saves already fit.
+export type Cell = Step | number[]
+
+// The notes in a step (none for a rest).
+export const cellNotes = (c: Cell): number[] => (c === null ? [] : Array.isArray(c) ? c : [c])
+
+// Store notes back as the smallest form: rest, one number, or a sorted chord.
+export const toCell = (notes: number[]): Cell => {
+  const u = [...new Set(notes)].sort((a, b) => a - b)
+  return u.length === 0 ? null : u.length === 1 ? u[0] : u
+}
+
 export interface SampleData extends Record<string, unknown> {
   s: string
   n: number
@@ -53,7 +66,7 @@ export const pieceCount = (s: SampleData): number => (isBank(s) ? (s.files as nu
 export interface SequencerData extends Record<string, unknown> {
   kind: SequencerKind
   // Length is steps.length; each step lasts 1/resolution of a bar (one Strudel cycle).
-  steps: Step[]
+  steps: Cell[]
   resolution: number
   octave: number
   // Older saves had a gain fader here; migrateCanvas removes it (Velocity sets level).

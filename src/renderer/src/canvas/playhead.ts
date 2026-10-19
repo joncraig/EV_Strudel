@@ -21,10 +21,10 @@ function subscribe(l: () => void): () => void {
 
 // Which step is playing (fixed step size, see stepAt), or -1 when stopped.
 export function useStepIndex(length: number, resolution: number): number {
-  return useSyncExternalStore(subscribe, () => (cycle < 0 ? -1 : stepAt(cycle, length, resolution || length)))
+  return useSyncExternalStore(subscribe, () =>
+    cycle < 0 ? -1 : stepAt(cycle, length, resolution || length)
+  )
 }
-
-
 
 // Any value derived from the cycle; re-renders only when the derived value changes.
 export function usePlayhead<T>(select: (cycle: number) => T): T {
@@ -41,7 +41,12 @@ export function subscribeStep(
 ): () => void {
   let last = Number.NaN
   const check = (): void => {
-    const step = cycle < 0 ? -1 : lens?.length ? stepAtLens(cycle, length, lens) : stepAt(cycle, length, resolution || length)
+    const step =
+      cycle < 0
+        ? -1
+        : lens?.length
+          ? stepAtLens(cycle, length, lens)
+          : stepAt(cycle, length, resolution || length)
     if (step !== last) {
       last = step
       onStep(step)
