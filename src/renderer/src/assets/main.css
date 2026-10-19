@@ -482,3 +482,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .clip-add.end { margin-left: 18px; padding: 0 14px; align-self: center; height: 60px; }
 .clip-add:hover { color: #fff; border-color: #8ab4f8; }
 .node-grip { cursor: grab; padding: 0 8px; font-size: 18px; color: #889; touch-action: none; user-select: none; }
+/* Fader strips pinned to the bottom of the session area; clips scroll above them. */
+.session-strips { flex: none; overflow: hidden; padding: 0 12px 8px; border-top: 1px solid #2a2a2a; background: #161616; }
+.session-strips .strip { margin-top: 6px; }

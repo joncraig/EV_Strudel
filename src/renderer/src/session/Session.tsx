@@ -333,6 +333,8 @@ function Session({
   }, [])
 
   const buses = song.channels.filter((c) => c.kind === 'bus')
+  const columns = `repeat(${tracks.length}, 150px) 64px`
+  const stripsRef = useRef<HTMLDivElement>(null)
   const anySolo = song.channels.some((c) => c.solo)
 
   return (
@@ -348,11 +350,14 @@ function Session({
               {'</>'} Code
             </button>
           </div>
-          <div className="session-scroll">
-            <div
-              className="session-grid"
-              style={{ gridTemplateColumns: `repeat(${tracks.length}, 150px) 64px` }}
-            >
+          {/* Clips scroll; the fader strips stay at the bottom edge, columns lined up. */}
+          <div
+            className="session-scroll"
+            onScroll={(e) => {
+              if (stripsRef.current) stripsRef.current.scrollLeft = e.currentTarget.scrollLeft
+            }}
+          >
+            <div className="session-grid" style={{ gridTemplateColumns: columns }}>
               {/* Channel headers */}
               {tracks.map((ch, i) => (
                 <div
@@ -431,6 +436,10 @@ function Session({
                   </button>
                 </SceneRow>
               ))}
+            </div>
+          </div>
+          <div className="session-strips" ref={stripsRef}>
+            <div className="session-grid" style={{ gridTemplateColumns: columns }}>
               {/* The fader section */}
               {tracks.map((ch, i) => (
                 <Strip
