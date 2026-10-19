@@ -237,14 +237,22 @@ export const MAX_STEPS = 128
 export const stepAt = (cycle: number, length: number, resolution: number): number =>
   length > 0 ? ((Math.floor(cycle * resolution) % length) + length) % length : -1
 
-// The playing step when steps have varying lengths (in 1/16 steps, cycling).
+// How many steps until a pattern of `length` steps and a list of step lengths line
+// up again (lcm), capped so a long pair can't blow up.
+const gcdN = (a: number, b: number): number => (b ? gcdN(b, a % b) : a)
+export const loopSteps = (length: number, lensCount: number): number =>
+  Math.min(4096, (length * lensCount) / gcdN(length, lensCount))
+
+// The playing step when steps have varying lengths (in 1/16 steps). The steps and the
+// lengths each loop at their own count: step i lasts lens[i % lens.length].
 export function stepAtLens(cycle: number, length: number, lens: number[]): number {
-  const w = Array.from({ length }, (_, i) => lens[i % lens.length])
+  const n = loopSteps(length, lens.length)
+  const w = Array.from({ length: n }, (_, i) => lens[i % lens.length])
   const total = w.reduce((a, b) => a + b, 0)
   if (!total) return -1
   let pos = Math.floor(cycle * STEP_RESOLUTION) % total
-  for (let i = 0; i < length; i++) {
-    if (pos < w[i]) return i
+  for (let i = 0; i < n; i++) {
+    if (pos < w[i]) return i % length
     pos -= w[i]
   }
   return -1

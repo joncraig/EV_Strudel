@@ -7,7 +7,7 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { DEFAULT_OCTAVE, EFFECTS, heldValues, velocityGain, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS } from './model'
+import { DEFAULT_OCTAVE, EFFECTS, heldValues, loopSteps, velocityGain, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS } from './model'
 import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, OctaveData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const quote = (s: string): string => JSON.stringify(s)
@@ -22,8 +22,11 @@ const lensAt = (lens: Lens, i: number): number => (lens?.length ? lens[i % lens.
 // weights), stretched so a 1/16 is a 1/16: "[...]/bars".
 // collapse: a value that's the same on every step can be written once (velocity, clip),
 // but a hit pattern can't: every step must still be its own hit.
-function stepped(tokens: string[], lens: Lens, collapse = true): string {
-  if (collapse && tokens.length && tokens.every((tk) => tk === tokens[0]) && tokens[0] !== '~') return tokens[0]
+// Steps and lengths loop at their own counts, so the loop runs until they line up.
+function stepped(stepTokens: string[], lens: Lens, collapse = true): string {
+  if (collapse && stepTokens.length && stepTokens.every((tk) => tk === stepTokens[0]) && stepTokens[0] !== '~') return stepTokens[0]
+  const n = lens?.length && stepTokens.length ? loopSteps(stepTokens.length, lens.length) : stepTokens.length
+  const tokens = Array.from({ length: n }, (_, i) => stepTokens[i % stepTokens.length])
   const weights = tokens.map((_, i) => lensAt(lens, i))
   const total = weights.reduce((a, b) => a + b, 0)
   const body = tokens.map((tk, i) => (weights[i] === 1 ? tk : `${tk}@${weights[i]}`)).join(' ')
@@ -45,7 +48,9 @@ export interface Stepped<T> {
 
 // One value per 1/16: each step's value repeated for its length.
 const perSixteenth = (values: number[], lens: Lens): number[] =>
-  values.flatMap((v, i) => Array(lensAt(lens, i)).fill(v))
+  Array.from({ length: lens?.length ? loopSteps(values.length, lens.length) : values.length }, (_, i) =>
+    Array(lensAt(lens, i)).fill(values[i % values.length])
+  ).flat()
 
 // The scale per 1/16, from the Key and Mode sequencers (C / Ionian when not wired).
 // They loop at their own lengths, so the combined loop is lcm of the two, written
@@ -246,9 +251,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       stepLens.set(n.id, c.length)
     } else if (n.type === 'length') {
       // Notes playing through here sound for this length; what steps after steps at it.
-      if (c.seq || c.base) c.mods += lengthCode(n.data, c.seqLens, c.length)
-      stepLens.set(n.id, c.length)
+      if (c.seq || c.base) c.mods += lengthCode(n.data, c.seqLens, lengthValues(n.data))
+      // Its own steps last their own lengths.
       c.length = lengthValues(n.data)
+      stepLens.set(n.id, c.length)
     } else if (n.type === 'effect') c.mods += effectCode(n.data)
     return c
   }
