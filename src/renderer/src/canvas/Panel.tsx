@@ -1,5 +1,6 @@
 import { Edge, useReactFlow } from '@xyflow/react'
 import PianoRoll from './PianoRoll'
+import { soloChanges } from './solo'
 import { VOICING_LABEL } from './model'
 import { valueDrag } from '../drag'
 import { useNudge } from '../nudge'
@@ -374,7 +375,16 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
         {/* Mute and Solo: the same, in the same place, for every node. */}
         <div className="pms">
           <Toggle label="M" on={!!muteSolo.muted} onChange={(muted) => set({ muted })} />
-          <Toggle label="S" on={!!muteSolo.solo} onChange={(solo) => set({ solo })} />
+          <button
+            className={`ptoggle ${muteSolo.solo ? 'on' : ''}`}
+            title="Solo (Shift: add to the solo)"
+            onClick={(e) => {
+              for (const c of soloChanges(nodes, [node.id], e.shiftKey))
+                updateNodeData(c.id, { solo: c.solo })
+            }}
+          >
+            S
+          </button>
         </div>
         <div className="pbody">{body}</div>
       </div>

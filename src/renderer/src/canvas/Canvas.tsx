@@ -46,6 +46,7 @@ import {
 } from './groups'
 import { compile } from './codegen'
 import { autoLayout, layoutKey } from './layout'
+import { soloChanges } from './solo'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import Panel from './Panel'
@@ -494,13 +495,25 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
       const on = !!(node.data as { muted?: boolean; solo?: boolean })[key]
       return {
         label: key === 'muted' ? (on ? 'Unmute' : 'Mute') : on ? 'Unsolo' : 'Solo',
-        onSelect: () =>
+        onSelect: () => {
+          // Solo is exclusive (like a radio button); Mute toggles the targets.
+          const solo =
+            key === 'solo'
+              ? new Map(soloChanges(nodes, targets, false).map((c) => [c.id, c.solo]))
+              : null
           onChange({
             nodes: nodes.map((n) =>
-              targets.includes(n.id) ? ({ ...n, data: { ...n.data, [key]: !on } } as CanvasNode) : n
+              solo
+                ? solo.has(n.id)
+                  ? ({ ...n, data: { ...n.data, solo: solo.get(n.id) } } as CanvasNode)
+                  : n
+                : targets.includes(n.id)
+                  ? ({ ...n, data: { ...n.data, [key]: !on } } as CanvasNode)
+                  : n
             ),
             edges
           })
+        }
       }
     })
 

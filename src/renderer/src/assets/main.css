@@ -414,3 +414,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .react-flow__node.selected .node.card,
 .react-flow__node.selected .sample-chip { border-color: #fff; box-shadow: 0 0 0 3px #fff, 0 0 22px 6px #8ab4f8bb; }
 .react-flow__node-group.selected .group-frame { box-shadow: 0 0 0 3px #fff, 0 0 22px 6px #8ab4f888; }
+/* M/S sit above the output handle's large touch area (which covers the card's
+   top-right corner); otherwise a tap on S starts a wire instead. */
+.card .bus-ms { z-index: 6; }

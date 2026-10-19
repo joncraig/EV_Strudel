@@ -12,6 +12,7 @@ import {
   useNodesData
 } from '@xyflow/react'
 import { CHORD_TYPES } from './chords'
+import { soloChanges } from './solo'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { usePlayhead } from './playhead'
 import {
@@ -118,7 +119,7 @@ const runs = (items: string[]): string[] => items.filter((v, i) => i === 0 || v 
 function MuteSolo(): React.JSX.Element | null {
   const id = useNodeId()
   const node = useNodesData(id ?? '')
-  const { updateNodeData } = useReactFlow()
+  const { updateNodeData, getNodes } = useReactFlow()
   if (!id || !node) return null
   const d = node.data as { muted?: boolean; solo?: boolean }
   return (
@@ -131,7 +132,11 @@ function MuteSolo(): React.JSX.Element | null {
       </button>
       <button
         className={d.solo ? 'on solo' : 'solo'}
-        onClick={() => updateNodeData(id, { solo: !d.solo })}
+        title="Solo (Shift: add to the solo)"
+        onClick={(e) => {
+          for (const c of soloChanges(getNodes(), [id], e.shiftKey))
+            updateNodeData(c.id, { solo: c.solo })
+        }}
       >
         S
       </button>
