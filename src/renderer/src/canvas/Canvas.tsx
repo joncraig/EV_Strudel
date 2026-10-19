@@ -34,6 +34,7 @@ import {
   dissolveNode,
   duplicateNodes,
   GROUP_TOGGLE_EVENT,
+  fitGroups,
   groupNodes,
   setCollapsed,
   ungroup
@@ -188,11 +189,13 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   }, [])
 
   const onNodesChange = useCallback(
-    (changes: NodeChange<CanvasNode>[]) =>
-      commit({
-        nodes: applyNodeChanges(changes, stateRef.current.nodes),
-        edges: stateRef.current.edges
-      }),
+    (changes: NodeChange<CanvasNode>[]) => {
+      const next = { nodes: applyNodeChanges(changes, stateRef.current.nodes), edges: stateRef.current.edges }
+      // Group frames fit their contents, except mid-drag (moving the frame under a node
+      // being dragged would fight the drag): they catch up when it's dropped.
+      const dragging = changes.some((ch) => ch.type === 'position' && ch.dragging)
+      commit(dragging ? next : fitGroups(next))
+    },
     [commit]
   )
   const onEdgesChange = useCallback(

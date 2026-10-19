@@ -87,6 +87,37 @@ export function removeNode(state: CanvasState, id: string): CanvasState {
   }
 }
 
+// Fit every open group's frame around its contents: PAD around the nodes, the title
+// bar on top. A node moved past the left or top edge moves the frame instead (its
+// contents stay where they are on screen). Returns the same state when nothing changes.
+export function fitGroups(state: CanvasState): CanvasState {
+  let nodes = state.nodes
+  for (const g of state.nodes) {
+    if (g.type !== 'group' || g.data.collapsed) continue
+    const kids = nodes.filter((n) => n.parentId === g.id)
+    if (!kids.length) continue
+    const minX = Math.min(...kids.map((n) => n.position.x))
+    const minY = Math.min(...kids.map((n) => n.position.y))
+    const dx = minX - PAD
+    const dy = minY - PAD - HEADER
+    const width = Math.round(Math.max(...kids.map((n) => n.position.x + size(n).width)) - dx + PAD)
+    const height = Math.round(Math.max(...kids.map((n) => n.position.y + size(n).height)) - dy + PAD)
+    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && width === g.data.width && height === g.data.height) continue
+    nodes = nodes.map((n) => {
+      if (n.id === g.id)
+        return {
+          ...n,
+          position: { x: n.position.x + dx, y: n.position.y + dy },
+          style: { ...n.style, width, height },
+          data: { ...n.data, width, height }
+        } as CanvasNode
+      if (n.parentId === g.id) return { ...n, position: { x: n.position.x - dx, y: n.position.y - dy } } as CanvasNode
+      return n
+    })
+  }
+  return nodes === state.nodes ? state : { nodes, edges: state.edges }
+}
+
 // Fired by a group's collapse arrow; the canvas owns the state and handles it.
 export const GROUP_TOGGLE_EVENT = 'ev-group-toggle'
 
