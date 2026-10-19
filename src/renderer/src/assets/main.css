@@ -417,3 +417,13 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 /* M/S sit above the output handle's large touch area (which covers the card's
    top-right corner); otherwise a tap on S starts a wire instead. */
 .card .bus-ms { z-index: 6; }
+/* Every node is one size (2026-10-18): the same height whatever it shows, so rows
+   line up; tighter padding. */
+.react-flow__node .node.card { height: 60px; padding: 5px 12px; overflow: hidden; }
+.card-kind { line-height: 12px; }
+.card-big { font-size: 21px; line-height: 26px; }
+.card-small { font-size: 11px; line-height: 13px; }
+.card.lfo-node .card-big { height: 26px; }
+.card.lfo-node .lfo-wave { height: 26px; }
+.react-flow__node .sample-chip { width: 160px; height: 60px; box-sizing: border-box; padding: 0 14px; font-size: 20px; }
+.group-header { height: 22px; }

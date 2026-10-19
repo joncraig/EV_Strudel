@@ -7,10 +7,10 @@
 import dagre from '@dagrejs/dagre'
 import type { CanvasNode, CanvasState } from './model'
 
-const GAP_X = 70 // between columns
-const GAP_Y = 28 // between nodes in a column
-const PAD = 20 // group frame around its nodes
-const HEADER = 34 // group title bar
+const GAP_X = 44 // between columns
+const GAP_Y = 12 // between nodes in a column
+const PAD = 12 // group frame around its nodes
+const HEADER = 22 // group title bar
 const COLLAPSED = { width: 180, height: HEADER }
 
 const sizeOf = (n: CanvasNode): { width: number; height: number } => ({
