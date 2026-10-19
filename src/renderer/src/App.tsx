@@ -37,6 +37,7 @@ interface Current {
 
 const EMPTY: CanvasState = { nodes: [], edges: [] }
 const AUTOSAVE_KEY = 'ev-strudel:canvas-autosave'
+const SIDEBAR_KEY = 'ev-strudel:sidebar'
 const BPM_KEY = 'ev-strudel:bpm'
 const CURRENT_KEY = 'ev-strudel:current-patch'
 
@@ -86,7 +87,13 @@ function readCurrent(): Current {
     if (raw) {
       const { file, title, tags, source } = JSON.parse(raw)
       // Treat the autosaved canvas as what was last saved, so it doesn't show as dirty.
-      return { file: file ?? null, title: title || 'Untitled', tags: tags ?? '', source, savedCanvas: serialize(readAutosave()) }
+      return {
+        file: file ?? null,
+        title: title || 'Untitled',
+        tags: tags ?? '',
+        source,
+        savedCanvas: serialize(readAutosave())
+      }
     }
   } catch {
     // Fall through.
@@ -94,7 +101,12 @@ function readCurrent(): Current {
   return blank()
 }
 
-const blank = (): Current => ({ file: null, title: 'Untitled', tags: '', savedCanvas: serialize(EMPTY) })
+const blank = (): Current => ({
+  file: null,
+  title: 'Untitled',
+  tags: '',
+  savedCanvas: serialize(EMPTY)
+})
 
 type Repl = Engine['repl']
 
@@ -103,6 +115,21 @@ function App(): React.JSX.Element {
   const [current, setCurrent] = useState<Current>(readCurrent)
   const [canvas, setCanvas] = useState<CanvasState>(readAutosave)
   const [tab, setTab] = useState<'samples' | 'library'>('samples')
+  // The Samples / Patches sidebar can be hidden for more canvas; remembered.
+  const [sidebar, setSidebar] = useState<boolean>(() => {
+    try {
+      return localStorage.getItem(SIDEBAR_KEY) !== 'hidden'
+    } catch {
+      return true
+    }
+  })
+  useEffect(() => {
+    try {
+      localStorage.setItem(SIDEBAR_KEY, sidebar ? 'shown' : 'hidden')
+    } catch {
+      // A convenience only.
+    }
+  }, [sidebar])
   const [playing, setPlaying] = useState(false)
   const [evalError, setEvalError] = useState<string | null>(null)
 
@@ -210,7 +237,9 @@ function App(): React.JSX.Element {
   const evaluate = useCallback(
     async (code: string) => {
       await readyRef.current
-      const failed = (await Promise.allSettled(neededPacks.map(loadPack))).filter((r) => r.status === 'rejected')
+      const failed = (await Promise.allSettled(neededPacks.map(loadPack))).filter(
+        (r) => r.status === 'rejected'
+      )
       setEvalError(failed.length ? `${failed.length} sample pack(s) failed to load` : null)
       replRef.current?.setCps(bpmToCps(bpmRef.current))
       await replRef.current?.evaluate(code)
@@ -277,14 +306,20 @@ function App(): React.JSX.Element {
     return json
   }, [])
 
-  const onCanvasChange = useCallback((s: CanvasState) => record(applyCanvas(s)), [applyCanvas, record])
+  const onCanvasChange = useCallback(
+    (s: CanvasState) => record(applyCanvas(s)),
+    [applyCanvas, record]
+  )
 
   // Snapshots don't store selection; keep what's selected now across undo/redo.
   const restore = useCallback(
     (json: string) => {
       const s = JSON.parse(json) as CanvasState
       const selected = new Set(canvasRef.current.nodes.filter((n) => n.selected).map((n) => n.id))
-      applyCanvas({ nodes: s.nodes.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n)), edges: s.edges })
+      applyCanvas({
+        nodes: s.nodes.map((n) => (selected.has(n.id) ? { ...n, selected: true } : n)),
+        edges: s.edges
+      })
     },
     [applyCanvas]
   )
@@ -298,7 +333,8 @@ function App(): React.JSX.Element {
   }, [popRedo, restore])
 
   const onSoundDropped = (sound: DraggedSound): void => {
-    if (sound.pack && !loaded.has(sound.pack)) loadPack(sound.pack).catch((e) => setEvalError(String(e)))
+    if (sound.pack && !loaded.has(sound.pack))
+      loadPack(sound.pack).catch((e) => setEvalError(String(e)))
   }
 
   const dirty = !current.codeOnly && serialize(canvas) !== current.savedCanvas
@@ -312,7 +348,8 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener('focus', refresh)
   }, [refresh])
 
-  const confirmDiscard = (): boolean => !dirty || confirm(`Discard unsaved changes to "${current.title}"?`)
+  const confirmDiscard = (): boolean =>
+    !dirty || confirm(`Discard unsaved changes to "${current.title}"?`)
 
   const open = async (file: string): Promise<void> => {
     if (file === current.file || !confirmDiscard()) return
@@ -336,21 +373,30 @@ function App(): React.JSX.Element {
   }
 
   // Save to the open patch, or (asNew / nothing open) to a new file named from the title.
-  const save = useCallback(async (asNew = false) => {
-    if (current.codeOnly) return
-    const tags = current.tags
-      .split(',')
-      .map((t) => t.trim())
-      .filter(Boolean)
-    const savedCanvas = serialize(canvas)
-    const file = await window.api.library.save(
-      asNew ? null : current.file,
-      { title: current.title.trim() || 'Untitled', tags, source: current.source, canvas: savedCanvas, tempo: bpm },
-      compile(canvas.nodes, canvas.edges).code
-    )
-    setCurrent((c) => ({ ...c, file, savedCanvas }))
-    refresh()
-  }, [current, canvas, bpm, refresh])
+  const save = useCallback(
+    async (asNew = false) => {
+      if (current.codeOnly) return
+      const tags = current.tags
+        .split(',')
+        .map((t) => t.trim())
+        .filter(Boolean)
+      const savedCanvas = serialize(canvas)
+      const file = await window.api.library.save(
+        asNew ? null : current.file,
+        {
+          title: current.title.trim() || 'Untitled',
+          tags,
+          source: current.source,
+          canvas: savedCanvas,
+          tempo: bpm
+        },
+        compile(canvas.nodes, canvas.edges).code
+      )
+      setCurrent((c) => ({ ...c, file, savedCanvas }))
+      refresh()
+    },
+    [current, canvas, bpm, refresh]
+  )
 
   useEffect(() => {
     const onKey = (e: KeyboardEvent): void => {
@@ -370,6 +416,10 @@ function App(): React.JSX.Element {
         save()
       }
       if ((e.ctrlKey || e.metaKey) && e.key === '.') stop()
+      if ((e.ctrlKey || e.metaKey) && !typing && e.key.toLowerCase() === 'b') {
+        e.preventDefault()
+        setSidebar((open) => !open)
+      }
     }
     window.addEventListener('keydown', onKey)
     return () => window.removeEventListener('keydown', onKey)
@@ -382,7 +432,19 @@ function App(): React.JSX.Element {
   const togglePanel = (): void => {
     window.dispatchEvent(new Event(TOGGLE_PANEL_EVENT))
   }
-  const menuHandlers = { new: newPatch, open: () => setTab('library'), save: () => save(), saveAs: () => save(true), showFolder: () => window.api.library.openFolder(), undo, redo, toggleCode, togglePanel }
+  const toggleSidebar = (): void => setSidebar((open) => !open)
+  const menuHandlers = {
+    new: newPatch,
+    open: () => setTab('library'),
+    save: () => save(),
+    saveAs: () => save(true),
+    showFolder: () => window.api.library.openFolder(),
+    undo,
+    redo,
+    toggleCode,
+    togglePanel,
+    toggleSidebar
+  }
   const menuRef = useRef(menuHandlers)
   useEffect(() => {
     menuRef.current = menuHandlers
@@ -447,31 +509,37 @@ function App(): React.JSX.Element {
         {evalError && <span className="eval-error">{evalError}</span>}
       </div>
       <div className="main">
-        <div className="sidebar">
-          <div className="tabs">
-            <button className={tab === 'samples' ? 'on' : ''} onClick={() => setTab('samples')}>
-              Samples
-            </button>
-            <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}>
-              Patches
-            </button>
+        {sidebar && (
+          <div className="sidebar">
+            <div className="tabs">
+              <button className={tab === 'samples' ? 'on' : ''} onClick={() => setTab('samples')}>
+                Samples
+              </button>
+              <button className={tab === 'library' ? 'on' : ''} onClick={() => setTab('library')}>
+                Patches
+              </button>
+            </div>
+            {tab === 'samples' ? (
+              <Samples loaded={loaded} onLoad={loadPack} onAudition={playSound} />
+            ) : (
+              <Library
+                patches={patches}
+                current={current.file}
+                onOpen={open}
+                onDelete={remove}
+                onImport={importPatches}
+              />
+            )}
           </div>
-          {tab === 'samples' ? (
-            <Samples
-              loaded={loaded}
-              onLoad={loadPack}
-              onAudition={playSound}
-            />
-          ) : (
-            <Library
-              patches={patches}
-              current={current.file}
-              onOpen={open}
-              onDelete={remove}
-              onImport={importPatches}
-            />
-          )}
-        </div>
+        )}
+        {/* Hide / show the sidebar for more canvas (also Ctrl+B, View menu). */}
+        <button
+          className="side-tab"
+          title={sidebar ? 'Hide sidebar (Ctrl+B)' : 'Show sidebar (Ctrl+B)'}
+          onClick={() => setSidebar((open) => !open)}
+        >
+          {sidebar ? '‹' : '›'}
+        </button>
         <ReactFlowProvider>
           <Canvas state={canvas} onChange={onCanvasChange} onSoundDropped={onSoundDropped} />
         </ReactFlowProvider>

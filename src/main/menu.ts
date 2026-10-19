@@ -11,7 +11,11 @@ export function installMenu(win: BrowserWindow, dev: boolean): void {
   const send = (command: MenuCommand) => (): void => {
     if (!win.isDestroyed()) win.webContents.send('menu:command', command)
   }
-  const item = (label: string, command: MenuCommand, accelerator?: string): MenuItemConstructorOptions => ({
+  const item = (
+    label: string,
+    command: MenuCommand,
+    accelerator?: string
+  ): MenuItemConstructorOptions => ({
     label,
     click: send(command),
     accelerator,
@@ -42,9 +46,12 @@ export function installMenu(win: BrowserWindow, dev: boolean): void {
       submenu: [
         item('Show Code', 'toggleCode'),
         item('Show Panel', 'togglePanel'),
+        item('Show Sidebar', 'toggleSidebar', 'CmdOrCtrl+B'),
         { type: 'separator' },
         { role: 'togglefullscreen' },
-        ...(dev ? ([{ role: 'reload' }, { role: 'toggleDevTools' }] as MenuItemConstructorOptions[]) : [])
+        ...(dev
+          ? ([{ role: 'reload' }, { role: 'toggleDevTools' }] as MenuItemConstructorOptions[])
+          : [])
       ]
     }
   ]
