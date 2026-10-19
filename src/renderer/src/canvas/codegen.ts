@@ -499,15 +499,16 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   // Length only sets durations, it never triggers.
   const STEPPING = new Set(['key', 'mode', 'octave', 'velocity'])
   for (const end of nodes) {
-    // Wired into anything (a sequencer's input too), it isn't an end: it sets that up.
-    if (
-      active.has(end.id) ||
-      edges.some((e) => e.source === end.id && e.sourceHandle === 'pattern')
-    )
-      continue
-    for (const chain of paramPaths(end.id, new Set()) ?? []) clocked(end, chain)
+    // Wired into anything but a Bus (a sequencer's input too), it isn't an end: it sets
+    // that up. Wired only into Buses, it plays through them.
+    const outs = edges.filter((e) => e.source === end.id && e.sourceHandle === 'pattern')
+    const buses = outs
+      .map((e) => byId.get(e.target))
+      .filter((n): n is CanvasNode => n?.type === 'mix')
+    if (active.has(end.id) || end.type === 'mix' || buses.length !== outs.length) continue
+    for (const chain of paramPaths(end.id, new Set()) ?? []) clocked(end, chain, buses)
   }
-  function clocked(end: CanvasNode, chain: CanvasNode[]): void {
+  function clocked(end: CanvasNode, chain: CanvasNode[], buses: CanvasNode[]): void {
     const si = chain.findIndex((n) => n.type === 'sample')
     if (si < 0) return
     const clock =
@@ -533,8 +534,12 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     // A held Length sets how long each hit sounds: a full step at that length.
     const held = clockLens ? { ...ctx, mods: '.clip(1)' + ctx.mods } : ctx
     const code = finish({ ...held, seq, seqLens: clockLens })
-    if (code) {
-      out.push({ code, layer: end.id, path: new Set(chain.map((n) => n.id)) })
+    if (!code) return
+    const path = new Set(chain.map((n) => n.id))
+    if (!buses.length) out.push({ code, layer: end.id, path })
+    for (const bus of buses) {
+      mixMembers.set(bus.id, [...(mixMembers.get(bus.id) ?? []), { code, path }])
+      active.add(bus.id)
     }
   }
 

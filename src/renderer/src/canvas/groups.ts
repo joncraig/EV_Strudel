@@ -101,8 +101,16 @@ export function fitGroups(state: CanvasState): CanvasState {
     const dx = minX - PAD
     const dy = minY - PAD - HEADER
     const width = Math.round(Math.max(...kids.map((n) => n.position.x + size(n).width)) - dx + PAD)
-    const height = Math.round(Math.max(...kids.map((n) => n.position.y + size(n).height)) - dy + PAD)
-    if (Math.abs(dx) < 0.5 && Math.abs(dy) < 0.5 && width === g.data.width && height === g.data.height) continue
+    const height = Math.round(
+      Math.max(...kids.map((n) => n.position.y + size(n).height)) - dy + PAD
+    )
+    if (
+      Math.abs(dx) < 0.5 &&
+      Math.abs(dy) < 0.5 &&
+      width === g.data.width &&
+      height === g.data.height
+    )
+      continue
     nodes = nodes.map((n) => {
       if (n.id === g.id)
         return {
@@ -111,11 +119,62 @@ export function fitGroups(state: CanvasState): CanvasState {
           style: { ...n.style, width, height },
           data: { ...n.data, width, height }
         } as CanvasNode
-      if (n.parentId === g.id) return { ...n, position: { x: n.position.x - dx, y: n.position.y - dy } } as CanvasNode
+      if (n.parentId === g.id)
+        return { ...n, position: { x: n.position.x - dx, y: n.position.y - dy } } as CanvasNode
       return n
     })
   }
   return nodes === state.nodes ? state : { nodes, edges: state.edges }
+}
+
+// Open group frames as they were when a drag started (canvas coordinates).
+export type GroupRect = { id: string; x: number; y: number; width: number; height: number }
+export const groupRects = (state: CanvasState): GroupRect[] =>
+  state.nodes
+    .filter((n): n is GroupNode => n.type === 'group' && !n.data.collapsed)
+    .map((n) => ({
+      id: n.id,
+      x: n.position.x,
+      y: n.position.y,
+      width: n.data.width,
+      height: n.data.height
+    }))
+
+// Dropping nodes: over a group's frame they join it, outside their own group they
+// leave it (keeping where they are on screen). `at` is the drop point on the canvas.
+export function dropIntoGroups(
+  state: CanvasState,
+  ids: string[],
+  at: { x: number; y: number },
+  rects: GroupRect[]
+): CanvasState {
+  const hit = rects.find(
+    (r) => at.x >= r.x && at.x <= r.x + r.width && at.y >= r.y && at.y <= r.y + r.height
+  )
+  const byId = new Map(state.nodes.map((n) => [n.id, n]))
+  let changed = false
+  const nodes = state.nodes.map((n) => {
+    if (!ids.includes(n.id) || n.type === 'group' || (n.parentId ?? null) === (hit?.id ?? null))
+      return n
+    const parent = n.parentId ? byId.get(n.parentId) : undefined
+    const abs = {
+      x: n.position.x + (parent?.position.x ?? 0),
+      y: n.position.y + (parent?.position.y ?? 0)
+    }
+    const into = hit ? byId.get(hit.id) : undefined
+    changed = true
+    return {
+      ...n,
+      parentId: into?.id,
+      position: { x: abs.x - (into?.position.x ?? 0), y: abs.y - (into?.position.y ?? 0) }
+    } as CanvasNode
+  })
+  if (!changed) return state
+  // React Flow needs parents before their children.
+  return {
+    nodes: [...nodes.filter((n) => n.type === 'group'), ...nodes.filter((n) => n.type !== 'group')],
+    edges: state.edges
+  }
 }
 
 // Fired by a group's collapse arrow; the canvas owns the state and handles it.
@@ -139,7 +198,12 @@ export function duplicateNodes(state: CanvasState, ids: string[]): CanvasState {
   )
   const wires = state.edges
     .filter((e) => map.has(e.source) && map.has(e.target))
-    .map((e) => ({ ...e, id: `${e.id}-copy-${map.get(e.source)}`, source: map.get(e.source)!, target: map.get(e.target)! }))
+    .map((e) => ({
+      ...e,
+      id: `${e.id}-copy-${map.get(e.source)}`,
+      source: map.get(e.source)!,
+      target: map.get(e.target)!
+    }))
   return {
     nodes: [...state.nodes.map((n) => (n.selected ? { ...n, selected: false } : n)), ...copies],
     edges: [...state.edges, ...wires]

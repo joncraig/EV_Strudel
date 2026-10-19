@@ -35,7 +35,10 @@ import {
   dissolveNode,
   duplicateNodes,
   GROUP_TOGGLE_EVENT,
+  dropIntoGroups,
   fitGroups,
+  groupRects,
+  type GroupRect,
   groupNodes,
   setCollapsed,
   ungroup
@@ -654,7 +657,29 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     }
   }
 
-  const onNodeDragStop = (_e: MouseEvent | TouchEvent, node: CanvasNode): void => {
+  // Group frames at drag start: auto-fit can grow a frame mid-drop, so the drop is
+  // judged against the frames as they were.
+  const dragGroupsRef = useRef<GroupRect[]>([])
+  const onNodeDragStart = (): void => {
+    dragGroupsRef.current = groupRects(stateRef.current)
+  }
+
+  const onNodeDragStop = (
+    e: MouseEvent | TouchEvent,
+    node: CanvasNode,
+    dragged: CanvasNode[]
+  ): void => {
+    // Dropped over a group: it joins; dragged out of its group: it leaves.
+    const p = 'changedTouches' in e ? e.changedTouches[0] : e
+    const ids = (dragged?.length ? dragged : [node]).map((n) => n.id)
+    const regrouped = dropIntoGroups(
+      stateRef.current,
+      ids,
+      screenToFlowPosition({ x: p.clientX, y: p.clientY }),
+      dragGroupsRef.current
+    )
+    if (regrouped !== stateRef.current) commit(fitGroups(regrouped))
+
     const target = insertRef.current
     clearInsert()
     if (!target) return
@@ -750,6 +775,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
             onEdgesChange={onEdgesChange}
             onConnect={onConnect}
             onNodeDrag={onNodeDrag}
+            onNodeDragStart={onNodeDragStart}
             onNodeDragStop={onNodeDragStop}
             onConnectStart={onConnectStart}
             onConnectEnd={onConnectEnd}
