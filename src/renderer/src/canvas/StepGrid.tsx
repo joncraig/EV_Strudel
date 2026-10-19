@@ -1,6 +1,7 @@
 import { useEffect, useRef } from 'react'
 import type { Step } from './model'
 import { subscribeStep } from './playhead'
+import { useNudge } from '../nudge'
 
 interface Props {
   steps: Step[]
@@ -28,6 +29,22 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
   useEffect(() => {
     stepsRef.current = steps
   }, [steps])
+
+  // Up/Down arrows move the last painted step a row up or down the grid (Shift: 10).
+  const lastRef = useRef<number | null>(null)
+  const touch = useNudge((n) => {
+    const i = lastRef.current
+    const cur = stepsRef.current
+    if (i === null || i >= cur.length || cur[i] === null) return
+    const r = rows.indexOf(cur[i] as number)
+    if (r < 0) return
+    const v = rows[Math.min(rows.length - 1, Math.max(0, r - n))]
+    if (v === cur[i]) return
+    const copy = [...cur]
+    copy[i] = v
+    stepsRef.current = copy
+    onChange(copy)
+  })
 
   // The playhead is one bar moved over the playing column by direct style updates,
   // so the grid itself never re-renders while playing (re-rendering every cell each
@@ -74,6 +91,8 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
     e.stopPropagation()
     const erase = !bars && !noRests && stepsRef.current[start.i] === start.v
     const { pointerId } = e
+    touch()
+    lastRef.current = start.i
 
     const apply = ({ i, v }: { i: number; v: number }): void => {
       const cur = stepsRef.current
@@ -89,7 +108,10 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
     const move = (ev: PointerEvent): void => {
       if (ev.pointerId !== pointerId) return
       const hit = cellAt(ev.clientX, ev.clientY)
-      if (hit) apply(hit)
+      if (hit) {
+        lastRef.current = hit.i
+        apply(hit)
+      }
     }
     const up = (ev: PointerEvent): void => {
       if (ev.pointerId !== pointerId) return
