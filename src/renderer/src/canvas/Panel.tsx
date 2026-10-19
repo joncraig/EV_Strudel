@@ -23,7 +23,8 @@ import {
 
 const KIND: Record<SequencerKind, string> = {
   degree: 'Notes sequencer',
-  slice: 'Slices sequencer'
+  slice: 'Slices sequencer',
+  chord: 'Chords'
 }
 
 function Stepper({

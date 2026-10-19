@@ -101,6 +101,10 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
       rows = keep.map(([v]) => v)
       labels = keep.map(([, l]) => l)
     }
+  } else if (node.data.kind === 'chord') {
+    // Chord roots (the chords themselves are named on the node).
+    rows = [7, 6, 5, 4, 3, 2, 1]
+    labels = rows.map((d) => ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII'][d - 1])
   } else if (node.data.kind === 'degree') {
     // Named from the first key and mode set in the wired sequencers (C Ionian if none).
     const tonic = TONICS[key?.steps.find((v) => v !== null) ?? 0]

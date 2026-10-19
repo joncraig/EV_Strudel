@@ -7,6 +7,7 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
+import { chordTones, voice } from './chords'
 import {
   DEFAULT_OCTAVE,
   EFFECTS,
@@ -159,6 +160,71 @@ function transposePattern(
 // Notes code has a placeholder where the scale goes: Key and Mode are chain nodes,
 // so the scale is only known once the chain has been followed (see compile).
 const SCALE = '__SCALE__'
+// Chords code has a placeholder for its notes, filled in once Key/Mode/Octave are known.
+const CHORDS = '__CHORDS__'
+
+// What Key, Mode and Octave are in effect at each 1/16 (they loop at their own lengths).
+function harmonyAt(
+  key: Stepped<KeyData> | null,
+  mode: Stepped<ModeData> | null,
+  octave: Stepped<OctaveData> | null,
+  fallbackOctave: number
+): { length: number; at: (i: number) => { tonic: number; modeId: string; octave: number } } {
+  const keys = key?.data.steps.length ? perSixteenth(heldValues(key.data.steps, 0), key.lens) : [0]
+  const modes = mode?.data.steps.length
+    ? perSixteenth(heldValues(mode.data.steps, 0), mode.lens)
+    : [0]
+  const octs = octave?.data.steps.length
+    ? perSixteenth(heldValues(octave.data.steps, 0), octave.lens).map((o) => fallbackOctave + o)
+    : [fallbackOctave]
+  const lcm = (a: number, b: number): number => (a * b) / gcd(a, b)
+  return {
+    length: Math.min(MAX_HARMONY_STEPS, lcm(lcm(keys.length, modes.length), octs.length)),
+    at: (i) => ({
+      tonic: keys[i % keys.length],
+      modeId: MODES[modes[i % modes.length]]?.id ?? 'major',
+      octave: octs[i % octs.length]
+    })
+  }
+}
+
+// A Chords sequencer as MIDI notes: each step's chord is worked out with the Key, Mode
+// and Octave heard when it starts, so the loop runs until the steps and the harmony
+// line up again. "[[50,53,57]@16 ~@16 ...]/bars".
+function chordPattern(
+  seq: SequencerData,
+  lens: Lens,
+  key: Stepped<KeyData> | null,
+  mode: Stepped<ModeData> | null,
+  octave: Stepped<OctaveData> | null
+): string {
+  const n = lens?.length ? loopSteps(seq.steps.length, lens.length) : seq.steps.length
+  const weights = Array.from({ length: n }, (_, i) => lensAt(lens, i))
+  const loop = weights.reduce((a, b) => a + b, 0)
+  const h = harmonyAt(key, mode, octave, DEFAULT_OCTAVE)
+  const total = Math.min(MAX_HARMONY_STEPS, (loop * h.length) / gcd(loop, h.length))
+  const tokens: string[] = []
+  for (let t = 0, i = 0; t < total; t += weights[i % n], i++) {
+    const s = i % seq.steps.length
+    const degree = cellNotes(seq.steps[s])[0]
+    const w = weights[i % n]
+    if (degree === undefined) {
+      tokens.push(w === 1 ? '~' : `~@${w}`)
+      continue
+    }
+    const at = h.at(t)
+    const tones = voice(
+      chordTones(degree, at.modeId, seq.quality?.[s] ?? null, seq.ext?.[s] ?? null),
+      seq
+    )
+    const base = 12 * (at.octave + 1) + at.tonic
+    const chord = `[${tones.map((x) => base + x).join(',')}]`
+    tokens.push(w === 1 ? chord : `${chord}@${w}`)
+  }
+  const bars = +(total / STEP_RESOLUTION).toFixed(6)
+  const body = tokens.join(' ')
+  return bars === 1 ? body : `[${body}]/${bars}`
+}
 
 // Built-in oscillators (no sample files): they take a note, not a slice or speed.
 const isOscillator = (sample: SampleData): boolean =>
@@ -185,6 +251,11 @@ export function sequencerCode(
       )
       code = `n("${degrees}")${SCALE}.s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
+      if (sample.n) code += `.n(${sample.n})`
+      break
+    }
+    case 'chord': {
+      code = `note("${CHORDS}").s(${sound})`
       if (sample.n) code += `.n(${sample.n})`
       break
     }
@@ -251,7 +322,7 @@ export interface Compiled {
   busOrbits: Map<string, number>
 }
 
-// Without a Sample in the chain, Notes play this synth; other sequencers stay silent.
+// Without a Sample in the chain, Notes and Chords play this synth; other sequencers stay silent.
 const DEFAULT_NOTE_SOUND: SampleData = { s: 'triangle', n: 0, slices: 8 }
 
 // Parameter chains (no sequencer) wired into a sequencer or any node of a playing
@@ -322,7 +393,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const finish = (ctx: Ctx): string | null => {
     if (ctx.base) return ctx.base + ctx.mods
     if (!ctx.seq) return null
-    const sample = ctx.sample ?? (ctx.seq.kind === 'degree' ? DEFAULT_NOTE_SOUND : null)
+    const sample = ctx.sample ?? (ctx.seq.kind !== 'slice' ? DEFAULT_NOTE_SOUND : null)
     if (!sample) return null
     const code = sequencerCode(ctx.seq, sample, ctx.seqLens)
     if (!code) return null
@@ -343,7 +414,11 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
             ctx.picks.lens
           )}")`
         : ''
-    return code.replace(SCALE, scale) + picks + cut + pitch + ctx.mods
+    const chords =
+      ctx.seq.kind === 'chord'
+        ? chordPattern(ctx.seq, ctx.seqLens, ctx.key, ctx.mode, ctx.octave)
+        : ''
+    return code.replace(SCALE, scale).replace(CHORDS, chords) + picks + cut + pitch + ctx.mods
   }
 
   // Parameter nodes set values that hold until something later overrides them.

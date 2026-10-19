@@ -22,6 +22,8 @@ interface Props {
   roll?: boolean
   // Chords: each cell toggles on its own, so a step can hold several rows (Notes).
   poly?: boolean
+  // Told which step was pressed (Chords: the quality buttons act on it).
+  onPress?: (i: number) => void
 }
 
 // Press a cell and slide across others to paint. The first cell decides the stroke:
@@ -37,7 +39,8 @@ function StepGrid({
   bars = false,
   roll = false,
   noRests = false,
-  poly = false
+  poly = false,
+  onPress
 }: Props): React.JSX.Element {
   // Latest steps for the stroke handlers, which outlive a render.
   const stepsRef = useRef(steps)
@@ -121,6 +124,7 @@ function StepGrid({
     const { pointerId } = e
     touch()
     lastRef.current = start.i
+    onPress?.(start.i)
 
     const apply = ({ i, v }: { i: number; v: number }): void => {
       const cur = stepsRef.current

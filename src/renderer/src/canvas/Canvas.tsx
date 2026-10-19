@@ -96,7 +96,7 @@ const NODE_COLORS = {
 function kindColor(kind: string): string {
   if (kind.startsWith('fx:')) return NODE_COLORS.effect
   if (kind.startsWith('synth:')) return NODE_COLORS.sample
-  if (kind === 'degree' || kind === 'slice') return NODE_COLORS.sequencer
+  if (kind === 'degree' || kind === 'slice' || kind === 'chord') return NODE_COLORS.sequencer
   return NODE_COLORS[kind as keyof typeof NODE_COLORS] ?? '#555'
 }
 
@@ -278,7 +278,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const addSections = (m: Extract<Menu, { type: 'add' }>): MenuSection[] => {
     const sequencers: [NewKind, string][] = [
       ['degree', 'Notes sequencer'],
-      ['slice', 'Slices sequencer']
+      ['slice', 'Slices sequencer'],
+      ['chord', 'Chords sequencer']
     ]
     const mix: [NewKind, string] = ['mix', 'Bus']
     const lfo: [NewKind, string] = ['lfo', 'LFO']

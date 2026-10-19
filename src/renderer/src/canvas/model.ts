@@ -3,6 +3,8 @@
 
 import type { Edge, Node } from '@xyflow/react'
 
+import type { ChordSettings } from './chords'
+
 export const TONICS = ['C', 'C#', 'D', 'Eb', 'E', 'F', 'F#', 'G', 'Ab', 'A', 'Bb', 'B'] as const
 
 // Strudel scale names; ':' separates words in mini-notation ("C:harmonic:minor").
@@ -27,7 +29,8 @@ export interface ModeStep {
   mode: string
 }
 
-export type SequencerKind = 'degree' | 'slice'
+// Notes play scale degrees, Slices pick pieces, Chords play a chord per step.
+export type SequencerKind = 'degree' | 'slice' | 'chord'
 
 // A step is a degree (1-based), a piece index (0-based), or null for a rest.
 export type Step = number | null
@@ -63,7 +66,8 @@ export const isBank = (s: SampleData): boolean => (s.files ?? 0) > 1
 // sound) until a Slice node cuts it.
 export const pieceCount = (s: SampleData): number => (isBank(s) ? (s.files as number) : 1)
 
-export interface SequencerData extends Record<string, unknown> {
+// Chords keep a quality and extension per step, and voicing (see chords.ts).
+export interface SequencerData extends Record<string, unknown>, ChordSettings {
   kind: SequencerKind
   // Length is steps.length; each step lasts 1/resolution of a bar (one Strudel cycle).
   steps: Cell[]
@@ -498,7 +502,7 @@ export function migrateCanvas(state: CanvasState): CanvasState {
 
 // ---- Pitch names for scale degrees (for labelling the piano roll) ----
 
-const MODE_STEPS: Record<string, number[]> = {
+export const MODE_STEPS: Record<string, number[]> = {
   major: [0, 2, 4, 5, 7, 9, 11],
   dorian: [0, 2, 3, 5, 7, 9, 10],
   phrygian: [0, 1, 3, 5, 7, 8, 10],
