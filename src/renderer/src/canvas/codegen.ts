@@ -198,6 +198,8 @@ function transposePattern(
 const SCALE = '__SCALE__'
 // Chords code has a placeholder for its notes, filled in once Key/Mode/Octave are known.
 const CHORDS = '__CHORDS__'
+// ... and one for the rhythm it plays on when another sequencer feeds it.
+const RHYTHM = '__RHYTHM__'
 
 // What Key, Mode and Octave are in effect at each 1/16 (they loop at their own lengths).
 function harmonyAt(
@@ -297,7 +299,7 @@ export function sequencerCode(
       break
     }
     case 'chord': {
-      code = `note("${CHORDS}").s(${sound})`
+      code = `note("${CHORDS}")${RHYTHM}.s(${sound})`
       if (sample.n) code += `.n(${sample.n})`
       break
     }
@@ -427,6 +429,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     picks: { steps: Step[]; lens: Lens } | null
     // A Strum / Arp node in the chain (held like any setting).
     perform: PerformData | null
+    // When a Chords sequencer follows another sequencer, that one's rhythm says when
+    // chords play (Chords then only says which chord).
+    rhythm: { steps: Cell[]; lens: Lens } | null
     mods: string // appended controls: .velocity() .clip() .delay() ...
   }
 
@@ -459,6 +464,13 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
             ctx.picks.lens
           )}")`
         : ''
+    const rhythm = ctx.rhythm
+      ? `.struct("${stepped(
+          ctx.rhythm.steps.map((c) => (cellNotes(c).length ? 't' : '~')),
+          ctx.rhythm.lens,
+          false
+        )}")`
+      : ''
     const chords =
       ctx.seq.kind === 'chord'
         ? chordPattern(ctx.seq, ctx.seqLens, ctx.key, ctx.mode, ctx.octave, ctx.perform)
@@ -471,7 +483,12 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         ? '.clip(1).release(0.5)'
         : ''
     return (
-      code.replace(SCALE, scale).replace(CHORDS, chords) + picks + cut + pitch + held + ctx.mods
+      code.replace(SCALE, scale).replace(CHORDS, chords).replace(RHYTHM, rhythm) +
+      picks +
+      cut +
+      pitch +
+      held +
+      ctx.mods
     )
   }
 
@@ -599,7 +616,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     for (const next of outs) {
       if (next.type === 'sequencer') {
         // A later sequencer takes over when and what plays; an earlier Slices'
-        // file choice holds. The Length in effect sets its step length.
+        // file choice holds. The Length in effect sets its step length. A Chords
+        // sequencer only takes over what plays: the incoming notes still say when.
         if (next.data.muted) continue
         stepLens.set(next.id, ctx.length)
         const picks =
@@ -608,7 +626,16 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
             : ctx.picks
         follow(
           next,
-          { ...ctx, seq: next.data, seqLens: ctx.length, picks },
+          {
+            ...ctx,
+            seq: next.data,
+            seqLens: ctx.length,
+            picks,
+            rhythm:
+              next.data.kind === 'chord' && ctx.seq
+                ? { steps: ctx.seq.steps, lens: ctx.seqLens }
+                : null
+          },
           new Set(seen).add(next.id)
         )
         continue
@@ -643,6 +670,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     seqLens: null,
     picks: null,
     perform: null,
+    rhythm: null,
     mods: ''
   }
   // Whether a sequencer is fed by another sequencer's chain (then that chain carries
