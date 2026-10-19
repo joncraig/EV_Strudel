@@ -192,10 +192,10 @@ export function MixNode({ data }: NodeProps<MixNodeT>): React.JSX.Element {
       <Ports />
       <ModInput param="volume" left={0.3} />
       <ModInput param="pan" left={0.7} />
-      {/* Duck nodes wire in here: their notes dip this Bus. */}
+      {/* Duck nodes wire in here, on top: their notes dip this Bus. */}
       <Handle
         type="target"
-        position={Position.Bottom}
+        position={Position.Top}
         id="duck"
         className="duck-handle"
         style={{ left: '50%' }}
