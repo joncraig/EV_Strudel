@@ -558,3 +558,6 @@ body.dragging-copy, body.dragging-copy * { cursor: copy !important; }
 .clip-shape i.off { opacity: 0.25; }
 /* The picked node tile (Delete / Ctrl+D act on it). */
 .clip-node.picked { box-shadow: 0 0 0 2px #fff, 0 0 14px 2px #8ab4f888; }
+/* No text selection while tapping and dragging around the session (fields still work). */
+.session, .session * { -webkit-user-select: none; user-select: none; }
+.session input, .session textarea, .session .code-view { -webkit-user-select: text; user-select: text; }
