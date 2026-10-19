@@ -311,6 +311,70 @@ function Session({
     onChange(withClip(song, sel.channel, to, cloneClip(c)))
     setSelected({ channel: sel.channel, scene: to })
   }
+  // ---- Drag a clip to another slot to move it; hold Ctrl when dropping to copy it.
+  // Pointer events, so it works with touch too. ----
+  const dragged = useRef(false) // a drag just ended: the click that follows isn't a tap
+  const dragClip = (e: React.PointerEvent, from: Selected): void => {
+    if ((e.target as HTMLElement).closest('.clip-launch') || e.button !== 0) return
+    const { pointerId, clientX: x0, clientY: y0 } = e
+    let active = false
+    let over: HTMLElement | null = null
+    const slotAt = (x: number, y: number): HTMLElement | null =>
+      document.elementFromPoint(x, y)?.closest<HTMLElement>('.clip-slot[data-scene]') ?? null
+    const mark = (el: HTMLElement | null): void => {
+      over?.classList.remove('drop-target')
+      over = el
+      over?.classList.add('drop-target')
+    }
+    const move = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId) return
+      if (!active && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 8) return
+      active = true
+      document.body.classList.add(ev.ctrlKey ? 'dragging-copy' : 'dragging-clip')
+      document.body.classList.toggle('dragging-copy', ev.ctrlKey)
+      const el = slotAt(ev.clientX, ev.clientY)
+      const target =
+        el && el.dataset.channel !== undefined && !el.classList.contains('bus-slot') ? el : null
+      mark(target)
+    }
+    const up = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId) return
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      document.body.classList.remove('dragging-clip', 'dragging-copy')
+      const target = over
+      mark(null)
+      if (!active) return
+      dragged.current = true
+      setTimeout(() => (dragged.current = false), 0)
+      if (!target || ev.type === 'pointercancel') return
+      const to: Selected = { channel: target.dataset.channel!, scene: Number(target.dataset.scene) }
+      if (to.channel === from.channel && to.scene === from.scene) return
+      const clip = clipAt(from)
+      if (!clip) return
+      // Ctrl at the drop copies; otherwise the clip moves (a playing clip keeps playing
+      // when it moves within its channel).
+      let next = withClip(song, to.channel, to.scene, ev.ctrlKey ? cloneClip(clip) : clip)
+      if (!ev.ctrlKey) {
+        const wasPlaying = channel(from.channel)?.playing === from.scene
+        next = withClip(next, from.channel, from.scene, null)
+        if (wasPlaying && to.channel === from.channel)
+          next = {
+            ...next,
+            channels: next.channels.map((c) =>
+              c.id === from.channel ? { ...c, playing: to.scene } : c
+            )
+          }
+      }
+      onChange(next)
+      setSelected(to)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+
   const slotMenu = (sel: Selected, x: number, y: number): void => {
     const has = !!clipAt(sel)
     setSelected(sel)
@@ -478,6 +542,8 @@ function Session({
                         <button
                           key={ch.id}
                           className={`clip-slot empty ${isSel ? 'selected' : ''}`}
+                          data-channel={ch.id}
+                          data-scene={s}
                           // First tap selects the slot (to paste into); a second makes a clip.
                           onClick={() =>
                             isSel ? newClip(ch.id, s) : setSelected({ channel: ch.id, scene: s })
@@ -505,8 +571,13 @@ function Session({
                       <div
                         key={ch.id}
                         className={`clip-slot ${isSel ? 'selected' : ''} ${playingHere ? 'playing' : ''} ${waiting ? 'queued' : ''}`}
+                        data-channel={ch.id}
+                        data-scene={s}
+                        onPointerDown={(e) => dragClip(e, { channel: ch.id, scene: s })}
                         style={{ background: channelColor(i) }}
-                        onClick={() => setSelected({ channel: ch.id, scene: s })}
+                        onClick={() =>
+                          !dragged.current && setSelected({ channel: ch.id, scene: s })
+                        }
                         onContextMenu={(e) => {
                           e.preventDefault()
                           slotMenu({ channel: ch.id, scene: s }, e.clientX, e.clientY)

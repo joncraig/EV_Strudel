@@ -548,3 +548,8 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
    height to the grid. */
 .clip-node:has(.piano-roll) .pbody,
 .clip-node:has(.piano-roll) .pbody:has(.ptoggle) { display: flex; flex-direction: row; flex-wrap: wrap; grid-template-rows: none; }
+/* Dragging a clip: the slot under the pointer lights up; Ctrl shows it'll copy. */
+.clip-slot.drop-target { outline: 2px dashed #fff; outline-offset: -2px; }
+body.dragging-clip, body.dragging-clip * { cursor: grabbing !important; }
+body.dragging-copy, body.dragging-copy * { cursor: copy !important; }
+.clip-slot:not(.empty) { touch-action: none; }
