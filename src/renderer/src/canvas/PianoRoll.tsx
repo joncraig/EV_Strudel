@@ -48,6 +48,8 @@ interface Props {
   onSteps: (steps: Cell[]) => void
 }
 
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
+
 function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   const sample = node.type === 'sequencer' ? sequencerSample(nodes, edges, node.id) : undefined
   const key =
@@ -117,7 +119,8 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
       ((downstream(nodes, edges, node.id, 'octave')?.data as OctaveData | undefined)?.steps.find(
         (v) => v !== null
       ) ?? 0) + (node.data.octave ?? DEFAULT_OCTAVE)
-    labels = rows.map((d) => degreeName(d, tonic, modeId, octave))
+    // Roman numeral, then the note it is in this key and mode.
+    labels = rows.map((d) => `${ROMAN[d - 1] ?? d} · ${degreeName(d, tonic, modeId, octave)}`)
   } else {
     const count = sample ? pieceCount(sample) : 8
     const all = Array.from({ length: count }, (_, i) => count - 1 - i)

@@ -1,3 +1,6 @@
+import { useEffect, useState } from 'react'
+import { useStepLens } from './stepLens'
+import { subscribeStep } from './playhead'
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import { CHORD_TYPES } from './chords'
 import { GROUP_TOGGLE_EVENT } from './groups'
@@ -29,6 +32,8 @@ import {
   isBank,
   pieceCount,
   TONICS,
+  heldValues,
+  STEP_RESOLUTION,
   velocityDb,
   VelocityNode as VelocityNodeT
 } from './model'
@@ -258,23 +263,41 @@ const KIND_LABEL: Record<SequencerKind, string> = {
 }
 const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
 
-export function SequencerNode({ data }: NodeProps<SequencerNodeT>): React.JSX.Element {
+// The step playing now (-1 when stopped), at the step lengths this node plays at.
+// Re-renders only when the step changes.
+function usePlayingStep(id: string, length: number, resolution: number): number {
+  const lens = useStepLens(id)
+  const lensKey = lens?.join(',') ?? ''
+  const [step, setStep] = useState(-1)
+  useEffect(
+    () => subscribeStep(length, resolution, setStep, lens),
+    // lensKey stands in for lens (a new array each render).
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [length, resolution, lensKey]
+  )
+  return step
+}
+
+// While playing, a card shows the step playing now; stopped, what it steps through.
+function live(step: number, now: string, all: string[], max = 4): string {
+  return step >= 0 ? now : few(runs(all), max)
+}
+
+export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JSX.Element {
+  const word = (c: (typeof data.steps)[number]): string => {
+    const notes = cellNotes(c)
+    if (!notes.length) return '·'
+    if (data.kind === 'chord') return CHORD_TYPES[notes[0]]?.label ?? '?'
+    if (data.kind === 'degree') return notes.map((d) => ROMAN[d - 1] ?? d).join('+')
+    return String(notes[0] + 1)
+  }
+  const step = usePlayingStep(id, data.steps.length, data.resolution)
   const set = data.steps.filter((c) => cellNotes(c).length)
-  const words =
-    data.kind === 'chord'
-      ? set.map((c) => CHORD_TYPES[cellNotes(c)[0]]?.label ?? '?')
-      : data.kind === 'degree'
-        ? set.map((c) =>
-            cellNotes(c)
-              .map((d) => ROMAN[d - 1] ?? d)
-              .join('+')
-          )
-        : set.map((c) => String((cellNotes(c)[0] ?? 0) + 1))
   return (
     <Card
       className={`sequencer-node ${data.kind}-seq ${data.muted ? 'muted' : ''}`}
       kind={KIND_LABEL[data.kind]}
-      big={few(runs(words))}
+      big={live(data.muted ? -1 : step, word(data.steps[step] ?? null), set.map(word))}
     >
       <Ports />
     </Card>
@@ -282,12 +305,14 @@ export function SequencerNode({ data }: NodeProps<SequencerNodeT>): React.JSX.El
 }
 
 // Per-step loudness (Strudel velocity).
-export function VelocityNode({ data }: NodeProps<VelocityNodeT>): React.JSX.Element {
+export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.Element {
+  const db = (v: number): string => String(velocityDb(v))
+  const step = usePlayingStep(id, data.steps.length, STEP_RESOLUTION)
   return (
     <Card
       className="velocity-node"
       kind="Velocity"
-      big={few(runs(data.steps.map((v) => String(velocityDb(v)))))}
+      big={live(step, db(data.steps[step] ?? 0), data.steps.map(db))}
       small="dB"
     >
       <Ports />
@@ -296,9 +321,14 @@ export function VelocityNode({ data }: NodeProps<VelocityNodeT>): React.JSX.Elem
 }
 
 // Per-step note length (Strudel clip).
-export function LengthNode({ data }: NodeProps<LengthNodeT>): React.JSX.Element {
+export function LengthNode({ id, data }: NodeProps<LengthNodeT>): React.JSX.Element {
+  const step = usePlayingStep(id, data.steps.length, STEP_RESOLUTION)
   return (
-    <Card className="length-node" kind="Length" big={few(runs(data.steps.map(lengthLabel)))}>
+    <Card
+      className="length-node"
+      kind="Length"
+      big={live(step, lengthLabel(data.steps[step] ?? 1), data.steps.map(lengthLabel))}
+    >
       <Ports />
     </Card>
   )
@@ -323,9 +353,11 @@ export function EffectNode({ data }: NodeProps<EffectNodeT>): React.JSX.Element 
 }
 
 function HarmonyNode({
+  id,
   data,
   kind
 }: {
+  id: string
   data: KeyNodeT['data'] | ModeNodeT['data'] | OctaveNodeT['data']
   kind: 'key' | 'mode' | 'octave'
 }): React.JSX.Element {
@@ -335,28 +367,31 @@ function HarmonyNode({
       : kind === 'mode'
         ? MODES[v].label.replace(/ (.*)/, '')
         : octaveLabel(v)
-  const values = runs(data.steps.filter((v): v is number => v !== null).map(name))
+  const step = usePlayingStep(id, data.steps.length, data.resolution)
+  // Empty steps hold the value before them (wrapping round).
+  const held = heldValues(data.steps, 0)
+  const values = data.steps.filter((v): v is number => v !== null).map(name)
   return (
     <Card
       className={`harmony-node ${kind}-node`}
       kind={kind === 'key' ? 'Key' : kind === 'mode' ? 'Mode' : 'Octave'}
-      big={few(values, kind === 'mode' ? 2 : 4)}
+      big={live(step, name(held[step] ?? 0), values, kind === 'mode' ? 2 : 4)}
     >
       <Ports />
     </Card>
   )
 }
 
-export function KeyNode({ data }: NodeProps<KeyNodeT>): React.JSX.Element {
-  return <HarmonyNode data={data} kind="key" />
+export function KeyNode({ id, data }: NodeProps<KeyNodeT>): React.JSX.Element {
+  return <HarmonyNode id={id} data={data} kind="key" />
 }
 
-export function OctaveNode({ data }: NodeProps<OctaveNodeT>): React.JSX.Element {
-  return <HarmonyNode data={data} kind="octave" />
+export function OctaveNode({ id, data }: NodeProps<OctaveNodeT>): React.JSX.Element {
+  return <HarmonyNode id={id} data={data} kind="octave" />
 }
 
-export function ModeNode({ data }: NodeProps<ModeNodeT>): React.JSX.Element {
-  return <HarmonyNode data={data} kind="mode" />
+export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element {
+  return <HarmonyNode id={id} data={data} kind="mode" />
 }
 
 // ---- Group ----
