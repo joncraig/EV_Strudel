@@ -161,7 +161,15 @@ interface Pending {
 }
 
 type Menu =
-  | { type: 'add'; x: number; y: number; flow: { x: number; y: number }; pending?: Pending }
+  | {
+      type: 'add'
+      x: number
+      y: number
+      flow: { x: number; y: number }
+      pending?: Pending
+      // Long-press / right-click on a pattern wire: the new node is spliced into it.
+      wire?: string
+    }
   | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React.JSX.Element {
@@ -342,7 +350,17 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
     const { pending } = m
 
     let groups: { title: string; kinds: [NewKind, string][] }[] | undefined
-    if (!pending)
+    if (m.wire)
+      groups = [
+        { title: 'Shape', kinds: [velocity, length, perform] },
+        { title: 'Harmony', kinds: [key, mode, octave] },
+        { title: 'Voicing', kinds: voicings },
+        { title: 'Effects', kinds: effects },
+        { title: 'Sequencers', kinds: sequencers },
+        { title: 'Sound', kinds: synths },
+        { title: 'Route', kinds: [mix, duck] }
+      ]
+    else if (!pending)
       groups = [
         { title: 'Sequencers', kinds: sequencers },
         { title: 'Shape', kinds: [velocity, length, perform] },
@@ -407,6 +425,25 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
         color: kindColor(kind),
         onSelect: () => {
           const node = makeNode(kind, m.flow)
+          const wire = m.wire ? edges.find((x) => x.id === m.wire) : undefined
+          if (wire) {
+            // Splice into the wire: source -> new node -> target.
+            const link = (source: string, target: string): Edge => ({
+              id: `e-${source}-${target}-pattern`,
+              source,
+              target,
+              sourceHandle: 'pattern',
+              targetHandle: 'pattern'
+            })
+            return onChange({
+              nodes: [...nodes, node],
+              edges: [
+                ...edges.filter((x) => x !== wire),
+                link(wire.source, node.id),
+                link(node.id, wire.target)
+              ]
+            })
+          }
           if (!pending) return add(node)
           const [source, target] =
             pending.handleType === 'source' ? [pending.nodeId, node.id] : [node.id, pending.nodeId]
@@ -536,9 +573,23 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
   // Tap a node to select it; long-press (or right-click) opens its menu.
   // Long-press works on the node's own surface (title bar, chip), not on controls
   // like the grid or faders, which use the press themselves.
+  // A pattern wire under a press, by its id (React Flow tags edges "rf__edge-<id>").
+  const wireAt = (el: HTMLElement): string | null => {
+    const id = el
+      .closest<HTMLElement>('.react-flow__edge')
+      ?.dataset.testid?.replace(/^rf__edge-/, '')
+    const wire = id ? stateRef.current.edges.find((x) => x.id === id) : undefined
+    return wire?.sourceHandle === 'pattern' ? wire.id : null
+  }
+  const openInsert = (x: number, y: number, wire: string): void =>
+    setMenu({ type: 'add', x, y, flow: screenToFlowPosition({ x, y }), wire })
+
   const onPointerDownCapture = (e: React.PointerEvent): void => {
     const target = e.target as HTMLElement
     if (target.classList.contains('react-flow__pane')) return longPress(e, (x, y) => openAdd(x, y))
+    // Long-press a wire: insert a node into it.
+    const wire = wireAt(target)
+    if (wire) return longPress(e, (x, y) => openInsert(x, y, wire))
     const id = target.closest<HTMLElement>('.react-flow__node')?.dataset.id
     if (!id) return
     const onControl = !!target.closest('.nodrag')
@@ -822,6 +873,10 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
             onConnectEnd={onConnectEnd}
             onPaneClick={onPaneClick}
             onPaneContextMenu={onPaneContextMenu}
+            onEdgeContextMenu={(e, edge) => {
+              e.preventDefault()
+              if (edge.sourceHandle === 'pattern') openInsert(e.clientX, e.clientY, edge.id)
+            }}
             // Drag on empty canvas draws a selection box; pan with two fingers, trackpad
             // scroll or the middle/right mouse button; pinch or Ctrl+scroll zooms.
             selectionOnDrag
