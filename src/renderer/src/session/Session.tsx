@@ -262,10 +262,18 @@ function Session({
     setSelected({ channel: chId, scene })
   }
 
-  // ---- Copy, paste, duplicate and delete clips: Ctrl+C / Ctrl+V / Ctrl+D / Delete on
-  // the selected slot, or its right-click menu. A pasted or duplicated clip gets fresh
-  // node ids. ----
-  const clipboard = useRef<Clip | null>(null)
+  // ---- Clip selection: one slot, or several by fence (drag a box over the grid from
+  // empty space). Copy, paste, duplicate, delete and drag act on the whole selection,
+  // keeping the clips' layout. A pasted or duplicated clip gets fresh node ids. ----
+  const [multi, setMulti] = useState<Selected[]>([])
+  const group: Selected[] = multi.length > 1 ? multi : selected ? [selected] : []
+  const inGroup = (chId: string, scene: number): boolean =>
+    group.some((g) => g.channel === chId && g.scene === scene)
+  const selectOne = (sel: Selected): void => {
+    setMulti([])
+    setSelected(sel)
+  }
+  const chIndex = (id: string): number => song.channels.findIndex((c) => c.id === id)
   const cloneClip = (c: Clip): Clip => ({
     id: nodeId('clip'),
     name: c.name,
@@ -292,30 +300,89 @@ function Session({
       })
     }
   }
-  const copyClip = (sel: Selected): void => {
-    const c = clipAt(sel)
-    if (c) clipboard.current = c
+  // Clips as a block: each one's place relative to the block's top-left slot.
+  interface Block {
+    dc: number
+    ds: number
+    clip: Clip
   }
-  const pasteClip = (sel: Selected): void => {
-    if (!clipboard.current || channel(sel.channel)?.kind !== 'track') return
-    onChange(withClip(song, sel.channel, sel.scene, cloneClip(clipboard.current)))
+  const blockOf = (
+    sels: Selected[]
+  ): { block: Block[]; ci: number; scene: number; rows: number } => {
+    const filled = sels.filter((s) => clipAt(s))
+    const ci = Math.min(...filled.map((s) => chIndex(s.channel)))
+    const scene = Math.min(...filled.map((s) => s.scene))
+    const block = filled.map((s) => ({
+      dc: chIndex(s.channel) - ci,
+      ds: s.scene - scene,
+      clip: clipAt(s)!
+    }))
+    return { block, ci, scene, rows: Math.max(0, ...block.map((b) => b.ds)) + 1 }
   }
-  const deleteClip = (sel: Selected): void => {
-    if (clipAt(sel)) onChange(withClip(song, sel.channel, sel.scene, null))
+  // Put a block with its top-left at (ci, scene); slots off the grid or on a Bus are skipped.
+  const place = (
+    base: Song,
+    block: Block[],
+    ci: number,
+    scene: number,
+    clone: boolean
+  ): { song: Song; at: Selected[] } => {
+    let next = base
+    const at: Selected[] = []
+    for (const b of block) {
+      const ch = base.channels[ci + b.dc]
+      if (!ch || ch.kind !== 'track' || scene + b.ds < 0) continue
+      next = withClip(next, ch.id, scene + b.ds, clone ? cloneClip(b.clip) : b.clip)
+      at.push({ channel: ch.id, scene: scene + b.ds })
+    }
+    return { song: next, at }
   }
-  // Into the next empty slot below (a new scene if there's none), and select it.
-  const duplicateClip = (sel: Selected): void => {
-    const c = clipAt(sel)
-    const ch = channel(sel.channel)
-    if (!c || !ch) return
-    let to = sel.scene + 1
-    while (to < song.scenes.length && ch.clips[to]) to++
-    onChange(withClip(song, sel.channel, to, cloneClip(c)))
-    setSelected({ channel: sel.channel, scene: to })
+  const selectAll = (at: Selected[]): void => {
+    setSelected(at[0] ?? null)
+    setMulti(at.length > 1 ? at : [])
   }
-  // ---- Drag a clip to another slot to move it; hold Ctrl when dropping to copy it.
-  // Pointer events, so it works with touch too. ----
+  const clipboard = useRef<Block[] | null>(null)
+  const copyClips = (sels: Selected[]): void => {
+    const { block } = blockOf(sels)
+    if (block.length) clipboard.current = block
+  }
+  const pasteClips = (sel: Selected): void => {
+    if (!clipboard.current) return
+    const r = place(song, clipboard.current, chIndex(sel.channel), sel.scene, true)
+    onChange(r.song)
+    selectAll(r.at)
+  }
+  const deleteClips = (sels: Selected[]): void => {
+    const next = sels.reduce((s, x) => withClip(s, x.channel, x.scene, null), song)
+    if (sels.some((s) => clipAt(s))) onChange(next)
+  }
+  // One clip: into the next empty slot below. Several: the block again, right below.
+  const duplicateClips = (sels: Selected[]): void => {
+    const filled = sels.filter((s) => clipAt(s))
+    if (!filled.length) return
+    if (filled.length === 1) {
+      const s = filled[0]
+      const ch = channel(s.channel)!
+      let to = s.scene + 1
+      while (to < song.scenes.length && ch.clips[to]) to++
+      onChange(withClip(song, s.channel, to, cloneClip(clipAt(s)!)))
+      selectOne({ channel: s.channel, scene: to })
+      return
+    }
+    const { block, ci, scene, rows } = blockOf(filled)
+    const r = place(song, block, ci, scene + rows, true)
+    onChange(r.song)
+    selectAll(r.at)
+  }
+
+  // ---- Drag clips to other slots to move them (the whole selection if the clip is in
+  // it); hold Ctrl at the drop to copy. Drag from empty space to fence-select. Pointer
+  // events, so touch works too. ----
   const dragged = useRef(false) // a drag just ended: the click that follows isn't a tap
+  const endDrag = (): void => {
+    dragged.current = true
+    setTimeout(() => (dragged.current = false), 0)
+  }
   const dragClip = (e: React.PointerEvent, from: Selected): void => {
     if ((e.target as HTMLElement).closest('.clip-launch') || e.button !== 0) return
     const { pointerId, clientX: x0, clientY: y0 } = e
@@ -332,12 +399,10 @@ function Session({
       if (ev.pointerId !== pointerId) return
       if (!active && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 8) return
       active = true
-      document.body.classList.add(ev.ctrlKey ? 'dragging-copy' : 'dragging-clip')
+      document.body.classList.add('dragging-clip')
       document.body.classList.toggle('dragging-copy', ev.ctrlKey)
       const el = slotAt(ev.clientX, ev.clientY)
-      const target =
-        el && el.dataset.channel !== undefined && !el.classList.contains('bus-slot') ? el : null
-      mark(target)
+      mark(el && !el.classList.contains('bus-slot') ? el : null)
     }
     const up = (ev: PointerEvent): void => {
       if (ev.pointerId !== pointerId) return
@@ -348,29 +413,79 @@ function Session({
       const target = over
       mark(null)
       if (!active) return
-      dragged.current = true
-      setTimeout(() => (dragged.current = false), 0)
+      endDrag()
       if (!target || ev.type === 'pointercancel') return
       const to: Selected = { channel: target.dataset.channel!, scene: Number(target.dataset.scene) }
       if (to.channel === from.channel && to.scene === from.scene) return
-      const clip = clipAt(from)
-      if (!clip) return
-      // Ctrl at the drop copies; otherwise the clip moves (a playing clip keeps playing
-      // when it moves within its channel).
-      let next = withClip(song, to.channel, to.scene, ev.ctrlKey ? cloneClip(clip) : clip)
-      if (!ev.ctrlKey) {
-        const wasPlaying = channel(from.channel)?.playing === from.scene
-        next = withClip(next, from.channel, from.scene, null)
-        if (wasPlaying && to.channel === from.channel)
-          next = {
-            ...next,
-            channels: next.channels.map((c) =>
-              c.id === from.channel ? { ...c, playing: to.scene } : c
-            )
-          }
-      }
+      const sels = inGroup(from.channel, from.scene) ? group : [from]
+      const { block, ci, scene } = blockOf(sels)
+      if (!block.length) return
+      const dci = chIndex(to.channel) - chIndex(from.channel)
+      const ds = to.scene - from.scene
+      // Ctrl at the drop copies; otherwise the clips move. A single playing clip moved
+      // within its channel keeps playing.
+      const wasPlaying = sels.length === 1 && channel(from.channel)?.playing === from.scene
+      const base = ev.ctrlKey
+        ? song
+        : sels.reduce((s, x) => withClip(s, x.channel, x.scene, null), song)
+      const r = place(base, block, ci + dci, scene + ds, ev.ctrlKey)
+      let next = r.song
+      if (wasPlaying && !ev.ctrlKey && to.channel === from.channel)
+        next = {
+          ...next,
+          channels: next.channels.map((c) =>
+            c.id === from.channel ? { ...c, playing: to.scene } : c
+          )
+        }
       onChange(next)
-      setSelected(to)
+      selectAll(r.at)
+    }
+    window.addEventListener('pointermove', move)
+    window.addEventListener('pointerup', up)
+    window.addEventListener('pointercancel', up)
+  }
+  const fenceRef = useRef<HTMLDivElement>(null)
+  // A box dragged from empty space (or an empty slot) selects the clips it touches.
+  const fence = (e: React.PointerEvent): void => {
+    const t = e.target as HTMLElement
+    if (e.button !== 0 || t.closest('.clip-slot:not(.empty), .ch-head, button.scene-launch')) return
+    const { pointerId, clientX: x0, clientY: y0 } = e
+    const box = fenceRef.current
+    let active = false
+    const move = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId) return
+      if (!active && Math.hypot(ev.clientX - x0, ev.clientY - y0) < 8) return
+      active = true
+      const l = Math.min(x0, ev.clientX)
+      const r = Math.max(x0, ev.clientX)
+      const tp = Math.min(y0, ev.clientY)
+      const b = Math.max(y0, ev.clientY)
+      if (box)
+        Object.assign(box.style, {
+          display: 'block',
+          left: `${l}px`,
+          top: `${tp}px`,
+          width: `${r - l}px`,
+          height: `${b - tp}px`
+        })
+      const hits: Selected[] = []
+      for (const el of document.querySelectorAll<HTMLElement>(
+        '.clip-slot[data-scene]:not(.empty)'
+      )) {
+        const q = el.getBoundingClientRect()
+        if (q.right > l && q.left < r && q.bottom > tp && q.top < b)
+          hits.push({ channel: el.dataset.channel!, scene: Number(el.dataset.scene) })
+      }
+      setMulti(hits)
+      if (hits[0]) setSelected(hits[0])
+    }
+    const up = (ev: PointerEvent): void => {
+      if (ev.pointerId !== pointerId) return
+      window.removeEventListener('pointermove', move)
+      window.removeEventListener('pointerup', up)
+      window.removeEventListener('pointercancel', up)
+      if (box) box.style.display = 'none'
+      if (active) endDrag()
     }
     window.addEventListener('pointermove', move)
     window.addEventListener('pointerup', up)
@@ -378,20 +493,22 @@ function Session({
   }
 
   const slotMenu = (sel: Selected, x: number, y: number): void => {
-    const has = !!clipAt(sel)
-    setSelected(sel)
+    const sels = inGroup(sel.channel, sel.scene) ? group : [sel]
+    if (!inGroup(sel.channel, sel.scene)) selectOne(sel)
+    const n = sels.filter((s) => clipAt(s)).length
+    const what = n > 1 ? ` ${n} clips` : ''
     setMenu({
       x,
       y,
       sections: [
         {
           items: [
-            ...(has ? [{ label: 'Copy', onSelect: () => copyClip(sel) }] : []),
-            ...(clipboard.current ? [{ label: 'Paste', onSelect: () => pasteClip(sel) }] : []),
-            ...(has
+            ...(n ? [{ label: `Copy${what}`, onSelect: () => copyClips(sels) }] : []),
+            ...(clipboard.current ? [{ label: 'Paste', onSelect: () => pasteClips(sel) }] : []),
+            ...(n
               ? [
-                  { label: 'Duplicate', onSelect: () => duplicateClip(sel) },
-                  { label: 'Delete', danger: true, onSelect: () => deleteClip(sel) }
+                  { label: `Duplicate${what}`, onSelect: () => duplicateClips(sels) },
+                  { label: `Delete${what}`, danger: true, onSelect: () => deleteClips(sels) }
                 ]
               : [])
           ]
@@ -421,10 +538,10 @@ function Session({
         next.splice(ni + 1, 0, copy)
         setNodes(next)
         setPickedNode(copy.id)
-      } else if (ctrl && k === 'c') copyClip(selected)
-      else if (ctrl && k === 'v') pasteClip(selected)
-      else if (ctrl && k === 'd') duplicateClip(selected)
-      else if (!ctrl && (e.key === 'Delete' || e.key === 'Backspace')) deleteClip(selected)
+      } else if (ctrl && k === 'c') copyClips(group)
+      else if (ctrl && k === 'v') pasteClips(selected)
+      else if (ctrl && k === 'd') duplicateClips(group)
+      else if (!ctrl && (e.key === 'Delete' || e.key === 'Backspace')) deleteClips(group)
       else return
       e.preventDefault()
     }
@@ -530,10 +647,12 @@ function Session({
             className="session-scroll"
             // Back in the clip grid: keys act on clips again.
             onPointerDownCapture={() => setPickedNode(null)}
+            onPointerDown={fence}
             onScroll={(e) => {
               if (stripsRef.current) stripsRef.current.scrollLeft = e.currentTarget.scrollLeft
             }}
           >
+            <div className="fence" ref={fenceRef} />
             <div className="session-grid" style={{ gridTemplateColumns: columns }}>
               {/* Channel headers */}
               {tracks.map((ch, i) => (
@@ -553,7 +672,7 @@ function Session({
                   {tracks.map((ch, i) => {
                     if (ch.kind === 'bus') return <div key={ch.id} className="clip-slot bus-slot" />
                     const clip = ch.clips[s] ?? null
-                    const isSel = selected?.channel === ch.id && selected.scene === s
+                    const isSel = inGroup(ch.id, s)
                     const playingHere = ch.playing === s
                     // Waiting for the next bar: to start here, or to stop while playing here.
                     const waiting = ch.id in queued && (queued[ch.id] === s || playingHere)
@@ -566,7 +685,11 @@ function Session({
                           data-scene={s}
                           // First tap selects the slot (to paste into); a second makes a clip.
                           onClick={() =>
-                            isSel ? newClip(ch.id, s) : setSelected({ channel: ch.id, scene: s })
+                            dragged.current
+                              ? undefined
+                              : isSel
+                                ? newClip(ch.id, s)
+                                : selectOne({ channel: ch.id, scene: s })
                           }
                           onContextMenu={(e) => {
                             e.preventDefault()
@@ -595,9 +718,7 @@ function Session({
                         data-scene={s}
                         onPointerDown={(e) => dragClip(e, { channel: ch.id, scene: s })}
                         style={{ background: channelColor(i) }}
-                        onClick={() =>
-                          !dragged.current && setSelected({ channel: ch.id, scene: s })
-                        }
+                        onClick={() => !dragged.current && selectOne({ channel: ch.id, scene: s })}
                         onContextMenu={(e) => {
                           e.preventDefault()
                           slotMenu({ channel: ch.id, scene: s }, e.clientX, e.clientY)
