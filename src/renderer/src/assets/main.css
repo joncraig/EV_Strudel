@@ -433,3 +433,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .strip-faders .param .fader { height: 104px; width: 30px; }
 .strip-faders .param-value { display: none; }
 .strip-faders .fader-fill { background: linear-gradient(#ddd, #777); }
+/* A wire straight down a channel is implied by the column: hidden (still long-pressable). */
+.react-flow__edge.implied-edge path.react-flow__edge-path { opacity: 0; }
+.react-flow__edge.implied-edge.selected path.react-flow__edge-path { opacity: 0.6; }

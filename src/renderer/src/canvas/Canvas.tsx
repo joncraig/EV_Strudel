@@ -863,15 +863,25 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
 
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
   // Mod wires (LFO -> a modulation input) are drawn differently from pattern wires.
-  const shownEdges = useMemo(
-    () =>
-      edges.map((e) =>
-        (e.sourceHandle === 'mod' || e.sourceHandle === 'duck') && e.className !== 'mod-edge'
-          ? { ...e, className: 'mod-edge' }
-          : e
-      ),
-    [edges]
-  )
+  // Mod wires (LFO -> a modulation input) look different from pattern wires. A pattern
+  // wire running straight down a channel to the node below adds nothing (the column
+  // already says it flows down), so it's hidden; it's still there for insert-on-wire.
+  const shownEdges = useMemo(() => {
+    const byId = new Map(nodes.map((n) => [n.id, n]))
+    const absX = (id: string): number | null => {
+      const n = byId.get(id)
+      if (!n) return null
+      const p = n.parentId ? byId.get(n.parentId) : undefined
+      return Math.round(n.position.x + (p?.position.x ?? 0))
+    }
+    return edges.map((e) => {
+      const mod = e.sourceHandle === 'mod' || e.sourceHandle === 'duck'
+      const sx = absX(e.source)
+      const implied = !mod && sx !== null && sx === absX(e.target)
+      const className = mod ? 'mod-edge' : implied ? 'implied-edge' : undefined
+      return className === e.className ? e : { ...e, className }
+    })
+  }, [edges, nodes])
   // Muted nodes dim, soloed ones get a ring.
   const anySolo = nodes.some((n) => (n.data as { solo?: boolean }).solo)
   const shownNodes = useMemo(
