@@ -324,6 +324,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         key: [{ title: 'Apply to', kinds: [sequencers[0]] }],
         mode: [{ title: 'Apply to', kinds: [sequencers[0]] }],
         pattern: [
+          { title: 'Play it with', kinds: sequencers },
           { title: 'Sound', kinds: synths },
           { title: 'Shape', kinds: [velocity, length] },
           { title: 'Harmony', kinds: [key, mode, octave] },
