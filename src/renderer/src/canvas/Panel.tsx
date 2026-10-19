@@ -54,22 +54,23 @@ function Slider({
   // One notch = 1% of the travel.
   const touch = useNudge((n) => setT(t + n / 100))
   return (
-    <div className="pfield slider">
-      <span className="plabel">{label}</span>
+    // A vertical fader (tiles grow down, not sideways): tap to jump, drag up for more.
+    <div className="pfield slider vertical">
+      <span className="pvalue">{shown}</span>
       <div
-        className="hbar"
+        className="vbar"
         onPointerDown={(e) => {
           touch()
           const r = e.currentTarget.getBoundingClientRect()
-          const start = Math.min(1, Math.max(0, (e.clientX - r.left) / r.width))
+          const start = Math.min(1, Math.max(0, (r.bottom - e.clientY) / r.height))
           const set = (p: number): void => onChange(+fromT(Math.min(1, Math.max(0, p))).toFixed(3))
           set(start)
-          valueDrag(e, (dx) => set(start + dx / r.width))
+          valueDrag(e, (_dx, dy) => set(start - dy / r.height))
         }}
       >
-        <div className="hbar-fill" style={{ width: `${t * 100}%` }} />
+        <div className="vbar-fill" style={{ height: `${t * 100}%` }} />
       </div>
-      <span className="pvalue">{shown}</span>
+      <span className="plabel">{label}</span>
     </div>
   )
 }
