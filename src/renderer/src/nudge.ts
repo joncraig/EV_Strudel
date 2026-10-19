@@ -38,6 +38,11 @@ export function installNudgeKeys(): () => void {
     e.stopPropagation() // React Flow would move the selected nodes
     step((e.key === 'ArrowUp' ? 1 : -1) * (e.shiftKey ? 10 : 1))
   }
+  // One listener per window: a hot reload re-runs this, and two listeners would step
+  // twice per press.
+  const w = window as unknown as { __evNudgeKeys?: (e: KeyboardEvent) => void }
+  if (w.__evNudgeKeys) window.removeEventListener('keydown', w.__evNudgeKeys, true)
+  w.__evNudgeKeys = onKey
   window.addEventListener('keydown', onKey, true)
   return () => window.removeEventListener('keydown', onKey, true)
 }
