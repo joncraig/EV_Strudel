@@ -330,3 +330,8 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .duck-node .node-header { background: #3d221c; }
 .duck-node .fader-fill { background: linear-gradient(#e87, #8a4a3a); }
 .react-flow__handle.duck-handle { background: #e87; border-color: #8a4a3a; }
+/* Bus Mute / Solo in the title bar. */
+.bus-ms { display: flex; gap: 3px; margin-left: auto; }
+.bus-ms button { min-width: 26px; min-height: 22px; padding: 0 5px; font-size: 11px; background: #2a2a2a; color: #aaa; border: 1px solid #444; border-radius: 3px; }
+.bus-ms button.mute.on { background: #7a3a2a; color: #fff; }
+.bus-ms button.solo.on { background: #8a7a20; color: #fff; }

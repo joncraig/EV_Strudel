@@ -114,7 +114,25 @@ export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
   return (
     <div className="node mix-node">
       <Handle type="target" position={Position.Left} id="pattern" />
-      <Header title="Bus" />
+      <Header
+        title="Bus"
+        right={
+          <div className="bus-ms nodrag">
+            <button
+              className={data.muted ? 'on mute' : 'mute'}
+              onClick={() => updateNodeData(id, { muted: !data.muted })}
+            >
+              M
+            </button>
+            <button
+              className={data.solo ? 'on solo' : 'solo'}
+              onClick={() => updateNodeData(id, { solo: !data.solo })}
+            >
+              S
+            </button>
+          </div>
+        }
+      />
       <div className="node-body bus-body nodrag">
         <ParamFader
           label="volume"

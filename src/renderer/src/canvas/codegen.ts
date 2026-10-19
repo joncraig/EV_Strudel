@@ -550,8 +550,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       )
       if (feedsFromMix) continue
       done.add(mix.id)
-      // A Solo after the Mix plays all of its inputs.
-      const soloAfter = [...reachableFrom(mix.id)].some((id) => flag(id, 'solo'))
+      // A Solo on the Bus itself, or after it, plays all of its inputs.
+      const soloAfter = [mix.id, ...reachableFrom(mix.id)].some((id) => flag(id, 'solo'))
       const members = (mixMembers.get(mix.id) ?? []).filter((m) => plays(m.path, soloAfter))
       if (!members.length) continue
       const base = `stack(${members.map((m) => m.code).join(', ')}).orbit(${busOrbits.get(mix.id)})`

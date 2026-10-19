@@ -239,6 +239,9 @@ export interface MixData extends Record<string, unknown> {
   volume?: number
   // -1 (left) .. 1 (right).
   pan?: number
+  // Mute / Solo (as in the node menu; see compile).
+  muted?: boolean
+  solo?: boolean
 }
 
 export const BUS_MAX_VOLUME = 1.5
