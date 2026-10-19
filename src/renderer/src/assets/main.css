@@ -343,3 +343,18 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .chord-names { display: flex; gap: 2px; padding-left: 34px; font-size: 10px; color: #889; overflow: hidden; }
 .chord-names span { width: 16px; flex: none; white-space: nowrap; overflow: visible; }
 .chord-names span.sel { color: #fff; }
+
+/* Nodes are summaries (edit in the bottom panel): one width, a step strip, a line. */
+.react-flow__node .node { width: 170px; min-width: 0; }
+.node-summary { padding: 4px 8px 6px; font-size: 11px; color: #aab; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.step-count { margin-left: auto; font-size: 11px; color: #99a; background: #ffffff10; border-radius: 8px; padding: 0 6px; }
+.mini-steps { display: flex; gap: 1px; height: 28px; margin: 6px 8px 2px; }
+.mini-col { position: relative; flex: 1 1 0; min-width: 1px; background: #ffffff08; border-radius: 1px; }
+.mini-col.bar { background: #ffffff16; }
+.mini-col.now { background: #ffffff30; }
+.mini-dot { position: absolute; left: 0; right: 0; height: 3px; margin-top: -1px; background: #8ab4f8; border-radius: 1px; }
+.mini-bar { position: absolute; left: 0; right: 0; bottom: 0; background: #e0a050; border-radius: 1px; }
+.mini-col.hit .mini-dot, .mini-col.hit .mini-bar { background: #fff; }
+.harmony-node .mini-dot { background: #c9a0f0; }
+.length-node .mini-dot { background: #6ab0e0; }
+.lfo-node .lfo-wave { margin-top: 6px; }

@@ -1,5 +1,6 @@
 import { Edge, useReactFlow } from '@xyflow/react'
 import PianoRoll from './PianoRoll'
+import { SPREADS } from './chords'
 import { valueDrag } from '../drag'
 import { useNudge } from '../nudge'
 import {
@@ -174,6 +175,26 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
           {d.kind === 'slice' && (
             <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
           )}
+          {d.kind === 'chord' && (
+            <>
+              <Stepper
+                label="inversion"
+                value={d.inversion ?? 0}
+                min={0}
+                max={3}
+                onChange={(inversion) => set({ inversion })}
+              />
+              {SPREADS.map((sp) => (
+                <Toggle
+                  key={sp}
+                  label={sp}
+                  on={(d.spread ?? 'close') === sp}
+                  onChange={() => set({ spread: sp })}
+                />
+              ))}
+              <Toggle label="Bass" on={!!d.bass} onChange={(bass) => set({ bass })} />
+            </>
+          )}
           <button className="ptoggle" onClick={() => set({ steps: d.steps.map(() => null) })}>
             Clear
           </button>
@@ -202,6 +223,9 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
               })
             }
           />
+          {node.type === 'length' && (
+            <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
+          )}
         </>
       )
       break
@@ -257,6 +281,8 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       title = 'Bus'
       body = (
         <>
+          <Toggle label="Mute" on={!!d.muted} onChange={(muted) => set({ muted })} />
+          <Toggle label="Solo" on={!!d.solo} onChange={(solo) => set({ solo })} />
           <Slider
             label="volume"
             value={d.volume ?? 1}
@@ -282,13 +308,34 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
         <>
           <Toggle label="Strum" on={d.mode === 'strum'} onChange={() => set({ mode: 'strum' })} />
           <Toggle label="Arp" on={d.mode === 'arp'} onChange={() => set({ mode: 'arp' })} />
-          <Slider
-            label="spread"
-            value={d.amount}
-            min={0}
-            max={0.5}
-            onChange={(amount) => set({ amount })}
-          />
+          {d.mode === 'arp' ? (
+            <>
+              {(['up', 'down', 'updown', 'random'] as const).map((p) => (
+                <Toggle key={p} label={p === 'updown' ? 'up-down' : p} on={d.pattern === p} onChange={() => set({ pattern: p })} />
+              ))}
+              <Stepper
+                label="rate"
+                value={d.rate}
+                min={1}
+                max={4}
+                display={`${d.rate}/16`}
+                onChange={(rate) => set({ rate })}
+              />
+            </>
+          ) : (
+            <>
+              {(['up', 'down'] as const).map((p) => (
+                <Toggle key={p} label={p} on={d.direction === p} onChange={() => set({ direction: p })} />
+              ))}
+              <Slider
+                label="spread"
+                value={d.amount}
+                min={0}
+                max={0.5}
+                onChange={(amount) => set({ amount })}
+              />
+            </>
+          )}
         </>
       )
       break
