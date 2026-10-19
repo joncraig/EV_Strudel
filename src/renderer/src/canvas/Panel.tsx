@@ -275,6 +275,24 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       )
       break
     }
+    case 'perform': {
+      const d = node.data
+      title = 'Strum / Arp'
+      body = (
+        <>
+          <Toggle label="Strum" on={d.mode === 'strum'} onChange={() => set({ mode: 'strum' })} />
+          <Toggle label="Arp" on={d.mode === 'arp'} onChange={() => set({ mode: 'arp' })} />
+          <Slider
+            label="spread"
+            value={d.amount}
+            min={0}
+            max={0.5}
+            onChange={(amount) => set({ amount })}
+          />
+        </>
+      )
+      break
+    }
     case 'duck': {
       const d = node.data
       title = 'Duck'

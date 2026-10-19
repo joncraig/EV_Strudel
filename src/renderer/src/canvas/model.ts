@@ -318,6 +318,27 @@ export interface DuckData extends Record<string, unknown> {
 export const newDuck = (): DuckData => ({ depth: 0.8, attack: 0.01, release: 0.25 })
 
 export type DuckNode = Node<DuckData, 'duck'>
+
+// Strum / Arp: plays the chords of the sequencer it's chained with note by note.
+// Strum starts each note a little later (amount = how much of the step the spread
+// takes); Arp plays one note at a time, every `rate` sixteenths.
+export interface PerformData extends Record<string, unknown> {
+  mode: 'strum' | 'arp'
+  amount: number
+  direction: 'up' | 'down'
+  pattern: 'up' | 'down' | 'updown' | 'random'
+  rate: number
+}
+
+export const newPerform = (): PerformData => ({
+  mode: 'arp',
+  amount: 0.15,
+  direction: 'up',
+  pattern: 'up',
+  rate: 1
+})
+
+export type PerformNode = Node<PerformData, 'perform'>
 export type KeyNode = Node<KeyData, 'key'>
 export type OctaveNode = Node<OctaveData, 'octave'>
 export type ModeNode = Node<ModeData, 'mode'>
@@ -328,6 +349,7 @@ export type CanvasNode =
   | MixNode
   | LfoNode
   | DuckNode
+  | PerformNode
   | KeyNode
   | OctaveNode
   | ModeNode

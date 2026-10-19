@@ -24,6 +24,7 @@ import {
   LengthNode,
   LfoNode,
   DuckNode,
+  PerformNode,
   MixNode,
   ModeNode,
   OctaveNode,
@@ -58,6 +59,7 @@ import {
   newOctave,
   newLfo,
   newDuck,
+  newPerform,
   MOD_PREFIX,
   newSequencer,
   newEffect,
@@ -91,7 +93,8 @@ const NODE_COLORS = {
   sample: '#3a7a4a',
   mix: '#777777',
   lfo: '#8a8a2a',
-  duck: '#8a4a3a'
+  duck: '#8a4a3a',
+  perform: '#4a5a9a'
 }
 function kindColor(kind: string): string {
   if (kind.startsWith('fx:')) return NODE_COLORS.effect
@@ -109,6 +112,7 @@ const nodeTypes = {
   mix: MixNode,
   lfo: LfoNode,
   duck: DuckNode,
+  perform: PerformNode,
   key: KeyNode,
   mode: ModeNode,
   octave: OctaveNode,
@@ -132,6 +136,7 @@ type NewKind =
   | 'mix'
   | 'lfo'
   | 'duck'
+  | 'perform'
   | 'octave'
   | 'key'
   | 'mode'
@@ -246,6 +251,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       return { id: nodeId('mix'), type: 'mix', position, data: { volume: 1, pan: 0 } }
     if (kind === 'lfo') return { id: nodeId('lfo'), type: 'lfo', position, data: newLfo() }
     if (kind === 'duck') return { id: nodeId('duck'), type: 'duck', position, data: newDuck() }
+    if (kind === 'perform')
+      return { id: nodeId('perform'), type: 'perform', position, data: newPerform() }
     if (kind === 'octave') return { id: nodeId('oct'), type: 'octave', position, data: newOctave() }
     if (kind === 'key') return { id: nodeId('key'), type: 'key', position, data: newKey() }
     if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
@@ -284,6 +291,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     const mix: [NewKind, string] = ['mix', 'Bus']
     const lfo: [NewKind, string] = ['lfo', 'LFO']
     const duck: [NewKind, string] = ['duck', 'Duck (sidechain)']
+    const perform: [NewKind, string] = ['perform', 'Strum / Arp']
     const key: [NewKind, string] = ['key', 'Key sequencer']
     const mode: [NewKind, string] = ['mode', 'Mode sequencer']
     const octave: [NewKind, string] = ['octave', 'Octave sequencer']
@@ -300,7 +308,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     if (!pending)
       groups = [
         { title: 'Sequencers', kinds: sequencers },
-        { title: 'Shape', kinds: [velocity, length] },
+        { title: 'Shape', kinds: [velocity, length, perform] },
         { title: 'Effects', kinds: effects },
         { title: 'Harmony', kinds: [key, mode, octave] },
         { title: 'Sound', kinds: synths },
@@ -327,7 +335,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         pattern: [
           { title: 'Play it with', kinds: sequencers },
           { title: 'Sound', kinds: synths },
-          { title: 'Shape', kinds: [velocity, length] },
+          { title: 'Shape', kinds: [velocity, length, perform] },
           { title: 'Harmony', kinds: [key, mode, octave] },
           { title: 'Effects', kinds: effects },
           { title: 'Route', kinds: [mix, duck] }
@@ -592,7 +600,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     'mode',
     'effect',
     'mix',
-    'duck'
+    'duck',
+    'perform'
   ])
   const insertRef = useRef<{ edgeId: string; el: Element } | null>(null)
 

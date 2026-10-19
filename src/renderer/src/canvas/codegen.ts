@@ -31,6 +31,7 @@ import type {
   LengthData,
   ModeData,
   OctaveData,
+  PerformData,
   SampleData,
   SequencerData,
   Step,
@@ -50,7 +51,13 @@ const lensAt = (lens: Lens, i: number): number => (lens?.length ? lens[i % lens.
 // collapse: a value that's the same on every step can be written once (velocity, clip),
 // but a hit pattern can't: every step must still be its own hit.
 // Steps and lengths loop at their own counts, so the loop runs until they line up.
-function stepped(stepTokens: string[], lens: Lens, collapse = true): string {
+// make: build each step's token from its index and length (Strum / Arp need the length).
+function stepped(
+  stepTokens: string[],
+  lens: Lens,
+  collapse = true,
+  make?: (i: number, w: number) => string
+): string {
   if (
     collapse &&
     stepTokens.length &&
@@ -62,7 +69,9 @@ function stepped(stepTokens: string[], lens: Lens, collapse = true): string {
     lens?.length && stepTokens.length
       ? loopSteps(stepTokens.length, lens.length)
       : stepTokens.length
-  const tokens = Array.from({ length: n }, (_, i) => stepTokens[i % stepTokens.length])
+  const tokens = Array.from({ length: n }, (_, i) =>
+    make ? make(i % stepTokens.length, lensAt(lens, i)) : stepTokens[i % stepTokens.length]
+  )
   const weights = tokens.map((_, i) => lensAt(lens, i))
   const total = weights.reduce((a, b) => a + b, 0)
   const body = tokens.map((tk, i) => (weights[i] === 1 ? tk : `${tk}@${weights[i]}`)).join(' ')
@@ -72,6 +81,33 @@ function stepped(stepTokens: string[], lens: Lens, collapse = true): string {
 
 // Mono steps (Slices): a chord's first note.
 const firstNotes = (cells: Cell[]): Step[] => cells.map((c) => cellNotes(c)[0] ?? null)
+
+// A step's notes as one token: a chord "[a,b,c]", or with a Strum / Arp node in the
+// chain, the notes spread out across the step (w = the step's length in 1/16s).
+function performToken(notes: string[], w: number, seed: number, p: PerformData | null): string {
+  if (notes.length === 0) return '~'
+  if (notes.length === 1) return notes[0]
+  if (!p) return `[${notes.join(',')}]`
+  const k = notes.length
+  if (p.mode === 'arp') {
+    const slots = Math.max(1, Math.round(w / Math.max(1, p.rate)))
+    const period = Math.max(1, 2 * k - 2)
+    const pick = (j: number): number => {
+      if (p.pattern === 'down') return k - 1 - (j % k)
+      if (p.pattern === 'updown') return j % period < k ? j % period : period - (j % period)
+      if (p.pattern === 'random')
+        return Math.abs((Math.sin((seed + 1) * 97.3 + j * 13.7) * 1e4) | 0) % k
+      return j % k
+    }
+    return `[${Array.from({ length: slots }, (_, j) => notes[pick(j)]).join(' ')}]`
+  }
+  const order = p.direction === 'down' ? [...notes].reverse() : notes
+  const strummed = order.map((nt, i) => {
+    const o = Math.round((100 * p.amount * i) / (k - 1))
+    return o > 0 ? `[~@${o} ${nt}@${100 - o}]` : nt
+  })
+  return `[${strummed.join(',')}]`
+}
 
 const steps = (values: Step[], toToken: (v: number) => string): string[] =>
   values.map((v) => (v === null ? '~' : toToken(v)))
@@ -196,7 +232,8 @@ function chordPattern(
   lens: Lens,
   key: Stepped<KeyData> | null,
   mode: Stepped<ModeData> | null,
-  octave: Stepped<OctaveData> | null
+  octave: Stepped<OctaveData> | null,
+  perform: PerformData | null
 ): string {
   const n = lens?.length ? loopSteps(seq.steps.length, lens.length) : seq.steps.length
   const weights = Array.from({ length: n }, (_, i) => lensAt(lens, i))
@@ -218,7 +255,12 @@ function chordPattern(
       seq
     )
     const base = 12 * (at.octave + 1) + at.tonic
-    const chord = `[${tones.map((x) => base + x).join(',')}]`
+    const chord = performToken(
+      tones.map((x) => String(base + x)),
+      w,
+      s,
+      perform
+    )
     tokens.push(w === 1 ? chord : `${chord}@${w}`)
   }
   const bars = +(total / STEP_RESOLUTION).toFixed(6)
@@ -233,7 +275,8 @@ const isOscillator = (sample: SampleData): boolean =>
 export function sequencerCode(
   seq: SequencerData,
   sample: SampleData,
-  lens: Lens = null
+  lens: Lens = null,
+  perform: PerformData | null = null
 ): string | null {
   if (seq.steps.every((v) => v === null)) return null
   const sound = quote(sample.s)
@@ -241,13 +284,12 @@ export function sequencerCode(
   switch (seq.kind) {
     case 'degree': {
       // UI degrees are 1-based; Strudel's are 0-based. A chord is "[0,2,4]".
+      const tokens = seq.steps.map((c) => cellNotes(c).map((v) => String(v - 1)))
       const degrees = stepped(
-        seq.steps.map((c) => {
-          const d = cellNotes(c).map((v) => v - 1)
-          return d.length === 0 ? '~' : d.length === 1 ? String(d[0]) : `[${d.join(',')}]`
-        }),
+        tokens.map((d) => performToken(d, 1, 0, null)),
         lens,
-        false
+        false,
+        (i, w) => performToken(tokens[i], w, i, perform)
       )
       code = `n("${degrees}")${SCALE}.s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
@@ -344,6 +386,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     'octave',
     'mix',
     'duck',
+    'perform',
     // A sequencer is a chain node too: wired after a chain, it takes over the
     // triggering and everything set before it (sound, Length, Key ...) carries on.
     'sequencer'
@@ -382,6 +425,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     // Which file/slice an earlier Slices sequencer picked, when a later sequencer
     // took over the triggering (it holds, like every other setting).
     picks: { steps: Step[]; lens: Lens } | null
+    // A Strum / Arp node in the chain (held like any setting).
+    perform: PerformData | null
     mods: string // appended controls: .velocity() .clip() .delay() ...
   }
 
@@ -395,7 +440,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (!ctx.seq) return null
     const sample = ctx.sample ?? (ctx.seq.kind !== 'slice' ? DEFAULT_NOTE_SOUND : null)
     if (!sample) return null
-    const code = sequencerCode(ctx.seq, sample, ctx.seqLens)
+    const code = sequencerCode(ctx.seq, sample, ctx.seqLens, ctx.perform)
     if (!code) return null
     // Sample hits (Slices, or a sound triggered by a stepping node) cut the chain's
     // previous hit, so a loop longer than its step restarts instead of stacking. Notes
@@ -416,7 +461,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         : ''
     const chords =
       ctx.seq.kind === 'chord'
-        ? chordPattern(ctx.seq, ctx.seqLens, ctx.key, ctx.mode, ctx.octave)
+        ? chordPattern(ctx.seq, ctx.seqLens, ctx.key, ctx.mode, ctx.octave, ctx.perform)
         : ''
     return code.replace(SCALE, scale).replace(CHORDS, chords) + picks + cut + pitch + ctx.mods
   }
@@ -447,6 +492,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       c.length = lengthValues(n.data)
       stepLens.set(n.id, c.length)
     } else if (n.type === 'effect') c.mods += effectCode(n.data)
+    else if (n.type === 'perform') c.perform = n.data
     else if (n.type === 'duck') {
       // Every note here ducks the Buses its duck output is wired to.
       const targets = edges
@@ -587,6 +633,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     length: null,
     seqLens: null,
     picks: null,
+    perform: null,
     mods: ''
   }
   // Whether a sequencer is fed by another sequencer's chain (then that chain carries

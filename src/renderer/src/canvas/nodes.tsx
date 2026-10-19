@@ -20,6 +20,7 @@ import {
   BUS_MAX_VOLUME,
   LfoNode as LfoNodeT,
   DuckNode as DuckNodeT,
+  PerformNode as PerformNodeT,
   LFO_RATES,
   LFO_SHAPES,
   lfoRateLabel,
@@ -210,6 +211,89 @@ export function DuckNode({ id, data }: NodeProps<DuckNodeT>): React.JSX.Element 
         />
       </div>
       <Handle type="source" position={Position.Bottom} id="duck" className="duck-handle" />
+    </div>
+  )
+}
+
+// ---- Strum / Arp ----
+
+// Plays the chords of the chain it's in note by note: Strum spreads each chord's
+// notes across the start of its step, Arp plays them one at a time.
+export function PerformNode({ id, data }: NodeProps<PerformNodeT>): React.JSX.Element {
+  const { updateNodeData } = useReactFlow()
+  const update = (patch: Partial<PerformNodeT['data']>): void => updateNodeData(id, patch)
+  const pick = <T extends string>(
+    options: [T, string][],
+    value: T,
+    set: (v: T) => void
+  ): React.JSX.Element => (
+    <div className="chord-row">
+      {options.map(([v, label]) => (
+        <button key={v} className={value === v ? 'on' : ''} onClick={() => set(v)}>
+          {label}
+        </button>
+      ))}
+    </div>
+  )
+  return (
+    <div className="node perform-node">
+      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
+      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
+      <Header title="Strum / Arp" />
+      <div className="node-body chord-controls nodrag">
+        {pick(
+          [
+            ['strum', 'Strum'],
+            ['arp', 'Arp']
+          ],
+          data.mode,
+          (mode) => update({ mode })
+        )}
+        {data.mode === 'arp' ? (
+          <>
+            {pick(
+              [
+                ['up', 'Up'],
+                ['down', 'Down'],
+                ['updown', 'Up-down'],
+                ['random', 'Random']
+              ],
+              data.pattern,
+              (pattern) => update({ pattern })
+            )}
+            {pick(
+              [
+                ['1', '1/16'],
+                ['2', '1/8'],
+                ['3', '3/16'],
+                ['4', '1/4']
+              ],
+              String(data.rate) as '1' | '2' | '3' | '4',
+              (r) => update({ rate: Number(r) })
+            )}
+          </>
+        ) : (
+          <>
+            {pick(
+              [
+                ['up', 'Up'],
+                ['down', 'Down']
+              ],
+              data.direction,
+              (direction) => update({ direction })
+            )}
+            <div className="bus-body">
+              <ParamFader
+                label="spread"
+                value={data.amount}
+                min={0}
+                max={0.5}
+                onChange={(amount) => update({ amount })}
+              />
+            </div>
+          </>
+        )}
+      </div>
     </div>
   )
 }
