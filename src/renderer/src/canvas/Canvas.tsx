@@ -41,7 +41,7 @@ import { compile } from './codegen'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import Panel from './Panel'
-import { StepLensContext } from './stepLens'
+import { SoundingContext, StepLensContext } from './stepLens'
 import { TOGGLE_CODE_EVENT, TOGGLE_PANEL_EVENT } from '../events'
 import {
   CanvasNode,
@@ -323,6 +323,23 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     }))
   }
 
+  // Mute / Solo for the chains through these nodes (see compile). All targets follow
+  // the tapped node: if it's off, they all turn on.
+  const muteSoloItems = (node: CanvasNode, targets: string[]): MenuItem[] =>
+    (['muted', 'solo'] as const).map((key) => {
+      const on = !!(node.data as { muted?: boolean; solo?: boolean })[key]
+      return {
+        label: key === 'muted' ? (on ? 'Unmute' : 'Mute') : on ? 'Unsolo' : 'Solo',
+        onSelect: () =>
+          onChange({
+            nodes: nodes.map((n) =>
+              targets.includes(n.id) ? ({ ...n, data: { ...n.data, [key]: !on } } as CanvasNode) : n
+            ),
+            edges
+          })
+      }
+    })
+
   const nodeSections = (id: string): MenuSection[] => {
     const node = nodes.find((n) => n.id === id)
     if (!node) return []
@@ -347,6 +364,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
               label: node.data.bypass ? 'Turn on' : 'Bypass',
               onSelect: () => updateNodeData(id, { bypass: !node.data.bypass })
             },
+            ...muteSoloItems(node, [id]),
             { label: 'Group', onSelect: () => onChange(groupNodes(state, [id])) },
             { label: 'Delete', danger: true, onSelect: () => remove(id) }
           ]
@@ -357,7 +375,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       .filter((n) => n.selected && !n.parentId && n.type !== 'group')
       .map((n) => n.id)
     const targets = node.selected && selected.length > 1 ? selected : [id]
-    const items: MenuItem[] = []
+    const items: MenuItem[] = [...muteSoloItems(node, targets)]
     if (!node.parentId)
       items.push({
         label: targets.length > 1 ? `Group ${targets.length} nodes` : 'Group',
@@ -536,7 +554,9 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     // little margin around it), not just the point under the finger. Nearest to the
     // node's centre wins.
     void e
-    const box = document.querySelector(`.react-flow__node[data-id="${node.id}"]`)?.getBoundingClientRect()
+    const box = document
+      .querySelector(`.react-flow__node[data-id="${node.id}"]`)
+      ?.getBoundingClientRect()
     if (!box) return null
     const pad = 12
     const cx = box.left + box.width / 2
@@ -553,7 +573,13 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       for (let k = 0; k <= samples; k++) {
         const q = path.getPointAtLength((total * k) / samples)
         const s = new DOMPoint(q.x, q.y).matrixTransform(ctm)
-        if (s.x < box.left - pad || s.x > box.right + pad || s.y < box.top - pad || s.y > box.bottom + pad) continue
+        if (
+          s.x < box.left - pad ||
+          s.x > box.right + pad ||
+          s.y < box.top - pad ||
+          s.y > box.bottom + pad
+        )
+          continue
         const d = Math.hypot(s.x - cx, s.y - cy)
         if (!best || d < best.d) best = { edgeId: edge.id, el: g, d }
       }
@@ -627,72 +653,89 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   }, [])
 
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
+  // Muted nodes dim, soloed ones get a ring.
+  const shownNodes = useMemo(
+    () =>
+      nodes.map((n) => {
+        const d = n.data as { muted?: boolean; solo?: boolean }
+        const className =
+          [d.muted && 'muted-node', d.solo && 'solo-node'].filter(Boolean).join(' ') || undefined
+        return className === n.className ? n : { ...n, className }
+      }),
+    [nodes]
+  )
 
   return (
     <StepLensContext.Provider value={compiled.stepLens}>
-      <div className="canvas" ref={rootRef} onPointerDownCapture={onPointerDownCapture}>
-        <div className="canvas-tools">
-          <span className="spacer" />
-          <button className={showCode ? 'on' : ''} onClick={() => setShowCode(!showCode)}>
-            {'</>'} Code
-          </button>
-        </div>
-        <ReactFlow
-          nodes={nodes}
-          edges={edges}
-          nodeTypes={nodeTypes}
-          onNodesChange={onNodesChange}
-          onEdgesChange={onEdgesChange}
-          onConnect={onConnect}
-          onNodeDrag={onNodeDrag}
-          onNodeDragStop={onNodeDragStop}
-          onConnectStart={onConnectStart}
-          onConnectEnd={onConnectEnd}
-          onPaneClick={onPaneClick}
-          onPaneContextMenu={onPaneContextMenu}
-          // Drag on empty canvas draws a selection box; pan with two fingers, trackpad
-          // scroll or the middle/right mouse button; pinch or Ctrl+scroll zooms.
-          selectionOnDrag
-          selectionMode={SelectionMode.Partial}
-          panOnDrag={[1]}
-          panOnScroll
-          onNodeClick={onNodeClick}
-          onNodeContextMenu={onNodeContextMenu}
-          isValidConnection={isValidConnection}
-          // How near a dropped wire must land to snap to an input, in screen px (default 20).
-          connectionRadius={44}
-          colorMode="dark"
-          fitView
-          minZoom={0.2}
-          // Our own Delete handler dissolves instead of breaking the chain.
-        deleteKeyCode={null}
-        >
-          <Background gap={24} />
-          <Controls />
-        </ReactFlow>
-        {nodes.length === 0 && (
-          <div className="canvas-empty">
-            Drag a sound in from Samples, or tap the canvas to add a node.
+      <SoundingContext.Provider value={compiled.sounding}>
+        <div className="canvas" ref={rootRef} onPointerDownCapture={onPointerDownCapture}>
+          <div className="canvas-tools">
+            <span className="spacer" />
+            <button className={showCode ? 'on' : ''} onClick={() => setShowCode(!showCode)}>
+              {'</>'} Code
+            </button>
           </div>
-        )}
-        {menu && (
-          <ContextMenu
-            x={menu.x}
-            y={menu.y}
-            sections={menu.type === 'add' ? addSections(menu) : nodeSections(menu.nodeId)}
-            searchable={menu.type === 'add'}
-            onClose={closeMenu}
-          />
-        )}
-        {showCode && <pre className="code-view">{compiled.code}</pre>}
-        {/* Fixed-height dock (like Ableton's detail view); hidden only when the user hides it. */}
-      <div className={`panel-dock ${panelOpen ? '' : 'closed'}`}>
-        <button className="panel-toggle" title={panelOpen ? 'Hide panel' : 'Show panel'} onClick={togglePanel}>
-          {panelOpen ? '▾' : '▴'}
-        </button>
-        {panelOpen && <Panel nodes={nodes} edges={edges} />}
-      </div>
-      </div>
+          <ReactFlow
+            nodes={shownNodes}
+            edges={edges}
+            nodeTypes={nodeTypes}
+            onNodesChange={onNodesChange}
+            onEdgesChange={onEdgesChange}
+            onConnect={onConnect}
+            onNodeDrag={onNodeDrag}
+            onNodeDragStop={onNodeDragStop}
+            onConnectStart={onConnectStart}
+            onConnectEnd={onConnectEnd}
+            onPaneClick={onPaneClick}
+            onPaneContextMenu={onPaneContextMenu}
+            // Drag on empty canvas draws a selection box; pan with two fingers, trackpad
+            // scroll or the middle/right mouse button; pinch or Ctrl+scroll zooms.
+            selectionOnDrag
+            selectionMode={SelectionMode.Partial}
+            panOnDrag={[1]}
+            panOnScroll
+            onNodeClick={onNodeClick}
+            onNodeContextMenu={onNodeContextMenu}
+            isValidConnection={isValidConnection}
+            // How near a dropped wire must land to snap to an input, in screen px (default 20).
+            connectionRadius={44}
+            colorMode="dark"
+            fitView
+            minZoom={0.2}
+            // Our own Delete handler dissolves instead of breaking the chain.
+            deleteKeyCode={null}
+          >
+            <Background gap={24} />
+            <Controls />
+          </ReactFlow>
+          {nodes.length === 0 && (
+            <div className="canvas-empty">
+              Drag a sound in from Samples, or tap the canvas to add a node.
+            </div>
+          )}
+          {menu && (
+            <ContextMenu
+              x={menu.x}
+              y={menu.y}
+              sections={menu.type === 'add' ? addSections(menu) : nodeSections(menu.nodeId)}
+              searchable={menu.type === 'add'}
+              onClose={closeMenu}
+            />
+          )}
+          {showCode && <pre className="code-view">{compiled.code}</pre>}
+          {/* Fixed-height dock (like Ableton's detail view); hidden only when the user hides it. */}
+          <div className={`panel-dock ${panelOpen ? '' : 'closed'}`}>
+            <button
+              className="panel-toggle"
+              title={panelOpen ? 'Hide panel' : 'Show panel'}
+              onClick={togglePanel}
+            >
+              {panelOpen ? '▾' : '▴'}
+            </button>
+            {panelOpen && <Panel nodes={nodes} edges={edges} />}
+          </div>
+        </div>
+      </SoundingContext.Provider>
     </StepLensContext.Provider>
   )
 }

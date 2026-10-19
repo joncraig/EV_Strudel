@@ -6,3 +6,9 @@ import type { Lens } from './codegen'
 export const StepLensContext = createContext<Map<string, Lens>>(new Map())
 
 export const useStepLens = (id: string): Lens => useContext(StepLensContext).get(id) ?? null
+
+// Nodes on a chain that is heard (compile().sounding): their grids flash the steps
+// that play.
+export const SoundingContext = createContext<Set<string>>(new Set())
+
+export const useSounding = (id: string): boolean => useContext(SoundingContext).has(id)

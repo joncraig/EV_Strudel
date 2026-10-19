@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Edge } from '@xyflow/react'
 import StepGrid from './StepGrid'
-import { useStepLens } from './stepLens'
+import { useSounding, useStepLens } from './stepLens'
 import { packSounds } from './packSounds'
 import {
   CanvasNode,
@@ -43,10 +43,15 @@ interface Props {
 }
 
 function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
-  const sample =
-    node.type === 'sequencer' ? sequencerSample(nodes, edges, node.id) : undefined
-  const key = node.type === 'sequencer' ? (downstream(nodes, edges, node.id, 'key')?.data as KeyData | undefined) : undefined
-  const mode = node.type === 'sequencer' ? (downstream(nodes, edges, node.id, 'mode')?.data as ModeData | undefined) : undefined
+  const sample = node.type === 'sequencer' ? sequencerSample(nodes, edges, node.id) : undefined
+  const key =
+    node.type === 'sequencer'
+      ? (downstream(nodes, edges, node.id, 'key')?.data as KeyData | undefined)
+      : undefined
+  const mode =
+    node.type === 'sequencer'
+      ? (downstream(nodes, edges, node.id, 'mode')?.data as ModeData | undefined)
+      : undefined
 
   // File names for a bank, loaded from the pack's sound list.
   const [files, setFiles] = useState<string[] | null>(null)
@@ -66,7 +71,11 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   let bars = false
   if (node.type === 'key' || node.type === 'mode' || node.type === 'octave') {
     const names =
-      node.type === 'key' ? [...TONICS] : node.type === 'mode' ? MODES.map((m) => m.label) : OCTAVES.map((o) => `octave ${o}`)
+      node.type === 'key'
+        ? [...TONICS]
+        : node.type === 'mode'
+          ? MODES.map((m) => m.label)
+          : OCTAVES.map((o) => `octave ${o}`)
     const all = names.map((_, i) => names.length - 1 - i)
     const used = new Set(node.data.steps.filter((v) => v !== null))
     rows = node.data.folded && all.some((v) => used.has(v)) ? all.filter((v) => used.has(v)) : all
@@ -75,14 +84,13 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     if (node.type === 'octave') {
       const all2 = [...OCTAVES].reverse()
       const used2 = new Set(node.data.steps.filter((v) => v !== null))
-      rows = node.data.folded && all2.some((v) => used2.has(v)) ? all2.filter((v) => used2.has(v)) : all2
+      rows =
+        node.data.folded && all2.some((v) => used2.has(v)) ? all2.filter((v) => used2.has(v)) : all2
       labels = rows.map((v) => `octave ${v}`)
     }
   } else if (node.type === 'velocity' || node.type === 'length') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
-    labels = rows.map((v) =>
-      node.type === 'length' ? lengthLabel(v) : `${velocityDb(v)} dB`
-    )
+    labels = rows.map((v) => (node.type === 'length' ? lengthLabel(v) : `${velocityDb(v)} dB`))
     bars = node.type === 'velocity'
     if (node.type === 'length' && node.data.folded) {
       const used = new Set(node.data.steps)
@@ -96,7 +104,9 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     const modeId = MODES[mode?.steps.find((v) => v !== null) ?? 0].id
     rows = DEGREE_ROWS
     const octave =
-      (downstream(nodes, edges, node.id, 'octave')?.data as OctaveData | undefined)?.steps.find((v) => v !== null) ??
+      (downstream(nodes, edges, node.id, 'octave')?.data as OctaveData | undefined)?.steps.find(
+        (v) => v !== null
+      ) ??
       node.data.octave ??
       DEFAULT_OCTAVE
     labels = rows.map((d) => degreeName(d, tonic, modeId, octave))
@@ -105,7 +115,9 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     const all = Array.from({ length: count }, (_, i) => count - 1 - i)
     const used = new Set(node.data.steps.map((v) => (v === null ? v : v % count)))
     rows = node.data.folded && all.some((v) => used.has(v)) ? all.filter((v) => used.has(v)) : all
-    labels = rows.map((v) => (sample && isBank(sample) ? (files?.[v] ?? `file ${v}`) : `slice ${v + 1}`))
+    labels = rows.map((v) =>
+      sample && isBank(sample) ? (files?.[v] ?? `file ${v}`) : `slice ${v + 1}`
+    )
   }
 
   // Rows always fit the panel's height (it never scrolls vertically, only sideways for
@@ -121,6 +133,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
   }, [])
   const muted = node.type === 'sequencer' && node.data.muted
   const lens = useStepLens(node.id)
+  const sounding = useSounding(node.id)
   return (
     <div
       className="piano-roll"
@@ -140,7 +153,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
         bars={bars}
         noRests={node.type === 'velocity' || node.type === 'length'}
         roll
-        timing={{ resolution: node.data.resolution, muted, lens }}
+        timing={{ resolution: node.data.resolution, muted, lens, sounding }}
         onChange={(steps) =>
           onSteps(
             node.type === 'velocity'

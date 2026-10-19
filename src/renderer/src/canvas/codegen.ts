@@ -7,8 +7,32 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { DEFAULT_OCTAVE, EFFECTS, heldValues, loopSteps, velocityGain, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, SYNTHS, TONICS } from './model'
-import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, OctaveData, SampleData, SequencerData, Step, VelocityData } from './model'
+import {
+  DEFAULT_OCTAVE,
+  EFFECTS,
+  heldValues,
+  loopSteps,
+  velocityGain,
+  isBank,
+  LENGTH_STEPS,
+  MODES,
+  pieceCount,
+  STEP_RESOLUTION,
+  SYNTHS,
+  TONICS
+} from './model'
+import type {
+  CanvasNode,
+  EffectData,
+  KeyData,
+  LengthData,
+  ModeData,
+  OctaveData,
+  SampleData,
+  SequencerData,
+  Step,
+  VelocityData
+} from './model'
 
 const quote = (s: string): string => JSON.stringify(s)
 
@@ -24,8 +48,17 @@ const lensAt = (lens: Lens, i: number): number => (lens?.length ? lens[i % lens.
 // but a hit pattern can't: every step must still be its own hit.
 // Steps and lengths loop at their own counts, so the loop runs until they line up.
 function stepped(stepTokens: string[], lens: Lens, collapse = true): string {
-  if (collapse && stepTokens.length && stepTokens.every((tk) => tk === stepTokens[0]) && stepTokens[0] !== '~') return stepTokens[0]
-  const n = lens?.length && stepTokens.length ? loopSteps(stepTokens.length, lens.length) : stepTokens.length
+  if (
+    collapse &&
+    stepTokens.length &&
+    stepTokens.every((tk) => tk === stepTokens[0]) &&
+    stepTokens[0] !== '~'
+  )
+    return stepTokens[0]
+  const n =
+    lens?.length && stepTokens.length
+      ? loopSteps(stepTokens.length, lens.length)
+      : stepTokens.length
   const tokens = Array.from({ length: n }, (_, i) => stepTokens[i % stepTokens.length])
   const weights = tokens.map((_, i) => lensAt(lens, i))
   const total = weights.reduce((a, b) => a + b, 0)
@@ -48,8 +81,9 @@ export interface Stepped<T> {
 
 // One value per 1/16: each step's value repeated for its length.
 const perSixteenth = (values: number[], lens: Lens): number[] =>
-  Array.from({ length: lens?.length ? loopSteps(values.length, lens.length) : values.length }, (_, i) =>
-    Array(lensAt(lens, i)).fill(values[i % values.length])
+  Array.from(
+    { length: lens?.length ? loopSteps(values.length, lens.length) : values.length },
+    (_, i) => Array(lensAt(lens, i)).fill(values[i % values.length])
   ).flat()
 
 // The scale per 1/16, from the Key and Mode sequencers (C / Ionian when not wired).
@@ -62,7 +96,9 @@ function harmonyPattern(
   fallbackOctave: number
 ): string {
   const keys = key?.data.steps.length ? perSixteenth(heldValues(key.data.steps, 0), key.lens) : [0]
-  const modes = mode?.data.steps.length ? perSixteenth(heldValues(mode.data.steps, 0), mode.lens) : [0]
+  const modes = mode?.data.steps.length
+    ? perSixteenth(heldValues(mode.data.steps, 0), mode.lens)
+    : [0]
   const octs = octave?.data.steps.length
     ? perSixteenth(heldValues(octave.data.steps, fallbackOctave), octave.lens)
     : [fallbackOctave]
@@ -98,7 +134,10 @@ function transposePattern(
   const octs = octave?.data.steps.length
     ? perSixteenth(heldValues(octave.data.steps, DEFAULT_OCTAVE), octave.lens)
     : [DEFAULT_OCTAVE]
-  const length = Math.min(MAX_HARMONY_STEPS, (keys.length * octs.length) / gcd(keys.length, octs.length))
+  const length = Math.min(
+    MAX_HARMONY_STEPS,
+    (keys.length * octs.length) / gcd(keys.length, octs.length)
+  )
   const runs: [string, number][] = []
   for (let i = 0; i < length; i++) {
     const semis = keys[i % keys.length] + 12 * (octs[i % octs.length] - DEFAULT_OCTAVE)
@@ -117,16 +156,25 @@ function transposePattern(
 const SCALE = '__SCALE__'
 
 // Built-in oscillators (no sample files): they take a note, not a slice or speed.
-const isOscillator = (sample: SampleData): boolean => SYNTHS.includes(sample.s) && sample.s !== 'piano'
+const isOscillator = (sample: SampleData): boolean =>
+  SYNTHS.includes(sample.s) && sample.s !== 'piano'
 
-export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens = null): string | null {
+export function sequencerCode(
+  seq: SequencerData,
+  sample: SampleData,
+  lens: Lens = null
+): string | null {
   if (seq.steps.every((v) => v === null)) return null
   const sound = quote(sample.s)
   let code: string
   switch (seq.kind) {
     case 'degree': {
       // UI degrees are 1-based; Strudel's are 0-based.
-      const degrees = stepped(steps(seq.steps, (v) => String(v - 1)), lens, false)
+      const degrees = stepped(
+        steps(seq.steps, (v) => String(v - 1)),
+        lens,
+        false
+      )
       code = `n("${degrees}")${SCALE}.s(${sound})`
       // scale() turns n into a note, so n is free again to pick the sample variant.
       if (sample.n) code += `.n(${sample.n})`
@@ -135,13 +183,17 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens
     case 'slice': {
       // Steps set before the piece count was lowered wrap around.
       const count = pieceCount(sample)
-      const picks = stepped(steps(seq.steps, (v) => String(v % count)), lens, false)
+      const picks = stepped(
+        steps(seq.steps, (v) => String(v % count)),
+        lens,
+        false
+      )
       // A multi-file sound picks files; a single file is cut into equal slices.
       code = isOscillator(sample)
         ? `n("${picks}").s(${sound})`
         : isBank(sample)
-        ? `n("${picks}").s(${sound})`
-        : `s(${sound}).n(${sample.n}).slice(${count}, "${picks}")`
+          ? `n("${picks}").s(${sound})`
+          : `s(${sound}).n(${sample.n}).slice(${count}, "${picks}")`
       break
     }
   }
@@ -150,12 +202,16 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens
 
 // Strudel's velocity is 0..1 and multiplies with gain, so accents scale the channel level.
 export function velocityCode(data: VelocityData, lens: Lens = null): string {
-  return `.velocity("${stepped(data.steps.map((v) => String(+velocityGain(v).toFixed(4))), lens)}")`
+  return `.velocity("${stepped(
+    data.steps.map((v) => String(+velocityGain(v).toFixed(4))),
+    lens
+  )}")`
 }
 
 // Strudel's clip multiplies each note's duration and cuts samples at the end.
 // Each step's length in 1/16 steps.
-export const lengthValues = (data: LengthData): number[] => data.steps.map((v) => LENGTH_STEPS[v - 1] ?? 1)
+export const lengthValues = (data: LengthData): number[] =>
+  data.steps.map((v) => LENGTH_STEPS[v - 1] ?? 1)
 
 // Note duration relative to the step it sits on (clip = length / step length): a 1/4
 // note on a 1/16 step is clip 4; on a 1/4 step it's clip 1. Clip also cuts samples off.
@@ -181,6 +237,8 @@ export interface Compiled {
   active: Set<string>
   // Step lengths (1/16 units) each stepping node plays at, for its playhead; absent = 1/16.
   stepLens: Map<string, Lens>
+  // Nodes on a chain that is heard (not muted, not left out by a Solo).
+  sounding: Set<string>
 }
 
 // Without a Sample in the chain, Notes play this synth; other sequencers stay silent.
@@ -201,6 +259,16 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
       .map((e) => byId.get(e.target))
       .filter((n): n is CanvasNode => !!n && CHAIN.has(n.type))
+
+  // Every node downstream of id (following pattern wires).
+  const reachableFrom = (id: string, seen = new Set<string>()): Set<string> => {
+    for (const e of edges)
+      if (e.source === id && e.sourceHandle === 'pattern' && !seen.has(e.target)) {
+        seen.add(e.target)
+        reachableFrom(e.target, seen)
+      }
+    return seen
+  }
 
   // What a chain has gathered so far. A sequencer start builds its pattern only at
   // the end, once it knows its sound and scale; a Mix start is already a pattern.
@@ -308,9 +376,16 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   // Apply the parameter chains wired into id (skipping the edge the flow arrived on).
   // A chain that branches off this same flow upstream is a parallel branch, not a
   // setting: it's followed on its own (see follow).
-  const applySide = (ctx: Ctx, id: string, from: string | null, flow: Set<string> = new Set()): Ctx => {
+  const applySide = (
+    ctx: Ctx,
+    id: string,
+    from: string | null,
+    flow: Set<string> = new Set()
+  ): Ctx => {
     let c = ctx
-    for (const e of edges.filter((e) => e.target === id && e.sourceHandle === 'pattern' && e.source !== from)) {
+    for (const e of edges.filter(
+      (e) => e.target === id && e.sourceHandle === 'pattern' && e.source !== from
+    )) {
       if (flowReaches(e.source, flow)) continue
       const chain = paramChain(e.source, new Set([id]))
       if (chain) for (const p of chain) c = apply(c, p)
@@ -322,13 +397,31 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (flow.has(id)) return true
     if (seen.has(id)) return false
     seen.add(id)
-    return edges.some((e) => e.target === id && e.sourceHandle === 'pattern' && flowReaches(e.source, flow, seen))
+    return edges.some(
+      (e) => e.target === id && e.sourceHandle === 'pattern' && flowReaches(e.source, flow, seen)
+    )
   }
 
-  const lines: string[] = []
-  const layers: string[] = []
+  // Every playing chain, with the nodes it runs through (for Mute / Solo).
+  interface Line {
+    code: string
+    layer: string
+    path: Set<string>
+  }
+  const out: Line[] = []
   const active = new Set<string>()
-  const mixMembers = new Map<string, string[]>()
+  const mixMembers = new Map<string, { code: string; path: Set<string> }[]>()
+
+  // Mute / Solo work on any node: a chain is silent if any node on it is muted, and
+  // while anything is soloed only chains running through a soloed node play.
+  const flag = (id: string, key: 'muted' | 'solo'): boolean =>
+    !!(byId.get(id)?.data as { muted?: boolean; solo?: boolean } | undefined)?.[key]
+  const anySolo = nodes.some((n) => flag(n.id, 'solo'))
+  const plays = (path: Set<string>, soloAfter = false): boolean => {
+    const ids = [...path]
+    if (ids.some((id) => flag(id, 'muted'))) return false
+    return !anySolo || soloAfter || ids.some((id) => flag(id, 'solo'))
+  }
 
   const follow = (node: CanvasNode, ctx: Ctx, seen: Set<string>): void => {
     active.add(node.id)
@@ -336,8 +429,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (!outs.length) {
       const code = finish(ctx)
       if (code) {
-        lines.push(code)
-        layers.push(node.id)
+        out.push({ code, layer: node.id, path: seen })
       }
       return
     }
@@ -345,7 +437,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       if (next.type === 'mix') {
         const code = finish(ctx)
         if (code) {
-          mixMembers.set(next.id, [...(mixMembers.get(next.id) ?? []), code])
+          mixMembers.set(next.id, [...(mixMembers.get(next.id) ?? []), { code, path: seen }])
           active.add(next.id)
         }
         continue
@@ -357,10 +449,17 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     }
   }
 
-  const empty = { sample: null, key: null, mode: null, octave: null, length: null, seqLens: null, mods: '' }
+  const empty = {
+    sample: null,
+    key: null,
+    mode: null,
+    octave: null,
+    length: null,
+    seqLens: null,
+    mods: ''
+  }
   for (const node of nodes)
-    if (node.type === 'sequencer' && !node.data.muted)
-    {
+    if (node.type === 'sequencer' && !node.data.muted) {
       // What's wired into a sequencer applies before it starts: a Length there sets its
       // step lengths (notes then fill their steps), not a note duration. Each branch
       // with a sound wired in is its own voice (see paramPaths).
@@ -384,7 +483,11 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const STEPPING = new Set(['key', 'mode', 'octave', 'velocity'])
   for (const end of nodes) {
     // Wired into anything (a sequencer's input too), it isn't an end: it sets that up.
-    if (active.has(end.id) || edges.some((e) => e.source === end.id && e.sourceHandle === 'pattern')) continue
+    if (
+      active.has(end.id) ||
+      edges.some((e) => e.source === end.id && e.sourceHandle === 'pattern')
+    )
+      continue
     for (const chain of paramPaths(end.id, new Set()) ?? []) clocked(end, chain)
   }
   function clocked(end: CanvasNode, chain: CanvasNode[]): void {
@@ -403,13 +506,19 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       active.add(n.id)
     }
     const hits = (clock.data.steps as Step[]).map((v) => (v === null ? null : 0))
-    const seq: SequencerData = { kind: 'slice', steps: hits, resolution: STEP_RESOLUTION, octave: DEFAULT_OCTAVE, gain: 1, muted: false }
+    const seq: SequencerData = {
+      kind: 'slice',
+      steps: hits,
+      resolution: STEP_RESOLUTION,
+      octave: DEFAULT_OCTAVE,
+      gain: 1,
+      muted: false
+    }
     // A held Length sets how long each hit sounds: a full step at that length.
     const held = clockLens ? { ...ctx, mods: '.clip(1)' + ctx.mods } : ctx
     const code = finish({ ...held, seq, seqLens: clockLens })
     if (code) {
-      lines.push(code)
-      layers.push(end.id)
+      out.push({ code, layer: end.id, path: new Set(chain.map((n) => n.id)) })
     }
   }
 
@@ -425,12 +534,25 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       )
       if (feedsFromMix) continue
       done.add(mix.id)
-      const members = mixMembers.get(mix.id) ?? []
+      // A Solo after the Mix plays all of its inputs.
+      const soloAfter = [...reachableFrom(mix.id)].some((id) => flag(id, 'solo'))
+      const members = (mixMembers.get(mix.id) ?? []).filter((m) => plays(m.path, soloAfter))
       if (!members.length) continue
-      const base = `stack(${members.join(', ')}).orbit(${i + 2})`
-      follow(mix, { ...empty, seq: null, base }, new Set([mix.id]))
+      const base = `stack(${members.map((m) => m.code).join(', ')}).orbit(${i + 2})`
+      follow(
+        mix,
+        { ...empty, seq: null, base },
+        new Set([mix.id, ...members.flatMap((m) => [...m.path])])
+      )
     }
 
+  const heard = out.filter((l) => plays(l.path))
+  const lines = heard.map((l) => l.code)
+  const layers = heard.map((l) => l.layer)
+  // Nodes on a chain that reaches the output (their grids flash as they play).
+  // A chain with a gain at 0 on it makes no sound, so it doesn't count.
+  const silent = (id: string): boolean => (byId.get(id)?.data as { gain?: number } | undefined)?.gain === 0
+  const sounding = new Set(heard.filter((l) => ![...l.path].some(silent)).flatMap((l) => [...l.path]))
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
-  return { code, layers, active, stepLens }
+  return { code, layers, active, stepLens, sounding }
 }

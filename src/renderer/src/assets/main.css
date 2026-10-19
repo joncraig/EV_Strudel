@@ -113,6 +113,10 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .cell.beat { background: #272727; }
 .cell:hover { border-color: #8ab4f8; }
 .cell.on { background: #8ab4f8; border-color: #8ab4f8; }
+/* The playing step of a chain that is heard. */
+.cell.on.hit { background: #fff !important; border-color: #fff !important; }
+.react-flow__node.muted-node { opacity: 0.45; }
+.react-flow__node.solo-node .node { box-shadow: 0 0 0 2px #f0d050; }
 .mode-node .cell.on { background: #c9a0f0; }
 
 .mode-step { display: flex; gap: 4px; align-items: center; }

@@ -10,7 +10,8 @@ interface Props {
   labels?: string[]
   onChange: (steps: Step[]) => void
   // Pattern timing, for the playhead bar. Omit (or muted) for no playhead.
-  timing?: { resolution: number; muted?: boolean; lens?: number[] | null }
+  // sounding: the node is on a chain that's heard, so the playing step's set cells flash.
+  timing?: { resolution: number; muted?: boolean; lens?: number[] | null; sounding?: boolean }
   // Level bars: a cell is lit when its row is at or below the step's value, and a
   // step always has a value (no rests).
   bars?: boolean
@@ -23,7 +24,16 @@ interface Props {
 // Press a cell and slide across others to paint. The first cell decides the stroke:
 // turning a cell on paints "on" (that row) along the way; turning one off erases.
 // In bar mode every column touched takes the level under the pointer.
-function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = false, noRests = false }: Props): React.JSX.Element {
+function StepGrid({
+  steps,
+  rows,
+  labels,
+  onChange,
+  timing,
+  bars = false,
+  roll = false,
+  noRests = false
+}: Props): React.JSX.Element {
   // Latest steps for the stroke handlers, which outlive a render.
   const stepsRef = useRef(steps)
   useEffect(() => {
@@ -56,6 +66,7 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
   const muted = !timing || timing.muted
   const lens = timing?.lens ?? null
   const lensKey = lens?.join(',') ?? ''
+  const sounding = !!timing?.sounding
   useEffect(() => {
     const bar = barRef.current
     if (!bar) return
@@ -63,19 +74,30 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
       bar.style.display = 'none'
       return
     }
-    return subscribeStep(length, resolution, (step) => {
-      const cell = gridRef.current?.querySelector<HTMLElement>(`.cell[data-i="${step}"]`)
-      if (step < 0 || !cell) {
-        bar.style.display = 'none'
-        return
-      }
-      bar.style.display = 'block'
-      bar.style.width = `${cell.offsetWidth}px`
-      bar.style.transform = `translateX(${cell.offsetLeft}px)`
-    }, lens)
+    return subscribeStep(
+      length,
+      resolution,
+      (step) => {
+        const grid = gridRef.current
+        grid?.querySelectorAll('.cell.hit').forEach((c) => c.classList.remove('hit'))
+        if (sounding && step >= 0)
+          grid
+            ?.querySelectorAll(`.cell.on[data-i="${step}"]`)
+            .forEach((c) => c.classList.add('hit'))
+        const cell = grid?.querySelector<HTMLElement>(`.cell[data-i="${step}"]`)
+        if (step < 0 || !cell) {
+          bar.style.display = 'none'
+          return
+        }
+        bar.style.display = 'block'
+        bar.style.width = `${cell.offsetWidth}px`
+        bar.style.transform = `translateX(${cell.offsetLeft}px)`
+      },
+      lens
+    )
     // lensKey stands in for lens (a new array each render).
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [length, resolution, muted, lensKey])
+  }, [length, resolution, muted, lensKey, sounding])
 
   const cellAt = (x: number, y: number): { i: number; v: number } | null => {
     const el = document.elementFromPoint(x, y) as HTMLElement | null
@@ -125,7 +147,11 @@ function StepGrid({ steps, rows, labels, onChange, timing, bars = false, roll = 
   }
 
   return (
-    <div className={`step-grid nodrag ${roll ? 'roll' : ''}`} ref={gridRef} onPointerDown={onPointerDown}>
+    <div
+      className={`step-grid nodrag ${roll ? 'roll' : ''}`}
+      ref={gridRef}
+      onPointerDown={onPointerDown}
+    >
       <div className="playhead-bar" ref={barRef} />
       {rows.map((v, r) => (
         <div className="grid-row" key={v}>
