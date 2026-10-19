@@ -1,31 +1,24 @@
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
-import MiniSteps from './MiniSteps'
 import { CHORD_TYPES } from './chords'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { usePlayhead } from './playhead'
-import { useSounding, useStepLens } from './stepLens'
 import {
-  DEGREE_ROWS,
   stepAt,
   EFFECTS,
   EffectNode as EffectNodeT,
   MODES,
   CanvasNode,
-  sequencerSample,
   KeyNode as KeyNodeT,
   MixNode as MixNodeT,
   LfoNode as LfoNodeT,
   DuckNode as DuckNodeT,
   PerformNode as PerformNodeT,
-  LFO_SHAPES,
   lfoRateLabel,
   MOD_PREFIX,
   upstream,
   LengthNode as LengthNodeT,
   lengthLabel,
-  STEP_RESOLUTION,
   ModeNode as ModeNodeT,
-  OCTAVES,
   octaveLabel,
   OctaveNode as OctaveNodeT,
   SampleNode as SampleNodeT,
@@ -36,19 +29,9 @@ import {
   isBank,
   pieceCount,
   TONICS,
-  VELOCITY_LEVELS,
+  velocityDb,
   VelocityNode as VelocityNodeT
 } from './model'
-
-// Title bar (drags the node). `right` holds header controls like the step grip.
-function Header({ title, right }: { title: string; right?: React.ReactNode }): React.JSX.Element {
-  return (
-    <div className="node-header">
-      <span className="node-title">{title}</span>
-      {right}
-    </div>
-  )
-}
 
 // ---- Sample ----
 
@@ -104,38 +87,81 @@ function ModInput({ param, left }: { param: string; left: number }): React.JSX.E
 // Several chains in, one out: they play stacked through whatever follows, sharing
 // its effects. Each Bus is its own orbit, so its delay and reverb are its own. Volume
 // and Pan act on its audio live (audio/modulation.ts) and take LFOs from below.
+// ---- Cards: every node is a block in its type's colour saying what it does in large
+// text, readable zoomed out. Editing is in the bottom panel. ----
+
+// At most `max` items, then "…".
+const few = (items: string[], max = 4): string =>
+  items.length > max ? `${items.slice(0, max).join(' ')} …` : items.join(' ')
+
+// Consecutive repeats once ("C C G" -> "C G").
+const runs = (items: string[]): string[] => items.filter((v, i) => i === 0 || v !== items[i - 1])
+
+function Card({
+  className,
+  kind,
+  big,
+  small,
+  children
+}: {
+  className: string
+  // The node type, small and dim (the colour already says it).
+  kind: string
+  big: React.ReactNode
+  small?: React.ReactNode
+  children?: React.ReactNode
+}): React.JSX.Element {
+  return (
+    <div className={`node card ${className}`}>
+      <span className="card-kind">{kind}</span>
+      <div className="card-big">{big || '–'}</div>
+      {small && <div className="card-small">{small}</div>}
+      {children}
+    </div>
+  )
+}
+
+// A chain node's pattern input and output.
+const Ports = (): React.JSX.Element => (
+  <>
+    <Handle type="target" position={Position.Left} id="pattern" />
+    <Handle type="source" position={Position.Right} id="pattern" />
+  </>
+)
+
 export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
   const { updateNodeData } = useReactFlow()
   const volume = data.volume ?? 1
-  const db = volume > 0 ? `${(20 * Math.log10(volume)).toFixed(1)} dB` : '-inf dB'
+  const db = volume > 0 ? `${(20 * Math.log10(volume)).toFixed(1)} dB` : '−∞'
   const pan = data.pan ?? 0
-  const panText =
-    Math.abs(pan) < 0.01 ? 'C' : pan < 0 ? `L${Math.round(-pan * 100)}` : `R${Math.round(pan * 100)}`
   return (
-    <div className="node mix-node">
-      <Handle type="target" position={Position.Left} id="pattern" />
-      <Header
-        title="Bus"
-        right={
-          <div className="bus-ms nodrag">
-            <button
-              className={data.muted ? 'on mute' : 'mute'}
-              onClick={() => updateNodeData(id, { muted: !data.muted })}
-            >
-              M
-            </button>
-            <button
-              className={data.solo ? 'on solo' : 'solo'}
-              onClick={() => updateNodeData(id, { solo: !data.solo })}
-            >
-              S
-            </button>
-          </div>
-        }
-      />
-      <div className="node-summary">
-        {db} · {panText}
+    <Card
+      className="mix-node"
+      kind="Bus"
+      big={db}
+      small={
+        Math.abs(pan) < 0.01
+          ? null
+          : pan < 0
+            ? `L ${Math.round(-pan * 100)}`
+            : `R ${Math.round(pan * 100)}`
+      }
+    >
+      <div className="bus-ms nodrag">
+        <button
+          className={data.muted ? 'on mute' : 'mute'}
+          onClick={() => updateNodeData(id, { muted: !data.muted })}
+        >
+          M
+        </button>
+        <button
+          className={data.solo ? 'on solo' : 'solo'}
+          onClick={() => updateNodeData(id, { solo: !data.solo })}
+        >
+          S
+        </button>
       </div>
+      <Ports />
       <ModInput param="volume" left={0.3} />
       <ModInput param="pan" left={0.7} />
       {/* Duck nodes wire in here: their notes dip this Bus. */}
@@ -146,49 +172,35 @@ export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
         className="duck-handle"
         style={{ left: '50%' }}
       />
-      <Handle type="source" position={Position.Right} id="pattern" />
-    </div>
+    </Card>
   )
 }
-
-// ---- Duck ----
-
-const ms = (s: number): string => (s < 1 ? `${Math.round(s * 1000)} ms` : `${s.toFixed(2)} s`)
 
 // Sidechain-style ducking: notes pass straight through, and each one dips the Buses
 // wired to the duck output (bottom).
 export function DuckNode({ data }: NodeProps<DuckNodeT>): React.JSX.Element {
   return (
-    <div className="node duck-node">
-      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 17 }} />
-      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 17 }} />
-      <Header title="Duck" />
-      <div className="node-summary">
-        {Math.round(data.depth * 100)}% · {ms(data.attack)} / {ms(data.release)}
-      </div>
+    <Card className="duck-node" kind="Duck" big={`${Math.round(data.depth * 100)}%`}>
+      <Ports />
       <Handle type="source" position={Position.Bottom} id="duck" className="duck-handle" />
-    </div>
+    </Card>
   )
 }
 
-// ---- Strum / Arp ----
-
-const ARP_LABEL = { up: 'up', down: 'down', updown: 'up-down', random: 'random' }
+const ARROW = { up: '↑', down: '↓', updown: '↕', random: '?' }
 
 // Plays the chords of the chain it's in note by note: Strum spreads each chord's
 // notes across the start of its step, Arp plays them one at a time.
 export function PerformNode({ data }: NodeProps<PerformNodeT>): React.JSX.Element {
   return (
-    <div className="node perform-node">
-      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 17 }} />
-      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 17 }} />
-      <Header title="Strum / Arp" />
-      <div className="node-summary">
-        {data.mode === 'arp'
-          ? `Arp · ${ARP_LABEL[data.pattern]} · ${data.rate}/16`
-          : `Strum · ${data.direction} · ${Math.round(data.amount * 100)}%`}
-      </div>
-    </div>
+    <Card
+      className="perform-node"
+      kind={data.mode === 'arp' ? 'Arp' : 'Strum'}
+      big={data.mode === 'arp' ? `Arp ${ARROW[data.pattern]}` : `Strum ${ARROW[data.direction]}`}
+      small={data.mode === 'arp' ? `${data.rate}/16` : null}
+    >
+      <Ports />
+    </Card>
   )
 }
 
@@ -219,122 +231,78 @@ function wavePath(shape: string, w: number, h: number): string {
 // A repeating wave synced to the tempo; its mod output (right) adds onto whatever it's
 // wired to. Rate and Depth take other LFOs from below (modulators modulating modulators).
 export function LfoNode({ data }: NodeProps<LfoNodeT>): React.JSX.Element {
-  const shape = LFO_SHAPES.find((s) => s.id === data.shape)?.label ?? data.shape
   return (
-    <div className="node lfo-node">
-      <Header title="LFO" />
-      <svg className="lfo-wave" viewBox="0 0 120 32" preserveAspectRatio="none">
-        <path d={wavePath(data.shape, 120, 32)} />
-      </svg>
-      <div className="node-summary">
-        {shape} · {lfoRateLabel(data.rate)} · {Math.round(data.depth * 100)}%
-      </div>
+    <Card
+      className="lfo-node"
+      kind="LFO"
+      big={
+        <svg className="lfo-wave" viewBox="0 0 120 32" preserveAspectRatio="none">
+          <path d={wavePath(data.shape, 120, 32)} />
+        </svg>
+      }
+      small={lfoRateLabel(data.rate)}
+    >
       <ModInput param="rate" left={0.15} />
       <ModInput param="depth" left={0.35} />
       <Handle type="source" position={Position.Right} id="mod" className="mod-handle" />
-    </div>
+    </Card>
   )
 }
 
-// ---- Sequencers: a summary on the canvas, edited in the bottom panel ----
+// ---- Sequencers ----
 
 const KIND_LABEL: Record<SequencerKind, string> = {
   degree: 'Notes',
   slice: 'Slices',
   chord: 'Chords'
 }
+const ROMAN = ['I', 'II', 'III', 'IV', 'V', 'VI', 'VII', 'VIII']
 
-// Chords rows: one chord type each (top: in key).
-const CHORD_ROWS = CHORD_TYPES.map((_, i) => i)
-
-// The step count, in the title bar.
-const StepCount = ({ n }: { n: number }): React.JSX.Element => (
-  <span className="step-count">{n}</span>
-)
-
-export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JSX.Element {
-  const nodes = useNodes()
-  const edges = useEdges()
-  // The sound this sequencer plays (wired in, or after it), as the music resolves it.
-  const sample = sequencerSample(nodes as CanvasNode[], edges, id)
-  const slices = sample ? pieceCount(sample) : 8
-  const timing = {
-    resolution: data.resolution,
-    muted: data.muted,
-    lens: useStepLens(id),
-    sounding: useSounding(id)
-  }
-  const rows =
+export function SequencerNode({ data }: NodeProps<SequencerNodeT>): React.JSX.Element {
+  const set = data.steps.filter((c) => cellNotes(c).length)
+  const words =
     data.kind === 'chord'
-      ? CHORD_ROWS
+      ? set.map((c) => CHORD_TYPES[cellNotes(c)[0]]?.label ?? '?')
       : data.kind === 'degree'
-        ? DEGREE_ROWS
-        : Array.from({ length: slices }, (_, i) => slices - 1 - i)
-  // Chords: the types in use, in order of first use.
-  const types =
-    data.kind === 'chord'
-      ? [...new Set(data.steps.flatMap((c) => cellNotes(c)))]
-          .map((t) => CHORD_TYPES[t]?.label)
-          .join(' ')
-      : ''
+        ? set.map((c) =>
+            cellNotes(c)
+              .map((d) => ROMAN[d - 1] ?? d)
+              .join('+')
+          )
+        : set.map((c) => String((cellNotes(c)[0] ?? 0) + 1))
   return (
-    <div className={`node sequencer-node ${data.muted ? 'muted' : ''}`}>
-      {/* Parameter chains (Length, Key, Mode ...) wired in set values for this sequencer's notes. */}
-      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 17 }} />
-      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 17 }} />
-      <Header title={KIND_LABEL[data.kind]} right={<StepCount n={data.steps.length} />} />
-      <MiniSteps steps={data.steps} rows={rows} timing={timing} />
-      {types && <div className="node-summary">{types}</div>}
-    </div>
-  )
-}
-
-// ---- Velocity and Length: level sequencers that shape the pattern wired in ----
-
-const LEVEL_ROWS = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
-
-function LevelNode({
-  id,
-  steps,
-  title,
-  kind
-}: {
-  id: string
-  steps: number[]
-  title: string
-  kind: 'velocity' | 'length'
-}): React.JSX.Element {
-  const lens = useStepLens(id)
-  const sounding = useSounding(id)
-  // Length: the lengths in use.
-  const used = kind === 'length' ? [...new Set(steps)].map(lengthLabel).join(' ') : ''
-  return (
-    <div className={`node level-node ${kind}-node`}>
-      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 17 }} />
-      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 17 }} />
-      <Header title={title} right={<StepCount n={steps.length} />} />
-      <MiniSteps
-        steps={steps}
-        rows={LEVEL_ROWS}
-        bars={kind === 'velocity'}
-        timing={{ resolution: STEP_RESOLUTION, lens, sounding }}
-      />
-      {used && <div className="node-summary">{used}</div>}
-    </div>
+    <Card
+      className={`sequencer-node ${data.kind}-seq ${data.muted ? 'muted' : ''}`}
+      kind={KIND_LABEL[data.kind]}
+      big={few(runs(words))}
+    >
+      <Ports />
+    </Card>
   )
 }
 
 // Per-step loudness (Strudel velocity).
-export function VelocityNode({ id, data }: NodeProps<VelocityNodeT>): React.JSX.Element {
-  return <LevelNode id={id} steps={data.steps} title="Velocity" kind="velocity" />
+export function VelocityNode({ data }: NodeProps<VelocityNodeT>): React.JSX.Element {
+  return (
+    <Card
+      className="velocity-node"
+      kind="Velocity"
+      big={few(runs(data.steps.map((v) => String(velocityDb(v)))))}
+      small="dB"
+    >
+      <Ports />
+    </Card>
+  )
 }
 
 // Per-step note length (Strudel clip).
-export function LengthNode({ id, data }: NodeProps<LengthNodeT>): React.JSX.Element {
-  return <LevelNode id={id} steps={data.steps} title="Length" kind="length" />
+export function LengthNode({ data }: NodeProps<LengthNodeT>): React.JSX.Element {
+  return (
+    <Card className="length-node" kind="Length" big={few(runs(data.steps.map(lengthLabel)))}>
+      <Ports />
+    </Card>
+  )
 }
-
-// ---- Effect ----
 
 const short = (v: number): string =>
   v >= 1000 ? `${(v / 1000).toFixed(1)}k` : v >= 100 ? v.toFixed(0) : String(+v.toFixed(2))
@@ -343,75 +311,52 @@ const short = (v: number): string =>
 export function EffectNode({ data }: NodeProps<EffectNodeT>): React.JSX.Element {
   const spec = EFFECTS[data.kind]
   return (
-    <div className={`node effect-node ${data.bypass ? 'muted' : ''}`}>
-      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 17 }} />
-      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 17 }} />
-      <Header title={data.bypass ? `${spec.label} (off)` : spec.label} />
-      <div className="node-summary">
-        {spec.params.map((p) => `${p.label} ${short(data.params[p.key] ?? p.value)}`).join(' · ')}
-      </div>
-    </div>
+    <Card
+      className={`effect-node ${data.bypass ? 'muted' : ''}`}
+      kind="Effect"
+      big={spec.label}
+      small={spec.params.map((p) => short(data.params[p.key] ?? p.value)).join(' · ')}
+    >
+      <Ports />
+    </Card>
   )
 }
 
-// ---- Key, Mode and Octave sequencers ----
-
-// Rows top to bottom: highest index first, so the strip reads like a piano roll.
-const KEY_ROWS = TONICS.map((_, i) => TONICS.length - 1 - i)
-const MODE_ROWS = MODES.map((_, i) => MODES.length - 1 - i)
-const OCTAVE_ROWS = [...OCTAVES].reverse()
-
 function HarmonyNode({
-  id,
   data,
   kind
 }: {
-  id: string
   data: KeyNodeT['data'] | ModeNodeT['data'] | OctaveNodeT['data']
   kind: 'key' | 'mode' | 'octave'
 }): React.JSX.Element {
-  const lens = useStepLens(id)
-  const sounding = useSounding(id)
-  const rows = kind === 'key' ? KEY_ROWS : kind === 'mode' ? MODE_ROWS : OCTAVE_ROWS
   const name = (v: number): string =>
     kind === 'key'
       ? TONICS[v]
       : kind === 'mode'
         ? MODES[v].label.replace(/ (.*)/, '')
         : octaveLabel(v)
-  // The values it steps through, in order.
-  const values = data.steps.filter((v): v is number => v !== null)
-  const seq = values.filter((v, i) => i === 0 || v !== values[i - 1]).map(name)
+  const values = runs(data.steps.filter((v): v is number => v !== null).map(name))
   return (
-    <div className={`node harmony-node ${kind}-node`}>
-      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 17 }} />
-      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 17 }} />
-      <Header
-        title={kind === 'key' ? 'Key' : kind === 'mode' ? 'Mode' : 'Octave'}
-        right={<StepCount n={data.steps.length} />}
-      />
-      <MiniSteps
-        steps={data.steps}
-        rows={rows}
-        timing={{ resolution: data.resolution, lens, sounding }}
-      />
-      <div className="node-summary">
-        {seq.length > 6 ? `${seq.slice(0, 6).join(' ')} …` : seq.join(' ')}
-      </div>
-    </div>
+    <Card
+      className={`harmony-node ${kind}-node`}
+      kind={kind === 'key' ? 'Key' : kind === 'mode' ? 'Mode' : 'Octave'}
+      big={few(values, kind === 'mode' ? 2 : 4)}
+    >
+      <Ports />
+    </Card>
   )
 }
 
-export function KeyNode({ id, data }: NodeProps<KeyNodeT>): React.JSX.Element {
-  return <HarmonyNode id={id} data={data} kind="key" />
+export function KeyNode({ data }: NodeProps<KeyNodeT>): React.JSX.Element {
+  return <HarmonyNode data={data} kind="key" />
 }
 
-export function OctaveNode({ id, data }: NodeProps<OctaveNodeT>): React.JSX.Element {
-  return <HarmonyNode id={id} data={data} kind="octave" />
+export function OctaveNode({ data }: NodeProps<OctaveNodeT>): React.JSX.Element {
+  return <HarmonyNode data={data} kind="octave" />
 }
 
-export function ModeNode({ id, data }: NodeProps<ModeNodeT>): React.JSX.Element {
-  return <HarmonyNode id={id} data={data} kind="mode" />
+export function ModeNode({ data }: NodeProps<ModeNodeT>): React.JSX.Element {
+  return <HarmonyNode data={data} kind="mode" />
 }
 
 // ---- Group ----

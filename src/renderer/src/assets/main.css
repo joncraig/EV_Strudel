@@ -358,3 +358,35 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .harmony-node .mini-dot { background: #c9a0f0; }
 .length-node .mini-dot { background: #6ab0e0; }
 .lfo-node .lfo-wave { margin-top: 6px; }
+
+/* Cards (2026-10-18): each node is a block in its type's colour with what it does in
+   large text; readable zoomed out. Colours roughly follow the add-menu stripes. */
+.react-flow__node .node.card { position: relative; width: auto; min-width: 110px; max-width: 260px; padding: 6px 14px 10px; border: 1px solid #0000; border-radius: 10px; background: var(--card, #333); color: #fff; box-shadow: 0 2px 10px #0007; }
+.react-flow__node.selected .node.card { border-color: #fff; }
+.card-kind { display: block; font-size: 10px; letter-spacing: 0.04em; text-transform: uppercase; color: #ffffff80; }
+.card-big { font-size: 22px; font-weight: 600; line-height: 1.2; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }
+.card-small { font-size: 12px; color: #ffffffb0; white-space: nowrap; }
+.card.muted { opacity: 0.4; }
+.card.degree-seq { --card: #2c4c80; }
+.card.chord-seq { --card: #3b3f9a; }
+.card.slice-seq { --card: #24607e; }
+.card.velocity-node { --card: #7d5a26; }
+.card.length-node { --card: #276a86; }
+.card.key-node { --card: #6b3a90; }
+.card.mode-node { --card: #8e3a6c; }
+.card.octave-node { --card: #4c3a90; }
+.card.effect-node { --card: #276b6b; }
+.card.mix-node { --card: #4a4a4a; }
+.card.lfo-node { --card: #5f5f18; }
+.card.duck-node { --card: #7a3626; }
+.card.perform-node { --card: #4f4296; }
+.card .bus-ms { position: absolute; top: 6px; right: 8px; }
+.card.lfo-node .card-big { height: 30px; }
+.card.lfo-node .lfo-wave { width: 120px; height: 30px; margin: 0; }
+.card.lfo-node .lfo-wave path { stroke: #ffd; }
+/* Piano roll: drag the right-edge grip for more or fewer steps. */
+.roll-row { display: flex; align-items: stretch; gap: 4px; }
+.roll-grip { flex: none; width: 22px; display: flex; align-items: center; justify-content: center; border-radius: 4px; background: #ffffff10; color: #ccd; font-size: 11px; cursor: ew-resize; touch-action: none; user-select: none; }
+.roll-grip:hover { background: #8ab4f855; }
+.card.mix-node .card-big { padding-right: 52px; }
+.react-flow__node .sample-chip { font-size: 20px; padding: 10px 16px; border-radius: 10px; }

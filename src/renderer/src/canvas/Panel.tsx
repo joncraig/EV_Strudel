@@ -12,11 +12,8 @@ import {
   lfoRateLabel,
   EffectParam,
   isBank,
-  LENGTH_FULL_STEP,
-  MAX_STEPS,
   pieceCount,
-  SequencerKind,
-  VELOCITY_LEVELS
+  SequencerKind
 } from './model'
 
 // Settings for the selected node, docked under the canvas. Edits go through
@@ -28,36 +25,6 @@ const KIND: Record<SequencerKind, string> = {
   chord: 'Chords'
 }
 
-function Stepper({
-  label,
-  value,
-  min,
-  max,
-  display,
-  onChange
-}: {
-  label: string
-  value: number
-  min: number
-  max: number
-  // Shown instead of the number.
-  display?: string
-  onChange: (v: number) => void
-}): React.JSX.Element {
-  return (
-    <div className="pfield">
-      <span className="plabel">{label}</span>
-      <div className="stepper">
-        <button onClick={() => onChange(Math.max(min, value - 1))}>−</button>
-        <span className="pvalue">{display ?? value}</span>
-        <button onClick={() => onChange(Math.min(max, value + 1))}>+</button>
-      </div>
-    </div>
-  )
-}
-
-// Horizontal value bar. Drag anywhere on it (tap jumps there); with a mouse the drag
-// takes a pointer lock, so it isn't stopped at the screen edge. Log scale for cutoffs.
 function Slider({
   label,
   value,
@@ -132,8 +99,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
 
   const node = selected[0]
   const set = (patch: Record<string, unknown>): void => updateNodeData(node.id, patch)
-  const resize = <T,>(steps: T[], n: number, fill: T): T[] =>
-    Array.from({ length: n }, (_, i) => steps[i] ?? fill)
 
   let title = ''
   let body: React.ReactNode = null
@@ -164,26 +129,20 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       title = KIND[d.kind]
       body = (
         <>
-          <Stepper
-            label="length"
-            value={d.steps.length}
-            min={1}
-            max={MAX_STEPS}
-            onChange={(n) => set({ steps: resize(d.steps, n, null) })}
-          />
           <Toggle label="Mute" on={d.muted} onChange={(muted) => set({ muted })} />
           {d.kind === 'slice' && (
             <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
           )}
           {d.kind === 'chord' && (
             <>
-              <Stepper
-                label="inversion"
-                value={d.inversion ?? 0}
-                min={0}
-                max={3}
-                onChange={(inversion) => set({ inversion })}
-              />
+              {[0, 1, 2, 3].map((k) => (
+                <Toggle
+                  key={k}
+                  label={k ? `inv ${k}` : 'root'}
+                  on={(d.inversion ?? 0) === k}
+                  onChange={() => set({ inversion: k })}
+                />
+              ))}
               {SPREADS.map((sp) => (
                 <Toggle
                   key={sp}
@@ -208,21 +167,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       title = node.type === 'length' ? 'Length sequencer' : 'Velocity sequencer'
       body = (
         <>
-          <Stepper
-            label="length"
-            value={d.steps.length}
-            min={1}
-            max={MAX_STEPS}
-            onChange={(n) =>
-              set({
-                steps: resize(
-                  d.steps,
-                  n,
-                  node.type === 'length' ? LENGTH_FULL_STEP : VELOCITY_LEVELS
-                )
-              })
-            }
-          />
           {node.type === 'length' && (
             <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
           )}
@@ -263,13 +207,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
             : 'Octave sequencer'
       body = (
         <>
-          <Stepper
-            label="length"
-            value={d.steps.length}
-            min={1}
-            max={MAX_STEPS}
-            onChange={(n) => set({ steps: resize(d.steps, n, null) })}
-          />
           <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
           <span className="plabel">Empty steps hold the last {node.type}.</span>
         </>
@@ -311,21 +248,31 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
           {d.mode === 'arp' ? (
             <>
               {(['up', 'down', 'updown', 'random'] as const).map((p) => (
-                <Toggle key={p} label={p === 'updown' ? 'up-down' : p} on={d.pattern === p} onChange={() => set({ pattern: p })} />
+                <Toggle
+                  key={p}
+                  label={p === 'updown' ? 'up-down' : p}
+                  on={d.pattern === p}
+                  onChange={() => set({ pattern: p })}
+                />
               ))}
-              <Stepper
-                label="rate"
-                value={d.rate}
-                min={1}
-                max={4}
-                display={`${d.rate}/16`}
-                onChange={(rate) => set({ rate })}
-              />
+              {[1, 2, 3, 4].map((r) => (
+                <Toggle
+                  key={r}
+                  label={`${r}/16`}
+                  on={d.rate === r}
+                  onChange={() => set({ rate: r })}
+                />
+              ))}
             </>
           ) : (
             <>
               {(['up', 'down'] as const).map((p) => (
-                <Toggle key={p} label={p} on={d.direction === p} onChange={() => set({ direction: p })} />
+                <Toggle
+                  key={p}
+                  label={p}
+                  on={d.direction === p}
+                  onChange={() => set({ direction: p })}
+                />
               ))}
               <Slider
                 label="spread"
@@ -374,7 +321,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     }
     case 'lfo': {
       const d = node.data
-      const ri = Math.max(0, LFO_RATES.indexOf(d.rate))
       title = 'LFO'
       body = (
         <>
@@ -386,14 +332,14 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
               onChange={() => set({ shape: sh.id })}
             />
           ))}
-          <Stepper
-            label="rate"
-            value={ri}
-            min={0}
-            max={LFO_RATES.length - 1}
-            display={lfoRateLabel(d.rate)}
-            onChange={(i) => set({ rate: LFO_RATES[i] })}
-          />
+          {LFO_RATES.map((r) => (
+            <Toggle
+              key={r}
+              label={lfoRateLabel(r)}
+              on={d.rate === r}
+              onChange={() => set({ rate: r })}
+            />
+          ))}
           <Slider
             label="depth"
             value={d.depth}

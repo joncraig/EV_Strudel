@@ -1,12 +1,14 @@
 import { useEffect, useRef, useState } from 'react'
 import type { Edge } from '@xyflow/react'
 import StepGrid from './StepGrid'
+import { valueDrag } from '../drag'
 import { CHORD_TYPES } from './chords'
 import { useSounding, useStepLens } from './stepLens'
 import { packSounds } from './packSounds'
 import {
   CanvasNode,
   DEGREE_ROWS,
+  MAX_STEPS,
   downstream,
   sequencerSample,
   degreeName,
@@ -154,25 +156,71 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
         return { ['--row-h' as string]: `${rowH}px`, ['--row-gap' as string]: `${gap}px` }
       })()}
     >
-      <StepGrid
-        steps={node.data.steps}
-        rows={rows}
-        labels={labels}
-        bars={bars}
-        noRests={node.type === 'velocity' || node.type === 'length'}
-        roll
-        poly={node.type === 'sequencer' && node.data.kind === 'degree'}
-        timing={{ resolution: node.data.resolution, muted, lens, sounding }}
-        onChange={(steps) =>
-          onSteps(
-            node.type === 'velocity'
-              ? (steps as Step[]).map((v) => v ?? VELOCITY_LEVELS)
-              : node.type === 'length'
-                ? (steps as Step[]).map((v) => v ?? LENGTH_FULL_STEP)
-                : steps
-          )
-        }
-      />
+      <div className="roll-row">
+        <StepGrid
+          steps={node.data.steps}
+          rows={rows}
+          labels={labels}
+          bars={bars}
+          noRests={node.type === 'velocity' || node.type === 'length'}
+          roll
+          poly={node.type === 'sequencer' && node.data.kind === 'degree'}
+          timing={{ resolution: node.data.resolution, muted, lens, sounding }}
+          onChange={(steps) =>
+            onSteps(
+              node.type === 'velocity'
+                ? (steps as Step[]).map((v) => v ?? VELOCITY_LEVELS)
+                : node.type === 'length'
+                  ? (steps as Step[]).map((v) => v ?? LENGTH_FULL_STEP)
+                  : steps
+            )
+          }
+        />
+        <StepsGrip
+          steps={node.data.steps.length}
+          onChange={(n) => {
+            const fill =
+              node.type === 'velocity'
+                ? VELOCITY_LEVELS
+                : node.type === 'length'
+                  ? LENGTH_FULL_STEP
+                  : null
+            onSteps(Array.from({ length: n }, (_, i) => node.data.steps[i] ?? fill))
+          }}
+        />
+      </div>
+    </div>
+  )
+}
+
+// The grid's right edge: drag it right for more steps, left for fewer (one step per
+// cell width). Pointer-locked with a mouse, so screen edges don't stop it.
+function StepsGrip({
+  steps,
+  onChange
+}: {
+  steps: number
+  onChange: (n: number) => void
+}): React.JSX.Element {
+  return (
+    <div
+      className="roll-grip"
+      title="Drag to change the number of steps"
+      onPointerDown={(e) => {
+        const cell = e.currentTarget.parentElement?.querySelector<HTMLElement>('.cell')
+        const width = (cell?.offsetWidth ?? 20) + 2
+        const start = steps
+        let last = start
+        valueDrag(e, (dx) => {
+          const next = Math.min(MAX_STEPS, Math.max(1, start + Math.round(dx / width)))
+          if (next !== last) {
+            last = next
+            onChange(next)
+          }
+        })
+      }}
+    >
+      <span>{steps}</span>
     </div>
   )
 }
