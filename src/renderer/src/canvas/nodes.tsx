@@ -12,6 +12,7 @@ import {
   useNodesData
 } from '@xyflow/react'
 import { CHORD_TYPES } from './chords'
+import { ParamFader } from './controls'
 import { soloChanges } from './solo'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { usePlayhead } from './playhead'
@@ -42,6 +43,7 @@ import {
   isBank,
   pieceCount,
   TONICS,
+  BUS_MAX_VOLUME,
   VOICING_LABEL,
   VOICING_ROWS,
   type VoicingNode as VoicingNodeT,
@@ -81,8 +83,8 @@ export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Elem
           {pieceCount(data)}
         </span>
       )}
-      <Handle type="target" position={Position.Left} id="pattern" />
-      <Handle type="source" position={Position.Right} id="pattern" />
+      <Handle type="target" position={Position.Top} id="pattern" />
+      <Handle type="source" position={Position.Bottom} id="pattern" />
     </div>
   )
 }
@@ -90,21 +92,19 @@ export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Elem
 // ---- Bus ----
 
 // A modulation input on the bottom edge, under the control it moves (left: 0..1).
-function ModInput({ param, left }: { param: string; left: number }): React.JSX.Element {
+// A modulation input on the left edge, `at` (0..1) of the way down.
+function ModInput({ param, at }: { param: string; at: number }): React.JSX.Element {
   return (
     <Handle
       type="target"
-      position={Position.Bottom}
+      position={Position.Left}
       id={MOD_PREFIX + param}
       className="mod-handle"
-      style={{ left: `${left * 100}%` }}
+      style={{ top: `${at * 100}%` }}
     />
   )
 }
 
-// Several chains in, one out: they play stacked through whatever follows, sharing
-// its effects. Each Bus is its own orbit, so its delay and reverb are its own. Volume
-// and Pan act on its audio live (audio/modulation.ts) and take LFOs from below.
 // ---- Cards: every node is a block in its type's colour saying what it does in large
 // text, readable zoomed out. Editing is in the bottom panel. ----
 
@@ -172,50 +172,67 @@ function Card({
 // A chain node's pattern input and output.
 const Ports = (): React.JSX.Element => (
   <>
-    <Handle type="target" position={Position.Left} id="pattern" />
-    <Handle type="source" position={Position.Right} id="pattern" />
+    <Handle type="target" position={Position.Top} id="pattern" />
+    <Handle type="source" position={Position.Bottom} id="pattern" />
   </>
 )
 
-export function MixNode({ data }: NodeProps<MixNodeT>): React.JSX.Element {
+// The Bus number shown everywhere (Duck's selector too): its place among the Buses.
+function useBusNumber(id: string): number {
+  const nodes = useNodes()
+  return nodes.filter((n) => n.type === 'mix').findIndex((n) => n.id === id) + 1
+}
+
+// A Bus is a channel strip in the fader section at the bottom: volume and pan faders
+// you drag right here (they act live on its audio), plus M/S. LFOs plug in on the left.
+export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
+  const { updateNodeData } = useReactFlow()
+  const n = useBusNumber(id)
   const volume = data.volume ?? 1
   const db = volume > 0 ? `${(20 * Math.log10(volume)).toFixed(1)} dB` : '−∞'
-  const pan = data.pan ?? 0
   return (
-    <Card
-      className="mix-node"
-      kind="Bus"
-      big={db}
-      small={
-        Math.abs(pan) < 0.01
-          ? null
-          : pan < 0
-            ? `L ${Math.round(-pan * 100)}`
-            : `R ${Math.round(pan * 100)}`
-      }
-    >
-      <Ports />
-      <ModInput param="volume" left={0.3} />
-      <ModInput param="pan" left={0.7} />
-      {/* Duck nodes wire in here, on top: their notes dip this Bus. */}
-      <Handle
-        type="target"
-        position={Position.Top}
-        id="duck"
-        className="duck-handle"
-        style={{ left: '50%' }}
-      />
+    <Card className="mix-node" kind={`Bus ${n}`} big={db}>
+      <div className="strip-faders nodrag">
+        <ParamFader
+          label="volume"
+          display={db}
+          value={volume}
+          min={0}
+          max={BUS_MAX_VOLUME}
+          onChange={(v) => updateNodeData(id, { volume: v })}
+        />
+        <ParamFader
+          label="pan"
+          value={data.pan ?? 0}
+          min={-1}
+          max={1}
+          onChange={(v) => updateNodeData(id, { pan: v })}
+        />
+      </div>
+      <Handle type="target" position={Position.Top} id="pattern" />
+      <ModInput param="volume" at={0.55} />
+      <ModInput param="pan" at={0.8} />
     </Card>
   )
 }
 
 // Sidechain-style ducking: notes pass straight through, and each one dips the Buses
-// wired to the duck output (bottom).
+// picked in its panel.
 export function DuckNode({ data }: NodeProps<DuckNodeT>): React.JSX.Element {
+  const nodes = useNodes()
+  const buses = nodes.filter((n) => n.type === 'mix').map((n) => n.id)
+  const targets = (data.targets ?? [])
+    .map((t) => buses.indexOf(t) + 1)
+    .filter((i) => i > 0)
+    .sort((a, b) => a - b)
   return (
-    <Card className="duck-node" kind="Duck" big={`${Math.round(data.depth * 100)}%`}>
+    <Card
+      className="duck-node"
+      kind="Duck"
+      big={`${Math.round(data.depth * 100)}%`}
+      small={targets.length ? `→ Bus ${targets.join(', ')}` : '→ no Bus'}
+    >
       <Ports />
-      <Handle type="source" position={Position.Bottom} id="duck" className="duck-handle" />
     </Card>
   )
 }
@@ -275,9 +292,9 @@ export function LfoNode({ data }: NodeProps<LfoNodeT>): React.JSX.Element {
       }
       small={lfoRateLabel(data.rate)}
     >
-      <ModInput param="rate" left={0.15} />
-      <ModInput param="depth" left={0.35} />
-      <Handle type="source" position={Position.Right} id="mod" className="mod-handle" />
+      <ModInput param="rate" at={0.35} />
+      <ModInput param="depth" at={0.7} />
+      <Handle type="source" position={Position.Bottom} id="mod" className="mod-handle" />
     </Card>
   )
 }

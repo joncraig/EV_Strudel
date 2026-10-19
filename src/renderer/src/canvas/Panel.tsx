@@ -271,9 +271,22 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     }
     case 'duck': {
       const d = node.data
+      const buses = nodes.filter((n) => n.type === 'mix').map((n) => n.id)
+      const targets = d.targets ?? []
       title = 'Duck'
       body = (
         <>
+          {/* Which Buses its notes dip (the Bus numbers on the strips). */}
+          {buses.map((b, i) => (
+            <Toggle
+              key={b}
+              label={`Bus ${i + 1}`}
+              on={targets.includes(b)}
+              onChange={(on) =>
+                set({ targets: on ? [...targets, b] : targets.filter((t) => t !== b) })
+              }
+            />
+          ))}
           <Slider
             label="depth"
             value={d.depth}

@@ -590,9 +590,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       stepLens.set(n.id, c.length)
     } else if (n.type === 'duck') {
       // Every note here ducks the Buses its duck output is wired to.
-      const targets = edges
-        .filter((e) => e.source === n.id && e.sourceHandle === 'duck')
-        .map((e) => busOrbits.get(e.target))
+      const targets = (n.data.targets ?? [])
+        .map((t) => busOrbits.get(t))
         .filter((o): o is number => o !== undefined)
       if (targets.length) {
         const orbit = targets.length === 1 ? String(targets[0]) : `"${targets.join(':')}"`

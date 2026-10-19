@@ -317,6 +317,8 @@ export interface DuckData extends Record<string, unknown> {
   attack: number
   // Time to come back up.
   release: number
+  // The Buses it dips (node ids), picked in its panel.
+  targets?: string[]
 }
 
 export const newDuck = (): DuckData => ({ depth: 0.8, attack: 0.01, release: 0.25 })
@@ -488,9 +490,28 @@ export interface DraggedSound {
   files?: number
 }
 
+// Duck nodes used to be wired to the Buses they dip; now they pick them (data.targets).
+function duckTargets(state: CanvasState): CanvasState {
+  const wires = state.edges.filter((e) => e.sourceHandle === 'duck')
+  if (!wires.length) return state
+  return {
+    nodes: state.nodes.map((n) => {
+      if (n.type !== 'duck') return n
+      const add = wires.filter((e) => e.source === n.id).map((e) => e.target)
+      return add.length
+        ? ({
+            ...n,
+            data: { ...n.data, targets: [...new Set([...(n.data.targets ?? []), ...add])] }
+          } as CanvasNode)
+        : n
+    }),
+    edges: state.edges.filter((e) => e.sourceHandle !== 'duck')
+  }
+}
+
 // Bring older saved canvases up to date. (The Velocity node was briefly called Volume.)
 export function migrateCanvas(state: CanvasState): CanvasState {
-  state = chainSamples(chainHarmony(splitLegacyModes(state)))
+  state = duckTargets(chainSamples(chainHarmony(splitLegacyModes(state))))
   // Wires are all drawn the same now (key/mode used to be animated).
   state = {
     nodes: state.nodes,

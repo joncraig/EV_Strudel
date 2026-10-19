@@ -1,14 +1,16 @@
 // Automatic layout (Jon: always consistent, so the shape and colour of a patch can be
-// read at a glance). Signal flows left to right: what feeds a node sits in a column to
-// its left, chains stack in rows, and the same wiring always gives the same picture.
+// read at a glance). Like a mixer: signal flows top to bottom, each chain is a channel
+// (a column), and every Bus sits in one row at the bottom, the fader section. The same
+// wiring always gives the same picture.
 // Nodes in a group are laid out with everything else and the group frame is fitted
 // around them; a collapsed group is placed as one block.
 
 import dagre from '@dagrejs/dagre'
 import type { CanvasNode, CanvasState } from './model'
 
-const GAP_X = 44 // between columns
-const GAP_Y = 12 // between nodes in a column
+const GAP_X = 16 // between channels (columns)
+const GAP_Y = 14 // between nodes down a channel
+const BUS_GAP = 36 // above the Bus row
 const PAD = 12 // group frame around its nodes
 const HEADER = 22 // group title bar
 const COLLAPSED = { width: 180, height: HEADER }
@@ -43,7 +45,7 @@ export function autoLayout(state: CanvasState): CanvasState {
   }
 
   const g = new dagre.graphlib.Graph({ multigraph: false })
-  g.setGraph({ rankdir: 'LR', nodesep: GAP_Y, ranksep: GAP_X, marginx: 0, marginy: 0 })
+  g.setGraph({ rankdir: 'TB', nodesep: GAP_X, ranksep: GAP_Y, marginx: 0, marginy: 0 })
   g.setDefaultEdgeLabel(() => ({}))
   for (const n of state.nodes) {
     if (n.type === 'group') {
@@ -53,9 +55,13 @@ export function autoLayout(state: CanvasState): CanvasState {
     if (stand(n.id) !== n.id) continue
     // A node in an open group also takes the room its frame needs (padding and the
     // title bar), so frames don't overlap the rows around them.
-    const s = sizeOf(n)
+    // Buses are moved to the bottom row afterwards; in the columns they only need
+    // a normal card's room, or their tall strips would stretch every row.
+    const s = n.type === 'mix' ? { width: sizeOf(n).width, height: 60 } : sizeOf(n)
     const framed = !!n.parentId && byId.get(n.parentId)?.type === 'group'
-    g.setNode(n.id, framed ? { width: s.width, height: s.height + HEADER + PAD * 2 } : s)
+    // Down a channel only the first node of a group needs the title bar's room, but
+    // every grouped node keeps its padding.
+    g.setNode(n.id, framed ? { width: s.width + PAD * 2, height: s.height + PAD * 2 } : s)
   }
   for (const e of state.edges) {
     const s = stand(e.source)
@@ -72,9 +78,17 @@ export function autoLayout(state: CanvasState): CanvasState {
     const framed = !!n?.parentId && byId.get(n.parentId)?.type === 'group'
     // Framed nodes sit below their reserved title bar.
     abs.set(id, {
-      x: Math.round(p.x - p.width / 2),
-      y: Math.round(p.y - p.height / 2 + (framed ? HEADER + PAD : 0))
+      x: Math.round(p.x - p.width / 2 + (framed ? PAD : 0)),
+      y: Math.round(p.y - p.height / 2 + (framed ? PAD : 0))
     })
+  }
+
+  // The fader section: every Bus in one row below everything else.
+  const isBus = (id: string): boolean => byId.get(id)?.type === 'mix'
+  const others = [...abs].filter(([id]) => !isBus(id))
+  if (others.length) {
+    const bottom = Math.max(...others.map(([id, p]) => p.y + sizeOf(byId.get(id)!).height))
+    for (const [id, p] of abs) if (isBus(id)) abs.set(id, { x: p.x, y: bottom + BUS_GAP })
   }
 
   // Open groups: a frame around their nodes; children are stored relative to it.
@@ -84,7 +98,7 @@ export function autoLayout(state: CanvasState): CanvasState {
     const kids = state.nodes.filter((n) => n.parentId === grp.id && abs.has(n.id))
     if (!kids.length) continue
     const x0 = Math.min(...kids.map((k) => abs.get(k.id)!.x)) - PAD
-    const y0 = Math.min(...kids.map((k) => abs.get(k.id)!.y)) - PAD - HEADER
+    const y0 = Math.min(...kids.map((k) => abs.get(k.id)!.y)) - PAD - HEADER / 2
     const x1 = Math.max(...kids.map((k) => abs.get(k.id)!.x + sizeOf(k).width)) + PAD
     const y1 = Math.max(...kids.map((k) => abs.get(k.id)!.y + sizeOf(k).height)) + PAD
     frames.set(grp.id, { x: x0, y: y0, width: x1 - x0, height: y1 - y0 })

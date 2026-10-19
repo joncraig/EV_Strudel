@@ -427,3 +427,9 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .card.lfo-node .lfo-wave { height: 26px; }
 .react-flow__node .sample-chip { width: 160px; height: 60px; box-sizing: border-box; padding: 0 14px; font-size: 20px; }
 .group-header { height: 22px; }
+/* Bus = a channel strip in the fader section: taller, with volume and pan faders. */
+.react-flow__node .node.card.mix-node { height: 190px; }
+.strip-faders { display: flex; justify-content: center; gap: 22px; margin-top: 6px; }
+.strip-faders .param .fader { height: 104px; width: 30px; }
+.strip-faders .param-value { display: none; }
+.strip-faders .fader-fill { background: linear-gradient(#ddd, #777); }
