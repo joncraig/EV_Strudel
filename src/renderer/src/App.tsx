@@ -237,7 +237,13 @@ function App(): React.JSX.Element {
     let raf = 0
     const tick = (): void => {
       const scheduler = replRef.current?.scheduler
-      if (scheduler) setPlayhead(scheduler.now())
+      // The scheduler runs a look-ahead (0.5s) ahead of what's heard, and the audio
+      // output adds its own buffer: show the cycle being heard, not the one queued.
+      if (scheduler) {
+        const ctx = getAudioContext()
+        const delay = (scheduler.latency ?? 0) + (ctx.outputLatency || ctx.baseLatency || 0)
+        setPlayhead(Math.max(0, scheduler.now() - delay * scheduler.cps))
+      }
       raf = requestAnimationFrame(tick)
     }
     raf = requestAnimationFrame(tick)
