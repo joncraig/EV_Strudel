@@ -85,6 +85,8 @@ function Session({
   onLaunch,
   onSoundDropped
 }: Props): React.JSX.Element {
+  // A node tile picked in the clip editor: Delete / Ctrl+D act on it rather than the clip.
+  const [pickedNode, setPickedNode] = useState<string | null>(null)
   const [selected, setSelected] = useState<Selected | null>(() => {
     const c = song.channels.find((ch) => ch.kind === 'track' && ch.clips.some(Boolean))
     return c ? { channel: c.id, scene: c.clips.findIndex(Boolean) } : null
@@ -403,7 +405,23 @@ function Session({
       if ((e.target as HTMLElement).closest?.('input, textarea, select') || !selected) return
       const ctrl = e.ctrlKey || e.metaKey
       const k = e.key.toLowerCase()
-      if (ctrl && k === 'c') copyClip(selected)
+      // A picked node tile: Delete removes it, Ctrl+D copies it right after itself.
+      const ni = pickedNode && selNodes ? selNodes.findIndex((n) => n.id === pickedNode) : -1
+      if (ni >= 0 && !ctrl && (e.key === 'Delete' || e.key === 'Backspace')) {
+        setNodes(selNodes!.filter((_, j) => j !== ni))
+        setPickedNode(null)
+      } else if (ni >= 0 && ctrl && k === 'd') {
+        const n = selNodes![ni]
+        const copy = {
+          ...n,
+          id: nodeId(n.type ?? 'node'),
+          data: structuredClone(n.data)
+        } as CanvasNode
+        const next = [...selNodes!]
+        next.splice(ni + 1, 0, copy)
+        setNodes(next)
+        setPickedNode(copy.id)
+      } else if (ctrl && k === 'c') copyClip(selected)
       else if (ctrl && k === 'v') pasteClip(selected)
       else if (ctrl && k === 'd') duplicateClip(selected)
       else if (!ctrl && (e.key === 'Delete' || e.key === 'Backspace')) deleteClip(selected)
@@ -510,6 +528,8 @@ function Session({
           {/* Clips scroll; the fader strips stay at the bottom edge, columns lined up. */}
           <div
             className="session-scroll"
+            // Back in the clip grid: keys act on clips again.
+            onPointerDownCapture={() => setPickedNode(null)}
             onScroll={(e) => {
               if (stripsRef.current) stripsRef.current.scrollLeft = e.currentTarget.scrollLeft
             }}
@@ -686,7 +706,8 @@ function Session({
                   {selNodes.map((n, i) => (
                     <div
                       key={n.id}
-                      className={`clip-node ${n.data.muted ? 'off' : ''}`}
+                      className={`clip-node ${n.data.muted ? 'off' : ''} ${pickedNode === n.id ? 'picked' : ''}`}
+                      onPointerDownCapture={() => setPickedNode(n.id)}
                       style={{ borderTopColor: kindColor(nodeKind(n)) }}
                     >
                       <button

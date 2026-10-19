@@ -556,3 +556,5 @@ body.dragging-copy, body.dragging-copy * { cursor: copy !important; }
 /* A disabled node: its tile and its block in the clip cell fade. */
 .clip-node.off .panel > :not(.panel-top), .clip-node.off .ptitle { opacity: 0.35; }
 .clip-shape i.off { opacity: 0.25; }
+/* The picked node tile (Delete / Ctrl+D act on it). */
+.clip-node.picked { box-shadow: 0 0 0 2px #fff, 0 0 14px 2px #8ab4f888; }
