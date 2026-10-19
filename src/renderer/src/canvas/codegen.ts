@@ -668,8 +668,12 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   // Mute takes a node out: a muted source (sequencer, sound, Bus) silences its chain;
   // anything else is bypassed (see apply).
   const SOURCES = new Set(['sequencer', 'sample', 'mix'])
+  // (A sequencer carrying on another sequencer's chain, like Chords after Notes, isn't
+  // the source: muted, it's bypassed instead, see follow.)
   const silences = (id: string): boolean =>
-    flag(id, 'muted') && SOURCES.has(byId.get(id)?.type ?? '')
+    flag(id, 'muted') &&
+    SOURCES.has(byId.get(id)?.type ?? '') &&
+    !(byId.get(id)?.type === 'sequencer' && fedBySequencer(id))
   const plays = (path: Set<string>, soloAfter = false): boolean => {
     const ids = [...path]
     if (ids.some(silences)) return false
@@ -691,7 +695,11 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         // A later sequencer takes over when and what plays; an earlier Slices'
         // file choice holds. The Length in effect sets its step length. A Chords
         // sequencer only takes over what plays: the incoming notes still say when.
-        if (next.data.muted) continue
+        // Muted, it's taken out: the chain carries on through it unchanged.
+        if (next.data.muted) {
+          follow(next, ctx, new Set(seen).add(next.id))
+          continue
+        }
         stepLens.set(next.id, ctx.length)
         const picks =
           ctx.seq?.kind === 'slice'

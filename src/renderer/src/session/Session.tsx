@@ -596,7 +596,11 @@ function Session({
                         <span className="clip-name">{clipTitle(clip)}</span>
                         <span className="clip-shape">
                           {clip.nodes.map((n) => (
-                            <i key={n.id} style={{ background: kindColor(nodeKind(n)) }} />
+                            <i
+                              key={n.id}
+                              className={n.data.muted ? 'off' : ''}
+                              style={{ background: kindColor(nodeKind(n)) }}
+                            />
                           ))}
                         </span>
                       </div>
@@ -682,7 +686,7 @@ function Session({
                   {selNodes.map((n, i) => (
                     <div
                       key={n.id}
-                      className="clip-node"
+                      className={`clip-node ${n.data.muted ? 'off' : ''}`}
                       style={{ borderTopColor: kindColor(nodeKind(n)) }}
                     >
                       <button

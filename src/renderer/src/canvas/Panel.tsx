@@ -380,9 +380,9 @@ function NodeEditor({
       <div className="panel-top">
         <div className="ptitle">{title}</div>
         {grip}
-        {/* Mute (takes the node out), the same place on every node. */}
+        {/* On / off: a disabled node is taken out of the clip (the chain plays without it). */}
         <div className="pms">
-          <Toggle label="M" on={!!muteSolo.muted} onChange={(muted) => set({ muted })} />
+          <Toggle label="On" on={!muteSolo.muted} onChange={(on) => set({ muted: !on })} />
         </div>
         <div className="pbody">{body}</div>
       </div>

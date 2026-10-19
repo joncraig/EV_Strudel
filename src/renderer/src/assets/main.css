@@ -553,3 +553,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 body.dragging-clip, body.dragging-clip * { cursor: grabbing !important; }
 body.dragging-copy, body.dragging-copy * { cursor: copy !important; }
 .clip-slot:not(.empty) { touch-action: none; }
+/* A disabled node: its tile and its block in the clip cell fade. */
+.clip-node.off .panel > :not(.panel-top), .clip-node.off .ptitle { opacity: 0.35; }
+.clip-shape i.off { opacity: 0.25; }
