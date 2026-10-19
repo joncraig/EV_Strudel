@@ -1,6 +1,6 @@
 import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
 import StepGrid from './StepGrid'
-import { Fader, ParamFader, StepWidthGrip } from './controls'
+import { ParamFader, StepWidthGrip } from './controls'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { usePlayhead } from './playhead'
 import { useSounding, useStepLens } from './stepLens'
@@ -15,6 +15,12 @@ import {
   sequencerSample,
   KeyNode as KeyNodeT,
   MixNode as MixNodeT,
+  BUS_MAX_VOLUME,
+  LfoNode as LfoNodeT,
+  LFO_RATES,
+  LFO_SHAPES,
+  lfoRateLabel,
+  MOD_PREFIX,
   upstream,
   LENGTH_FULL_STEP,
   LengthNode as LengthNodeT,
@@ -81,23 +87,115 @@ export function SampleNode({ id, data }: NodeProps<SampleNodeT>): React.JSX.Elem
   )
 }
 
-// ---- Mix ----
+// ---- Bus ----
+
+// A modulation input on the bottom edge, under the control it moves (left: 0..1).
+function ModInput({ param, left }: { param: string; left: number }): React.JSX.Element {
+  return (
+    <Handle
+      type="target"
+      position={Position.Bottom}
+      id={MOD_PREFIX + param}
+      className="mod-handle"
+      style={{ left: `${left * 100}%` }}
+    />
+  )
+}
 
 // Several chains in, one out: they play stacked through whatever follows, sharing
-// its effects. Each Mix is its own orbit (bus), so its delay and reverb are its own.
-export function MixNode({ id }: NodeProps<MixNodeT>): React.JSX.Element {
-  const edges = useEdges()
-  const inputs = edges.filter((e) => e.target === id).length
+// its effects. Each Bus is its own orbit, so its delay and reverb are its own. Volume
+// and Pan act on its audio live (audio/modulation.ts) and take LFOs from below.
+export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
+  const { updateNodeData } = useReactFlow()
+  const volume = data.volume ?? 1
+  const db = volume > 0 ? `${(20 * Math.log10(volume)).toFixed(1)} dB` : '-inf'
   return (
     <div className="node mix-node">
       <Handle type="target" position={Position.Left} id="pattern" />
-      <Header title="Mix" />
+      <Header title="Bus" />
+      <div className="node-body bus-body nodrag">
+        <ParamFader
+          label="volume"
+          display={db}
+          value={volume}
+          min={0}
+          max={BUS_MAX_VOLUME}
+          onChange={(v) => updateNodeData(id, { volume: v })}
+        />
+        <ParamFader
+          label="pan"
+          value={data.pan ?? 0}
+          min={-1}
+          max={1}
+          onChange={(v) => updateNodeData(id, { pan: v })}
+        />
+      </div>
+      <ModInput param="volume" left={0.3} />
+      <ModInput param="pan" left={0.7} />
+      <Handle type="source" position={Position.Right} id="pattern" />
+    </div>
+  )
+}
+
+// ---- LFO ----
+
+// One cycle of each shape, for the little picture on the node.
+function wavePath(shape: string, w: number, h: number): string {
+  const pts: string[] = []
+  for (let i = 0; i <= 48; i++) {
+    const t = i / 48
+    const v =
+      shape === 'sine'
+        ? Math.sin(2 * Math.PI * t)
+        : shape === 'triangle'
+          ? 1 - 4 * Math.abs(((t + 0.25) % 1) - 0.5)
+          : shape === 'sawtooth'
+            ? 2 * ((t + 0.5) % 1) - 1
+            : shape === 'square'
+              ? t < 0.5 ? 1 : -1
+              : [0.6, -0.4, 0.9, -0.8, 0.2, -0.1][Math.floor(t * 5.999)]
+    pts.push(`${(t * w).toFixed(1)},${((1 - v) * 0.5 * h).toFixed(1)}`)
+  }
+  return 'M' + pts.join(' L')
+}
+
+// A repeating wave synced to the tempo; its mod output (right) adds onto whatever it's
+// wired to. Rate and Depth take other LFOs from below (modulators modulating modulators).
+export function LfoNode({ id, data }: NodeProps<LfoNodeT>): React.JSX.Element {
+  const { updateNodeData } = useReactFlow()
+  const update = (patch: Partial<LfoNodeT['data']>): void => updateNodeData(id, patch)
+  const ri = Math.max(0, LFO_RATES.indexOf(data.rate))
+  return (
+    <div className="node lfo-node">
+      <Header title="LFO" />
       <div className="node-body">
-        <div className="mix-count">
-          {inputs} input{inputs === 1 ? '' : 's'}
+        <div className="lfo-shapes nodrag">
+          {LFO_SHAPES.map((sh) => (
+            <button key={sh.id} className={data.shape === sh.id ? 'on' : ''} onClick={() => update({ shape: sh.id })}>
+              {sh.label}
+            </button>
+          ))}
+        </div>
+        <svg className="lfo-wave" viewBox="0 0 120 32" preserveAspectRatio="none">
+          <path d={wavePath(data.shape, 120, 32)} />
+        </svg>
+        <div className="lfo-rate nodrag">
+          <button disabled={ri === 0} onClick={() => update({ rate: LFO_RATES[ri - 1] })}>
+            −
+          </button>
+          <span>{lfoRateLabel(data.rate)}</span>
+          <button disabled={ri === LFO_RATES.length - 1} onClick={() => update({ rate: LFO_RATES[ri + 1] })}>
+            +
+          </button>
+        </div>
+        <div className="bus-body nodrag">
+          <ParamFader label="depth" value={data.depth} min={0} max={1} onChange={(depth) => update({ depth })} />
+          <ParamFader label="phase" value={data.phase} min={0} max={1} onChange={(phase) => update({ phase })} />
         </div>
       </div>
-      <Handle type="source" position={Position.Right} id="pattern" />
+      <ModInput param="rate" left={0.15} />
+      <ModInput param="depth" left={0.35} />
+      <Handle type="source" position={Position.Right} id="mod" className="mod-handle" />
     </div>
   )
 }
@@ -182,11 +280,8 @@ export function SequencerNode({ id, data }: NodeProps<SequencerNodeT>): React.JS
             </button>
           )}
         </div>
-        {/* Grid, then the gain fader; the right edge drags the step count. */}
-        <div className="seq-main">
-          {grid}
-          <Fader label="gain" value={data.gain} max={1.5} onChange={(gain) => update({ gain })} />
-        </div>
+        {/* The right edge drags the step count. */}
+        <div className="seq-main">{grid}</div>
       </div>
     </div>
   )

@@ -56,7 +56,8 @@ export interface SequencerData extends Record<string, unknown> {
   steps: Step[]
   resolution: number
   octave: number
-  gain: number
+  // Older saves had a gain fader here; migrateCanvas removes it (Velocity sets level).
+  gain?: number
   muted: boolean
   // Slices: show only rows that have hits (like Ableton's Fold).
   folded?: boolean
@@ -209,18 +210,61 @@ export const newEffect = (kind: EffectKind): EffectData => ({
 })
 
 export type EffectNode = Node<EffectData, 'effect'>
-// Several chains in, one out: they play stacked through whatever follows (shared
-// effects). Each Mix is its own Strudel orbit, so its delay/reverb are its own.
+// A Bus (type 'mix' in saved files): several chains in, one out; they play stacked
+// through whatever follows (shared effects). Each Bus is its own Strudel orbit, so its
+// delay/reverb are its own, and its Volume and Pan act live on the orbit's audio
+// (audio/modulation.ts), not through the code, so they move instantly and can be
+// modulated smoothly.
 export interface MixData extends Record<string, unknown> {
   label?: string
+  // Linear gain, 0..1.5 (1 = unchanged).
+  volume?: number
+  // -1 (left) .. 1 (right).
+  pan?: number
 }
 
+export const BUS_MAX_VOLUME = 1.5
+
 export type MixNode = Node<MixData, 'mix'>
+
+// ---- Modulators ----
+
+// An LFO: a repeating wave, synced to the tempo, added onto whatever its mod output is
+// wired to (a Bus's Volume or Pan, or another LFO's Rate or Depth).
+export type LfoShape = 'sine' | 'triangle' | 'sawtooth' | 'square' | 'random'
+export const LFO_SHAPES: { id: LfoShape; label: string }[] = [
+  { id: 'sine', label: 'Sine' },
+  { id: 'triangle', label: 'Tri' },
+  { id: 'sawtooth', label: 'Saw' },
+  { id: 'square', label: 'Square' },
+  { id: 'random', label: 'S&H' }
+]
+// One cycle of the wave, in bars.
+export const LFO_RATES = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16]
+export const lfoRateLabel = (bars: number): string => (bars >= 1 ? `${bars} bar${bars === 1 ? '' : 's'}` : `1/${Math.round(1 / bars)}`)
+
+export interface LfoData extends Record<string, unknown> {
+  shape: LfoShape
+  // Bars per cycle (one of LFO_RATES).
+  rate: number
+  // How far it swings, 0..1 (1 = the target's full range; see modulation.ts).
+  depth: number
+  // Where in the cycle it starts at bar 1, 0..1.
+  phase: number
+}
+
+export const newLfo = (): LfoData => ({ shape: 'sine', rate: 1, depth: 0.5, phase: 0 })
+
+// Modulation inputs each node type has (handle id = MOD_PREFIX + param).
+export const MOD_PREFIX = 'mod:'
+export const MOD_TARGETS: Record<string, string[]> = { mix: ['volume', 'pan'], lfo: ['rate', 'depth'] }
+
+export type LfoNode = Node<LfoData, 'lfo'>
 export type KeyNode = Node<KeyData, 'key'>
 export type OctaveNode = Node<OctaveData, 'octave'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | MixNode | KeyNode | OctaveNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
+export type CanvasNode = SampleNode | SequencerNode | MixNode | LfoNode | KeyNode | OctaveNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
@@ -267,7 +311,6 @@ export const newSequencer = (kind: SequencerKind, length = 1): SequencerData => 
   steps: Array(length).fill(null),
   resolution: STEP_RESOLUTION,
   octave: kind === 'degree' ? 3 : 0,
-  gain: 0.8,
   muted: false
 })
 
@@ -331,6 +374,12 @@ export function migrateCanvas(state: CanvasState): CanvasState {
       // canvases had steps squeezed into one bar; they become 1/16 steps, by design.
       if ((node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length') && node.data.resolution !== STEP_RESOLUTION)
         node = { ...node, data: { ...node.data, resolution: STEP_RESOLUTION } } as CanvasNode
+      // The gain fader is gone (Velocity sets level): a sequencer at 0 becomes muted,
+      // otherwise its gain is dropped.
+      if (node.type === 'sequencer' && node.data.gain !== undefined) {
+        const { gain, ...rest } = node.data
+        node = { ...node, data: { ...rest, muted: rest.muted || gain === 0 } } as CanvasNode
+      }
       // Rhythm sequencers are gone: a Slices sequencer with one row is the same thing.
       if (node.type === 'sequencer' && (node.data.kind as string) === 'trigger')
         node = { ...node, data: { ...node.data, kind: 'slice', steps: node.data.steps.map((v) => (v === null ? null : 0)) } } as CanvasNode

@@ -3,8 +3,12 @@ import PianoRoll from './PianoRoll'
 import { valueDrag } from '../drag'
 import { useNudge } from '../nudge'
 import {
+  BUS_MAX_VOLUME,
   CanvasNode,
   EFFECTS,
+  LFO_RATES,
+  LFO_SHAPES,
+  lfoRateLabel,
   EffectParam,
   isBank,
   LENGTH_FULL_STEP,
@@ -28,12 +32,15 @@ function Stepper({
   value,
   min,
   max,
+  display,
   onChange
 }: {
   label: string
   value: number
   min: number
   max: number
+  // Shown instead of the number.
+  display?: string
   onChange: (v: number) => void
 }): React.JSX.Element {
   return (
@@ -41,7 +48,7 @@ function Stepper({
       <span className="plabel">{label}</span>
       <div className="stepper">
         <button onClick={() => onChange(Math.max(min, value - 1))}>−</button>
-        <span className="pvalue">{value}</span>
+        <span className="pvalue">{display ?? value}</span>
         <button onClick={() => onChange(Math.min(max, value + 1))}>+</button>
       </div>
     </div>
@@ -146,7 +153,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
             max={MAX_STEPS}
             onChange={(n) => set({ steps: resize(d.steps, n, null) })}
           />
-          <Slider label="gain" value={d.gain} min={0} max={1.5} onChange={(gain) => set({ gain })} />
           <Toggle label="Mute" on={d.muted} onChange={(muted) => set({ muted })} />
           {d.kind === 'slice' && <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />}
           <button className="ptoggle" onClick={() => set({ steps: d.steps.map(() => null) })}>
@@ -215,13 +221,36 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       break
     }
     case 'mix': {
-      title = 'Mix'
+      const d = node.data
+      title = 'Bus'
       body = (
-        <div className="pinfo">
-          Stacks every chain wired in and plays them through what follows, sharing its effects.
-          <br />
-          Its delay and reverb are its own (a separate orbit).
-        </div>
+        <>
+          <Slider label="volume" value={d.volume ?? 1} min={0} max={BUS_MAX_VOLUME} onChange={(volume) => set({ volume })} />
+          <Slider label="pan" value={d.pan ?? 0} min={-1} max={1} onChange={(pan) => set({ pan })} />
+        </>
+      )
+      break
+    }
+    case 'lfo': {
+      const d = node.data
+      const ri = Math.max(0, LFO_RATES.indexOf(d.rate))
+      title = 'LFO'
+      body = (
+        <>
+          {LFO_SHAPES.map((sh) => (
+            <Toggle key={sh.id} label={sh.label} on={d.shape === sh.id} onChange={() => set({ shape: sh.id })} />
+          ))}
+          <Stepper
+            label="rate"
+            value={ri}
+            min={0}
+            max={LFO_RATES.length - 1}
+            display={lfoRateLabel(d.rate)}
+            onChange={(i) => set({ rate: LFO_RATES[i] })}
+          />
+          <Slider label="depth" value={d.depth} min={0} max={1} onChange={(depth) => set({ depth })} />
+          <Slider label="phase" value={d.phase} min={0} max={1} onChange={(phase) => set({ phase })} />
+        </>
       )
       break
     }

@@ -22,6 +22,7 @@ import {
   GroupNode,
   KeyNode,
   LengthNode,
+  LfoNode,
   MixNode,
   ModeNode,
   OctaveNode,
@@ -50,6 +51,8 @@ import {
   newKey,
   newMode,
   newOctave,
+  newLfo,
+  MOD_PREFIX,
   newSequencer,
   newEffect,
   newLength,
@@ -80,7 +83,8 @@ const NODE_COLORS = {
   mode: '#9a4a7a',
   octave: '#5a4a9a',
   sample: '#3a7a4a',
-  mix: '#777777'
+  mix: '#777777',
+  lfo: '#8a8a2a'
 }
 function kindColor(kind: string): string {
   if (kind.startsWith('fx:')) return NODE_COLORS.effect
@@ -96,6 +100,7 @@ const nodeTypes = {
   sample: SampleNode,
   sequencer: SequencerNode,
   mix: MixNode,
+  lfo: LfoNode,
   key: KeyNode,
   mode: ModeNode,
   octave: OctaveNode,
@@ -105,14 +110,17 @@ const nodeTypes = {
   group: GroupNode
 }
 
-// Handles only connect to the same-named handle: sound→sound, mode→mode.
+// Pattern outputs connect to pattern inputs; an LFO's mod output connects to any
+// modulation input (Bus Volume/Pan, LFO Rate/Depth).
 const isValidConnection: IsValidConnection = (c) =>
-  c.sourceHandle === c.targetHandle && c.source !== c.target
+  c.source !== c.target &&
+  (c.sourceHandle === 'mod' ? !!c.targetHandle?.startsWith(MOD_PREFIX) : c.sourceHandle === c.targetHandle)
 
 // What the add menu can create: a sequencer kind, a mode node, or a synth sound.
 type NewKind =
   | SequencerKind
   | 'mix'
+  | 'lfo'
   | 'octave'
   | 'key'
   | 'mode'
@@ -124,7 +132,8 @@ type NewKind =
 // A wire dragged out of a handle and dropped on empty canvas.
 interface Pending {
   nodeId: string
-  handle: 'sound' | 'key' | 'mode' | 'pattern'
+  // 'mod' (an LFO output) or 'mod:<param>' (a modulation input) for mod wires.
+  handle: string
   handleType: 'source' | 'target'
 }
 
@@ -217,7 +226,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const closeMenu = useCallback(() => setMenu(null), [])
 
   const makeNode = (kind: NewKind, position: { x: number; y: number }): CanvasNode => {
-    if (kind === 'mix') return { id: nodeId('mix'), type: 'mix', position, data: {} }
+    if (kind === 'mix') return { id: nodeId('mix'), type: 'mix', position, data: { volume: 1, pan: 0 } }
+    if (kind === 'lfo') return { id: nodeId('lfo'), type: 'lfo', position, data: newLfo() }
     if (kind === 'octave') return { id: nodeId('oct'), type: 'octave', position, data: newOctave() }
     if (kind === 'key') return { id: nodeId('key'), type: 'key', position, data: newKey() }
     if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
@@ -252,7 +262,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       ['degree', 'Notes sequencer'],
       ['slice', 'Slices sequencer']
     ]
-    const mix: [NewKind, string] = ['mix', 'Mix']
+    const mix: [NewKind, string] = ['mix', 'Bus']
+    const lfo: [NewKind, string] = ['lfo', 'LFO']
     const key: [NewKind, string] = ['key', 'Key sequencer']
     const mode: [NewKind, string] = ['mode', 'Mode sequencer']
     const octave: [NewKind, string] = ['octave', 'Octave sequencer']
@@ -265,7 +276,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     const synths: [NewKind, string][] = SYNTHS.map((s) => [`synth:${s}`, s])
     const { pending } = m
 
-    let groups: { title: string; kinds: [NewKind, string][] }[]
+    let groups: { title: string; kinds: [NewKind, string][] }[] | undefined
     if (!pending)
       groups = [
         { title: 'Sequencers', kinds: sequencers },
@@ -273,8 +284,12 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         { title: 'Effects', kinds: effects },
         { title: 'Harmony', kinds: [key, mode, octave] },
         { title: 'Sound', kinds: synths },
-        { title: 'Route', kinds: [mix] }
+        { title: 'Route', kinds: [mix] },
+        { title: 'Modulate', kinds: [lfo] }
       ]
+    // A mod wire: from an LFO output, offer what it can drive; into a mod input, an LFO.
+    else if (pending.handle.startsWith('mod'))
+      groups = pending.handleType === 'source' ? [{ title: 'Modulate', kinds: [mix, lfo] }] : [{ title: 'Modulate with', kinds: [lfo] }]
     else if (pending.handleType === 'source')
       groups = {
         sound: [{ title: 'Play it with', kinds: sequencers }],
@@ -301,7 +316,14 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         ]
       }[pending.handle]
 
-    return groups.map((g) => ({
+    // Mod wires land on the new node's first modulation input (Bus Volume, LFO Rate).
+    const handles = (kind: NewKind): [string, string] => {
+      if (!pending?.handle.startsWith('mod')) return [pending?.handle ?? '', pending?.handle ?? '']
+      if (pending.handleType === 'target') return ['mod', pending.handle]
+      return ['mod', MOD_PREFIX + (kind === 'mix' ? 'volume' : 'rate')]
+    }
+
+    return (groups ?? []).map((g) => ({
       title: g.title,
       items: g.kinds.map(([kind, label]) => ({
         label,
@@ -311,12 +333,13 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
           if (!pending) return add(node)
           const [source, target] =
             pending.handleType === 'source' ? [pending.nodeId, node.id] : [node.id, pending.nodeId]
+          const [sourceHandle, targetHandle] = handles(kind)
           add(node, {
-            id: `e-${source}-${target}-${pending.handle}`,
+            id: `e-${source}-${target}-${targetHandle}`,
             source,
             target,
-            sourceHandle: pending.handle,
-            targetHandle: pending.handle
+            sourceHandle,
+            targetHandle
           })
         }
       }))
@@ -653,6 +676,11 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   }, [])
 
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
+  // Mod wires (LFO -> a modulation input) are drawn differently from pattern wires.
+  const shownEdges = useMemo(
+    () => edges.map((e) => (e.sourceHandle === 'mod' && e.className !== 'mod-edge' ? { ...e, className: 'mod-edge' } : e)),
+    [edges]
+  )
   // Muted nodes dim, soloed ones get a ring.
   const shownNodes = useMemo(
     () =>
@@ -677,7 +705,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
           </div>
           <ReactFlow
             nodes={shownNodes}
-            edges={edges}
+            edges={shownEdges}
             nodeTypes={nodeTypes}
             onNodesChange={onNodesChange}
             onEdgesChange={onEdgesChange}

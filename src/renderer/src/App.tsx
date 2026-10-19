@@ -3,6 +3,7 @@ import { ReactFlowProvider } from '@xyflow/react'
 import { getAudioContext, initAudio, samples, superdough } from '@strudel/webaudio'
 import { getEngine, type Engine } from './audio/engine'
 import { installFastReverb } from './audio/fastReverb'
+import { applyModulation } from './audio/modulation'
 import { installNudgeKeys } from './nudge'
 import Library from './components/Library'
 import Transport from './components/Transport'
@@ -174,7 +175,23 @@ function App(): React.JSX.Element {
     return () => window.removeEventListener(AUDITION_EVENT, listener)
   }, [loadPack])
 
-  const compiled = useMemo(() => current.codeOnly ?? compile(canvas.nodes, canvas.edges).code, [canvas, current.codeOnly])
+  const compiledCanvas = useMemo(() => compile(canvas.nodes, canvas.edges), [canvas])
+  const compiled = current.codeOnly ?? compiledCanvas.code
+
+  // Bus Volume/Pan and LFOs act on the audio directly (audio/modulation.ts), so they
+  // follow every edit at once instead of waiting for the code to be re-evaluated.
+  useEffect(() => {
+    if (current.codeOnly) return
+    Promise.resolve(readyRef.current).then(() => {
+      const scheduler = replRef.current?.scheduler
+      const cps = bpmToCps(bpm)
+      applyModulation(canvas.nodes, canvas.edges, compiledCanvas.busOrbits, {
+        playing,
+        cps,
+        heardCycle: () => (scheduler ? scheduler.now() - (scheduler.latency ?? 0) * cps : 0)
+      })
+    })
+  }, [canvas, compiledCanvas, playing, bpm, current.codeOnly])
 
   // Packs the current music needs. Code-only patches get what strudel.cc preloads.
   const neededPacks = useMemo(() => {

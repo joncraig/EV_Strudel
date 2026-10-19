@@ -307,3 +307,22 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .hbar-fill { position: absolute; left: 0; top: 0; bottom: 0; background: linear-gradient(90deg, #4a6a9a, #8ab4f8); }
 .panel-top { flex: none; }
 .step-grid.roll .row-label { font-size: min(12px, calc(var(--row-h, 26px) - 1px)); line-height: var(--row-h, 26px); }
+
+/* Bus: Volume and Pan faders; LFO wires come in from below. */
+.node-body.bus-body, .bus-body { display: flex; flex-direction: row; gap: 14px; justify-content: center; padding: 6px 10px 10px; }
+.mix-node .fader-fill { background: linear-gradient(#bbb, #666); }
+/* LFO: a modulator. Olive, like its add-menu stripe. */
+.lfo-node { min-width: 150px; }
+.lfo-node .node-header { background: #3d3d1c; }
+.lfo-node .fader-fill { background: linear-gradient(#dd5, #8a8a2a); }
+.lfo-shapes { display: flex; gap: 2px; padding: 6px 8px 0; }
+.lfo-shapes button { flex: 1; min-height: 26px; padding: 0 4px; font-size: 11px; background: #2a2a2a; color: #aaa; border: 1px solid #3a3a3a; border-radius: 3px; }
+.lfo-shapes button.on { background: #5a5a20; color: #ffd; border-color: #8a8a2a; }
+.lfo-wave { display: block; width: calc(100% - 16px); height: 32px; margin: 6px 8px 0; }
+.lfo-wave path { fill: none; stroke: #dd5; stroke-width: 1.5; vector-effect: non-scaling-stroke; }
+.lfo-rate { display: flex; align-items: center; justify-content: center; gap: 6px; padding-top: 6px; font-size: 12px; color: #ccc; }
+.lfo-rate button { min-width: 30px; min-height: 26px; background: #2a2a2a; color: #ccc; border: 1px solid #3a3a3a; border-radius: 3px; }
+.lfo-rate span { min-width: 54px; text-align: center; }
+/* Modulation: yellow handles and dashed yellow wires, apart from pattern wires. */
+.react-flow__handle.mod-handle { background: #dd5; border-color: #8a8a2a; }
+.react-flow__edge.mod-edge path.react-flow__edge-path { stroke: #cc4; stroke-dasharray: 6 4; }

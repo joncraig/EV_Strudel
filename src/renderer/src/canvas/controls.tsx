@@ -97,6 +97,7 @@ export function ParamFader({
   max,
   log,
   label,
+  display,
   onChange
 }: {
   value: number
@@ -104,11 +105,13 @@ export function ParamFader({
   max: number
   log?: boolean
   label: string
+  // Shown instead of the number (e.g. dB).
+  display?: string
   onChange: (v: number) => void
 }): React.JSX.Element {
   const toT = (v: number): number => (log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min))
   const fromT = (p: number): number => (log ? min * Math.pow(max / min, p) : min + p * (max - min))
-  const shown = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value >= 100 ? value.toFixed(0) : value.toFixed(2)
+  const shown = display ?? (value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value >= 100 ? value.toFixed(0) : value.toFixed(2))
   return (
     <div className="param">
       <span className="param-value">{shown}</span>

@@ -197,7 +197,7 @@ export function sequencerCode(
       break
     }
   }
-  return `${code}.gain(${seq.gain})`
+  return code
 }
 
 // Strudel's velocity is 0..1 and multiplies with gain, so accents scale the channel level.
@@ -239,6 +239,8 @@ export interface Compiled {
   stepLens: Map<string, Lens>
   // Nodes on a chain that is heard (not muted, not left out by a Solo).
   sounding: Set<string>
+  // The orbit each Bus plays on (for its live Volume/Pan and modulation).
+  busOrbits: Map<string, number>
 }
 
 // Without a Sample in the chain, Notes play this synth; other sequencers stay silent.
@@ -511,7 +513,6 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       steps: hits,
       resolution: STEP_RESOLUTION,
       octave: DEFAULT_OCTAVE,
-      gain: 1,
       muted: false
     }
     // A held Length sets how long each hit sounds: a full step at that length.
@@ -525,9 +526,11 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   // Mixes: once a Mix's inputs are known, it continues as one chain. A Mix that feeds
   // another Mix is done first, so keep going until nothing new arrives.
   const mixes = nodes.filter((n) => n.type === 'mix')
+  // Each Bus is its own orbit (2, 3, ...; chains without one share orbit 1).
+  const busOrbits = new Map(mixes.map((m, i) => [m.id, i + 2]))
   const done = new Set<string>()
   for (let pass = 0; pass < mixes.length; pass++)
-    for (const [i, mix] of mixes.entries()) {
+    for (const mix of mixes) {
       if (done.has(mix.id)) continue
       const feedsFromMix = edges.some(
         (e) => e.target === mix.id && byId.get(e.source)?.type === 'mix' && !done.has(e.source)
@@ -538,7 +541,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       const soloAfter = [...reachableFrom(mix.id)].some((id) => flag(id, 'solo'))
       const members = (mixMembers.get(mix.id) ?? []).filter((m) => plays(m.path, soloAfter))
       if (!members.length) continue
-      const base = `stack(${members.map((m) => m.code).join(', ')}).orbit(${i + 2})`
+      const base = `stack(${members.map((m) => m.code).join(', ')}).orbit(${busOrbits.get(mix.id)})`
       follow(
         mix,
         { ...empty, seq: null, base },
@@ -550,9 +553,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const lines = heard.map((l) => l.code)
   const layers = heard.map((l) => l.layer)
   // Nodes on a chain that reaches the output (their grids flash as they play).
-  // A chain with a gain at 0 on it makes no sound, so it doesn't count.
-  const silent = (id: string): boolean => (byId.get(id)?.data as { gain?: number } | undefined)?.gain === 0
+  // A chain through a Bus at volume 0 makes no sound, so it doesn't count.
+  const silent = (id: string): boolean => (byId.get(id)?.data as { volume?: number } | undefined)?.volume === 0
   const sounding = new Set(heard.filter((l) => ![...l.path].some(silent)).flatMap((l) => [...l.path]))
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
-  return { code, layers, active, stepLens, sounding }
+  return { code, layers, active, stepLens, sounding, busOrbits }
 }
