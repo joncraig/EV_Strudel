@@ -396,3 +396,9 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .card .bus-ms { position: absolute; top: 5px; right: 6px; }
 .card .card-big, .card .card-kind { padding-right: 52px; }
 .pms { display: flex; gap: 4px; margin-right: 12px; }
+/* A group is one coloured block: no frame, no separate title bar (2026-10-18). */
+.react-flow__node-group, .react-flow__node-group.selected { padding: 0 !important; border: none !important; background: none !important; box-shadow: none !important; }
+.group-frame { border: none; border-radius: 12px; background: #34344c; }
+.react-flow__node-group.selected .group-frame { box-shadow: 0 0 0 2px #fff; }
+.group-header { background: none; height: 30px; padding: 0 6px; font-size: 10px; font-weight: 400; letter-spacing: 0.04em; text-transform: uppercase; color: #ffffff80; }
+.group-toggle { color: #ffffff80; }
