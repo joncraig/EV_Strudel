@@ -383,7 +383,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   // Length only sets durations, it never triggers.
   const STEPPING = new Set(['key', 'mode', 'octave', 'velocity'])
   for (const end of nodes) {
-    if (active.has(end.id) || patternOuts(end.id).length) continue
+    // Wired into anything (a sequencer's input too), it isn't an end: it sets that up.
+    if (active.has(end.id) || edges.some((e) => e.source === end.id && e.sourceHandle === 'pattern')) continue
     for (const chain of paramPaths(end.id, new Set()) ?? []) clocked(end, chain)
   }
   function clocked(end: CanvasNode, chain: CanvasNode[]): void {
