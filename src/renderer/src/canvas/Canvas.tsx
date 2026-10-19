@@ -37,7 +37,6 @@ import {
   duplicateNodes,
   GROUP_TOGGLE_EVENT,
   dropIntoGroups,
-  fitGroups,
   groupRects,
   type GroupRect,
   groupNodes,
@@ -45,6 +44,7 @@ import {
   ungroup
 } from './groups'
 import { compile } from './codegen'
+import { autoLayout, layoutKey } from './layout'
 import { SOUND_DROP_EVENT, SoundDropDetail } from './soundDrag'
 import ContextMenu, { MenuItem, MenuSection } from './ContextMenu'
 import Panel from './Panel'
@@ -157,7 +157,7 @@ type Menu =
   | { type: 'add'; x: number; y: number; flow: { x: number; y: number }; pending?: Pending }
   | { type: 'node'; x: number; y: number; nodeId: string }
 
-function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
+function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React.JSX.Element {
   const { screenToFlowPosition, updateNodeData } = useReactFlow()
   const [showCode, setShowCode] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => {
@@ -193,15 +193,25 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   // painting a cell); each must build on the one before, or the later one wipes
   // out the earlier (the first tap on an unselected node used to lose its edit).
   const stateRef = useRef(state)
-  const onChangeRef = useRef(onChange)
+  const onChangeRef = useRef(onChangeProp)
   useEffect(() => {
     stateRef.current = state
-    onChangeRef.current = onChange
+    onChangeRef.current = onChangeProp
   })
-  const commit = useCallback((next: CanvasState) => {
+  // Every change goes through here. The layout is automatic (layout.ts): whenever the
+  // wiring, grouping or a node's size changes, or a drag ends (force), positions are
+  // recomputed, so the same patch always looks the same.
+  const layoutKeyRef = useRef('')
+  const commit = useCallback((next: CanvasState, force = false) => {
+    const key = layoutKey(next)
+    if (force || key !== layoutKeyRef.current) {
+      next = autoLayout(next)
+      layoutKeyRef.current = layoutKey(next)
+    }
     stateRef.current = next
     onChangeRef.current(next)
   }, [])
+  const onChange = commit
 
   const onNodesChange = useCallback(
     (changes: NodeChange<CanvasNode>[]) => {
@@ -209,10 +219,18 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         nodes: applyNodeChanges(changes, stateRef.current.nodes),
         edges: stateRef.current.edges
       }
-      // Group frames fit their contents, except mid-drag (moving the frame under a node
-      // being dragged would fight the drag): they catch up when it's dropped.
+      // Mid-drag, the node follows the pointer (to wire it or drop it on a wire or a
+      // group); when it's let go, the layout puts it back in its place.
       const dragging = changes.some((ch) => ch.type === 'position' && ch.dragging)
-      commit(dragging ? next : fitGroups(next))
+      if (dragging) {
+        stateRef.current = next
+        onChangeRef.current(next)
+        return
+      }
+      commit(
+        next,
+        changes.some((ch) => ch.type === 'position' && ch.dragging === false)
+      )
     },
     [commit]
   )
@@ -486,8 +504,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     const listener = (e: Event): void => {
       const id = (e as CustomEvent<string>).detail
       const group = stateRef.current.nodes.find((n) => n.id === id)
-      if (group?.type === 'group')
-        onChangeRef.current(setCollapsed(stateRef.current, id, !group.data.collapsed))
+      if (group?.type === 'group') commit(setCollapsed(stateRef.current, id, !group.data.collapsed))
     }
     window.addEventListener(GROUP_TOGGLE_EVENT, listener)
     return () => window.removeEventListener(GROUP_TOGGLE_EVENT, listener)
@@ -689,7 +706,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
       screenToFlowPosition({ x: p.clientX, y: p.clientY }),
       dragGroupsRef.current
     )
-    if (regrouped !== stateRef.current) commit(fitGroups(regrouped))
+    if (regrouped !== stateRef.current) commit(regrouped, true)
 
     const target = insertRef.current
     clearInsert()
@@ -821,6 +838,8 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
             <ContextMenu
               x={menu.x}
               y={menu.y}
+              // The sections' onSelect handlers call commit later, on a pick, not during render.
+              // eslint-disable-next-line react-hooks/refs
               sections={menu.type === 'add' ? addSections(menu) : nodeSections(menu.nodeId)}
               searchable={menu.type === 'add'}
               onClose={closeMenu}
