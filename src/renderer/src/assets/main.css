@@ -405,3 +405,7 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 /* The thin tab on the sidebar's edge: hide / show it for more canvas. */
 .side-tab { flex: none; width: 16px; padding: 0; border: none; border-right: 1px solid #333; border-radius: 0; background: #181818; color: #889; font-size: 14px; cursor: pointer; }
 .side-tab:hover { background: #2a2a2a; color: #fff; }
+/* Cards keep one size whatever they show (live values change every step; a size
+   change would re-run the layout and stall the audio scheduler). */
+.react-flow__node .node.card { width: 160px; min-width: 160px; max-width: 160px; }
+.react-flow__node .node.card.lfo-node { width: 160px; }

@@ -221,16 +221,19 @@ function App(): React.JSX.Element {
   }, [canvas, compiledCanvas, playing, bpm, current.codeOnly])
 
   // Packs the current music needs. Code-only patches get what strudel.cc preloads.
-  const neededPacks = useMemo(() => {
-    if (current.codeOnly) return ['dirt-samples', 'tidal-drum-machines', 'piano']
+  // Kept as a string so it only changes when the packs do (a new array on every canvas
+  // change re-created evaluate below and re-evaluated the music on every layout).
+  const neededPackList = useMemo(() => {
+    if (current.codeOnly) return 'dirt-samples,tidal-drum-machines,piano'
     const ids = new Set<string>()
     for (const node of canvas.nodes) {
       if (node.type !== 'sample') continue
       const pack = node.data.pack ?? SYNTH_PACKS[node.data.s]
       if (pack) ids.add(pack)
     }
-    return [...ids]
+    return [...ids].sort().join(',')
   }, [canvas, current.codeOnly])
+  const neededPacks = useMemo(() => neededPackList.split(',').filter(Boolean), [neededPackList])
 
   // Load what's needed, then (re)evaluate. A failed pack shows an error but
   // doesn't stop the rest from playing.
@@ -249,6 +252,7 @@ function App(): React.JSX.Element {
 
   const play = async (): Promise<void> => {
     await initAudio()
+    evaluatedRef.current = compiled
     await evaluate(compiled)
   }
 
@@ -281,9 +285,15 @@ function App(): React.JSX.Element {
       setPlayhead(-1)
     }
   }, [playing])
+  // Only re-evaluate when the code itself changed: evaluating re-parses everything on
+  // the main thread, and doing it needlessly made the scheduler skip notes.
+  const evaluatedRef = useRef<string | null>(null)
   useEffect(() => {
-    if (!playingRef.current) return
-    const t = setTimeout(() => evaluate(compiled), 120)
+    if (!playingRef.current || compiled === evaluatedRef.current) return
+    const t = setTimeout(() => {
+      evaluatedRef.current = compiled
+      evaluate(compiled)
+    }, 120)
     return () => clearTimeout(t)
   }, [compiled, evaluate])
 
