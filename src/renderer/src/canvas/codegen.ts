@@ -235,25 +235,55 @@ function chordPattern(
   key: Stepped<KeyData> | null,
   mode: Stepped<ModeData> | null,
   octave: Stepped<OctaveData> | null,
-  perform: PerformData | null
+  perform: PerformData | null,
+  // Notes played into the Chords node (Orchid-style): each note is a chord's root and
+  // says when it plays; the Chords step at that moment gives quality and extension
+  // (an empty one: the chord in key).
+  feed: { steps: Cell[]; lens: Lens } | null = null
 ): string {
   const n = lens?.length ? loopSteps(seq.steps.length, lens.length) : seq.steps.length
   const weights = Array.from({ length: n }, (_, i) => lensAt(lens, i))
   const loop = weights.reduce((a, b) => a + b, 0)
+  // Which Chords step is playing at 1/16 position t.
+  const stepAtTime = (t: number): number => {
+    let pos = t % loop
+    for (let i = 0; i < n; i++) {
+      if (pos < weights[i]) return i % seq.steps.length
+      pos -= weights[i]
+    }
+    return 0
+  }
+  // The timeline that triggers chords: the incoming notes, or the Chords steps.
+  const fn = feed
+    ? feed.lens?.length
+      ? loopSteps(feed.steps.length, feed.lens.length)
+      : feed.steps.length
+    : n
+  const fWeights = feed ? Array.from({ length: fn }, (_, i) => lensAt(feed.lens, i)) : weights
+  const fLoop = fWeights.reduce((a, b) => a + b, 0)
   const h = harmonyAt(key, mode, octave, DEFAULT_OCTAVE)
-  const total = Math.min(MAX_HARMONY_STEPS, (loop * h.length) / gcd(loop, h.length))
+  const lcm = (a: number, b: number): number => (a * b) / gcd(a, b)
+  const total = Math.min(MAX_HARMONY_STEPS, lcm(lcm(fLoop, feed ? loop : 1), h.length))
   const tokens: string[] = []
-  for (let t = 0, i = 0; t < total; t += weights[i % n], i++) {
-    const s = i % seq.steps.length
-    const degree = cellNotes(seq.steps[s])[0]
-    const w = weights[i % n]
+  for (let t = 0, i = 0; t < total; t += fWeights[i % fn], i++) {
+    const w = fWeights[i % fn]
+    const s = feed ? stepAtTime(t) : i % seq.steps.length
+    const own = cellNotes(seq.steps[s])[0]
+    const degree = feed ? cellNotes(feed.steps[i % feed.steps.length])[0] : own
     if (degree === undefined) {
       tokens.push(w === 1 ? '~' : `~@${w}`)
       continue
     }
+    // Fed: an empty Chords step means the chord in key.
+    const set = !feed || own !== undefined
     const at = h.at(t)
     const tones = voice(
-      chordTones(degree, at.modeId, seq.quality?.[s] ?? null, seq.ext?.[s] ?? null),
+      chordTones(
+        degree,
+        at.modeId,
+        set ? (seq.quality?.[s] ?? null) : null,
+        set ? (seq.ext?.[s] ?? null) : null
+      ),
       seq
     )
     const base = 12 * (at.octave + 1) + at.tonic
@@ -280,7 +310,8 @@ export function sequencerCode(
   lens: Lens = null,
   perform: PerformData | null = null
 ): string | null {
-  if (seq.steps.every((v) => v === null)) return null
+  // (A Chords node fed by notes plays even with no steps set: in-key chords; see finish.)
+  if (seq.kind !== 'chord' && seq.steps.every((v) => v === null)) return null
   const sound = quote(sample.s)
   let code: string
   switch (seq.kind) {
@@ -429,9 +460,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     picks: { steps: Step[]; lens: Lens } | null
     // A Strum / Arp node in the chain (held like any setting).
     perform: PerformData | null
-    // When a Chords sequencer follows another sequencer, that one's rhythm says when
-    // chords play (Chords then only says which chord).
-    rhythm: { steps: Cell[]; lens: Lens } | null
+    // When a Chords sequencer follows another sequencer, that one says when chords
+    // play: Notes also give each chord's root; Slices only the timing.
+    rhythm: { steps: Cell[]; lens: Lens; roots: boolean } | null
     mods: string // appended controls: .velocity() .clip() .delay() ...
   }
 
@@ -445,6 +476,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (!ctx.seq) return null
     const sample = ctx.sample ?? (ctx.seq.kind !== 'slice' ? DEFAULT_NOTE_SOUND : null)
     if (!sample) return null
+    // An empty Chords node plays nothing unless notes are fed into it.
+    if (ctx.seq.kind === 'chord' && !ctx.rhythm?.roots && ctx.seq.steps.every((v) => v === null))
+      return null
     const code = sequencerCode(ctx.seq, sample, ctx.seqLens, ctx.perform)
     if (!code) return null
     // Sample hits (Slices, or a sound triggered by a stepping node) cut the chain's
@@ -464,16 +498,25 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
             ctx.picks.lens
           )}")`
         : ''
-    const rhythm = ctx.rhythm
-      ? `.struct("${stepped(
-          ctx.rhythm.steps.map((c) => (cellNotes(c).length ? 't' : '~')),
-          ctx.rhythm.lens,
-          false
-        )}")`
-      : ''
+    const rhythm =
+      ctx.rhythm && !ctx.rhythm.roots
+        ? `.struct("${stepped(
+            ctx.rhythm.steps.map((c) => (cellNotes(c).length ? 't' : '~')),
+            ctx.rhythm.lens,
+            false
+          )}")`
+        : ''
     const chords =
       ctx.seq.kind === 'chord'
-        ? chordPattern(ctx.seq, ctx.seqLens, ctx.key, ctx.mode, ctx.octave, ctx.perform)
+        ? chordPattern(
+            ctx.seq,
+            ctx.seqLens,
+            ctx.key,
+            ctx.mode,
+            ctx.octave,
+            ctx.perform,
+            ctx.rhythm?.roots ? ctx.rhythm : null
+          )
         : ''
     // Sampled notes (piano...) would ring to the end of the file and pile up when
     // played often; they hold for their step and fade out, like letting go of a key.
@@ -633,7 +676,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
             picks,
             rhythm:
               next.data.kind === 'chord' && ctx.seq
-                ? { steps: ctx.seq.steps, lens: ctx.seqLens }
+                ? { steps: ctx.seq.steps, lens: ctx.seqLens, roots: ctx.seq.kind === 'degree' }
                 : null
           },
           new Set(seen).add(next.id)
