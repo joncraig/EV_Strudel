@@ -28,6 +28,7 @@ import {
   STEP_RESOLUTION,
   ModeNode as ModeNodeT,
   OCTAVES,
+  octaveLabel,
   OctaveNode as OctaveNodeT,
   SampleNode as SampleNodeT,
   SequencerKind,
@@ -430,7 +431,7 @@ function HarmonyNode({
   const usedRows = allRows.filter((v) => used.has(v))
   const rows = data.folded && usedRows.length ? usedRows : allRows
   const labels = rows.map((v) =>
-    kind === 'key' ? TONICS[v] : kind === 'mode' ? MODES[v].label.replace(/ (.*)/, '') : `oct ${v}`
+    kind === 'key' ? TONICS[v] : kind === 'mode' ? MODES[v].label.replace(/ (.*)/, '') : octaveLabel(v)
   )
   return (
     <div className={`node harmony-node ${kind}-node`}>

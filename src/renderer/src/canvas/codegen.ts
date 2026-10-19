@@ -100,7 +100,7 @@ function harmonyPattern(
     ? perSixteenth(heldValues(mode.data.steps, 0), mode.lens)
     : [0]
   const octs = octave?.data.steps.length
-    ? perSixteenth(heldValues(octave.data.steps, fallbackOctave), octave.lens)
+    ? perSixteenth(heldValues(octave.data.steps, 0), octave.lens).map((o) => fallbackOctave + o)
     : [fallbackOctave]
   const lcm = (a: number, b: number): number => (a * b) / gcd(a, b)
   const length = Math.min(MAX_HARMONY_STEPS, lcm(lcm(keys.length, modes.length), octs.length))
@@ -132,7 +132,7 @@ function transposePattern(
   if (!key && !octave) return null
   const keys = key?.data.steps.length ? perSixteenth(heldValues(key.data.steps, 0), key.lens) : [0]
   const octs = octave?.data.steps.length
-    ? perSixteenth(heldValues(octave.data.steps, DEFAULT_OCTAVE), octave.lens)
+    ? perSixteenth(heldValues(octave.data.steps, 0), octave.lens).map((o) => DEFAULT_OCTAVE + o)
     : [DEFAULT_OCTAVE]
   const length = Math.min(
     MAX_HARMONY_STEPS,

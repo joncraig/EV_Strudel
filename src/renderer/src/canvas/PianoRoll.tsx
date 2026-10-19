@@ -18,6 +18,7 @@ import {
   ModeData,
   ModeNode,
   OCTAVES,
+  octaveLabel,
   OctaveData,
   OctaveNode,
   DEFAULT_OCTAVE,
@@ -75,7 +76,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
         ? [...TONICS]
         : node.type === 'mode'
           ? MODES.map((m) => m.label)
-          : OCTAVES.map((o) => `octave ${o}`)
+          : OCTAVES.map((o) => `octave ${octaveLabel(o)}`)
     const all = names.map((_, i) => names.length - 1 - i)
     const used = new Set(node.data.steps.filter((v) => v !== null))
     rows = node.data.folded && all.some((v) => used.has(v)) ? all.filter((v) => used.has(v)) : all
@@ -86,7 +87,7 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
       const used2 = new Set(node.data.steps.filter((v) => v !== null))
       rows =
         node.data.folded && all2.some((v) => used2.has(v)) ? all2.filter((v) => used2.has(v)) : all2
-      labels = rows.map((v) => `octave ${v}`)
+      labels = rows.map((v) => `octave ${octaveLabel(v)}`)
     }
   } else if (node.type === 'velocity' || node.type === 'length') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
@@ -104,11 +105,10 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
     const modeId = MODES[mode?.steps.find((v) => v !== null) ?? 0].id
     rows = DEGREE_ROWS
     const octave =
-      (downstream(nodes, edges, node.id, 'octave')?.data as OctaveData | undefined)?.steps.find(
+      ((downstream(nodes, edges, node.id, 'octave')?.data as OctaveData | undefined)?.steps.find(
         (v) => v !== null
       ) ??
-      node.data.octave ??
-      DEFAULT_OCTAVE
+      0) + (node.data.octave ?? DEFAULT_OCTAVE)
     labels = rows.map((d) => degreeName(d, tonic, modeId, octave))
   } else {
     const count = sample ? pieceCount(sample) : 8

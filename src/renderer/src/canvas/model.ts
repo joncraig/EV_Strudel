@@ -78,12 +78,17 @@ export interface ModeData extends Record<string, unknown> {
 }
 
 // Octave as a step sequencer: a step holds an octave number (1..7); empty steps hold.
+// Octave steps are relative: octaves up or down from where the sound already is
+// (notes: octave 3; samples: their original pitch). 0 = no change.
 export interface OctaveData extends Record<string, unknown> {
   steps: Step[]
   resolution: number
   folded?: boolean
+  // 2 = relative steps (-4..+4). Older saves held absolute octaves 1..7.
+  version?: number
 }
-export const OCTAVES = [1, 2, 3, 4, 5, 6, 7]
+export const OCTAVES = [-4, -3, -2, -1, 0, 1, 2, 3, 4]
+export const octaveLabel = (v: number): string => (v > 0 ? `+${v}` : String(v))
 export const DEFAULT_OCTAVE = 3
 
 // The list-style mode node from before Key and Mode were split (migrated on load).
@@ -320,7 +325,7 @@ export const newKey = (): KeyData => ({
   resolution: STEP_RESOLUTION
 })
 // One octave unless lengthened into a sequence.
-export const newOctave = (): OctaveData => ({ steps: [DEFAULT_OCTAVE], resolution: STEP_RESOLUTION })
+export const newOctave = (): OctaveData => ({ steps: [0], resolution: STEP_RESOLUTION, version: 2 })
 export const newMode = (): ModeData => ({
   steps: [0],
   resolution: STEP_RESOLUTION
@@ -383,6 +388,12 @@ export function migrateCanvas(state: CanvasState): CanvasState {
       // Rhythm sequencers are gone: a Slices sequencer with one row is the same thing.
       if (node.type === 'sequencer' && (node.data.kind as string) === 'trigger')
         node = { ...node, data: { ...node.data, kind: 'slice', steps: node.data.steps.map((v) => (v === null ? null : 0)) } } as CanvasNode
+      // Octave steps were absolute (1..7, 3 = normal); now they're relative to 3.
+      if (node.type === 'octave' && node.data.version !== 2)
+        node = {
+          ...node,
+          data: { ...node.data, version: 2, steps: node.data.steps.map((v) => (v === null ? null : v - DEFAULT_OCTAVE)) }
+        } as CanvasNode
       // Length table v1 was [1/4, 1/2, 1, 2, 3, 4, 6, 8] steps; map to the nearest v2 value.
       if (node.type === 'length' && node.data.version !== 2) {
         const V1 = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
