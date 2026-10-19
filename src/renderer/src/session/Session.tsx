@@ -26,7 +26,6 @@ import { songGraph, type Channel, type Clip, type Song, compileSong } from './so
 const PANEL_KEY = 'ev-strudel:panel'
 const NODE_W = 330 // a typical node column in the clip editor (for drag reordering)
 
-
 // Colours for channels, by position.
 const CHANNEL_COLORS = [
   '#c9643b',
@@ -260,6 +259,99 @@ function Session({
     setClip(chId, scene, { id: nodeId('clip'), nodes: [] })
     setSelected({ channel: chId, scene })
   }
+
+  // ---- Copy, paste, duplicate and delete clips: Ctrl+C / Ctrl+V / Ctrl+D / Delete on
+  // the selected slot, or its right-click menu. A pasted or duplicated clip gets fresh
+  // node ids. ----
+  const clipboard = useRef<Clip | null>(null)
+  const cloneClip = (c: Clip): Clip => ({
+    id: nodeId('clip'),
+    name: c.name,
+    nodes: c.nodes.map(
+      (n) => ({ ...n, id: nodeId(n.type ?? 'node'), data: structuredClone(n.data) }) as CanvasNode
+    )
+  })
+  const clipAt = (sel: Selected): Clip | null => channel(sel.channel)?.clips[sel.scene] ?? null
+  // The song with one slot changed (adding scenes if it's past the last one).
+  const withClip = (base: Song, chId: string, scene: number, clip: Clip | null): Song => {
+    const scenes = [...base.scenes]
+    while (scenes.length <= scene)
+      scenes.push({ id: nodeId('scene'), name: `${scenes.length + 1}` })
+    return {
+      ...base,
+      scenes,
+      channels: base.channels.map((c) => {
+        if (c.id !== chId) return c
+        const clips = [...c.clips]
+        while (clips.length <= scene) clips.push(null)
+        clips[scene] = clip
+        // A deleted clip that was playing stops.
+        return { ...c, clips, playing: !clip && c.playing === scene ? null : c.playing }
+      })
+    }
+  }
+  const copyClip = (sel: Selected): void => {
+    const c = clipAt(sel)
+    if (c) clipboard.current = c
+  }
+  const pasteClip = (sel: Selected): void => {
+    if (!clipboard.current || channel(sel.channel)?.kind !== 'track') return
+    onChange(withClip(song, sel.channel, sel.scene, cloneClip(clipboard.current)))
+  }
+  const deleteClip = (sel: Selected): void => {
+    if (clipAt(sel)) onChange(withClip(song, sel.channel, sel.scene, null))
+  }
+  // Into the next empty slot below (a new scene if there's none), and select it.
+  const duplicateClip = (sel: Selected): void => {
+    const c = clipAt(sel)
+    const ch = channel(sel.channel)
+    if (!c || !ch) return
+    let to = sel.scene + 1
+    while (to < song.scenes.length && ch.clips[to]) to++
+    onChange(withClip(song, sel.channel, to, cloneClip(c)))
+    setSelected({ channel: sel.channel, scene: to })
+  }
+  const slotMenu = (sel: Selected, x: number, y: number): void => {
+    const has = !!clipAt(sel)
+    setSelected(sel)
+    setMenu({
+      x,
+      y,
+      sections: [
+        {
+          items: [
+            ...(has ? [{ label: 'Copy', onSelect: () => copyClip(sel) }] : []),
+            ...(clipboard.current ? [{ label: 'Paste', onSelect: () => pasteClip(sel) }] : []),
+            ...(has
+              ? [
+                  { label: 'Duplicate', onSelect: () => duplicateClip(sel) },
+                  { label: 'Delete', danger: true, onSelect: () => deleteClip(sel) }
+                ]
+              : [])
+          ]
+        }
+      ]
+    })
+  }
+  const keysRef = useRef<(e: KeyboardEvent) => void>(() => {})
+  useEffect(() => {
+    keysRef.current = (e) => {
+      if ((e.target as HTMLElement).closest?.('input, textarea, select') || !selected) return
+      const ctrl = e.ctrlKey || e.metaKey
+      const k = e.key.toLowerCase()
+      if (ctrl && k === 'c') copyClip(selected)
+      else if (ctrl && k === 'v') pasteClip(selected)
+      else if (ctrl && k === 'd') duplicateClip(selected)
+      else if (!ctrl && (e.key === 'Delete' || e.key === 'Backspace')) deleteClip(selected)
+      else return
+      e.preventDefault()
+    }
+  })
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent): void => keysRef.current(e)
+    window.addEventListener('keydown', onKey)
+    return () => window.removeEventListener('keydown', onKey)
+  }, [])
   const launchScene = (scene: number): void =>
     onLaunch(
       Object.fromEntries(
@@ -386,7 +478,14 @@ function Session({
                         <button
                           key={ch.id}
                           className={`clip-slot empty ${isSel ? 'selected' : ''}`}
-                          onClick={() => newClip(ch.id, s)}
+                          // First tap selects the slot (to paste into); a second makes a clip.
+                          onClick={() =>
+                            isSel ? newClip(ch.id, s) : setSelected({ channel: ch.id, scene: s })
+                          }
+                          onContextMenu={(e) => {
+                            e.preventDefault()
+                            slotMenu({ channel: ch.id, scene: s }, e.clientX, e.clientY)
+                          }}
                           title="New clip"
                         >
                           {ch.playing !== null && (
@@ -408,6 +507,10 @@ function Session({
                         className={`clip-slot ${isSel ? 'selected' : ''} ${playingHere ? 'playing' : ''} ${waiting ? 'queued' : ''}`}
                         style={{ background: channelColor(i) }}
                         onClick={() => setSelected({ channel: ch.id, scene: s })}
+                        onContextMenu={(e) => {
+                          e.preventDefault()
+                          slotMenu({ channel: ch.id, scene: s }, e.clientX, e.clientY)
+                        }}
                       >
                         <button
                           className="clip-launch"
