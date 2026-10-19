@@ -7,7 +7,7 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { CHORD_TYPES, chordTones, voice } from './chords'
+import { CHORD_TYPES, chordTones, SPREADS, voice, type ChordSettings } from './chords'
 import {
   DEFAULT_OCTAVE,
   EFFECTS,
@@ -32,6 +32,8 @@ import type {
   ModeData,
   OctaveData,
   PerformData,
+  VoicingData,
+  VoicingParam,
   SampleData,
   SequencerData,
   Step,
@@ -236,6 +238,7 @@ function chordPattern(
   mode: Stepped<ModeData> | null,
   octave: Stepped<OctaveData> | null,
   perform: PerformData | null,
+  voicing: Partial<Record<VoicingParam, Stepped<VoicingData>>>,
   // Notes played into the Chords node (Orchid-style): each note is a chord's root and
   // says when it plays; the Chords step at that moment gives quality and extension
   // (an empty one: the chord in key).
@@ -263,7 +266,21 @@ function chordPattern(
   const fLoop = fWeights.reduce((a, b) => a + b, 0)
   const h = harmonyAt(key, mode, octave, DEFAULT_OCTAVE)
   const lcm = (a: number, b: number): number => (a * b) / gcd(a, b)
-  const total = Math.min(MAX_HARMONY_STEPS, lcm(lcm(fLoop, feed ? loop : 1), h.length))
+  // Voicing per 1/16 from the voicing sequencers (else the node's own old settings).
+  const vo = (p: VoicingParam): number[] | null => {
+    const v = voicing[p]
+    return v?.data.steps.length ? perSixteenth(heldValues(v.data.steps, 0), v.lens) : null
+  }
+  const inv = vo('inversion')
+  const spread = vo('spread')
+  const bass = vo('bass')
+  const voicingAt = (t: number): ChordSettings => ({
+    inversion: inv ? inv[t % inv.length] : seq.inversion,
+    spread: spread ? SPREADS[spread[t % spread.length]] : seq.spread,
+    bass: bass ? bass[t % bass.length] === 1 : seq.bass
+  })
+  const vLoop = [inv, spread, bass].reduce((a, arr) => (arr ? lcm(a, arr.length) : a), 1)
+  const total = Math.min(MAX_HARMONY_STEPS, lcm(lcm(lcm(fLoop, feed ? loop : 1), h.length), vLoop))
   const tokens: string[] = []
   for (let t = 0, i = 0; t < total; t += fWeights[i % fn], i++) {
     const w = fWeights[i % fn]
@@ -282,7 +299,7 @@ function chordPattern(
     }
     const ct = CHORD_TYPES[type ?? 0] ?? CHORD_TYPES[0]
     const at = h.at(t)
-    const tones = voice(chordTones(degree, at.modeId, ct.quality, ct.ext), seq)
+    const tones = voice(chordTones(degree, at.modeId, ct.quality, ct.ext), voicingAt(t))
     const base = 12 * (at.octave + 1) + at.tonic
     const chord = performToken(
       tones.map((x) => String(base + x)),
@@ -417,6 +434,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     'mix',
     'duck',
     'perform',
+    'voicing',
     // A sequencer is a chain node too: wired after a chain, it takes over the
     // triggering and everything set before it (sound, Length, Key ...) carries on.
     'sequencer'
@@ -457,6 +475,8 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     picks: { steps: Step[]; lens: Lens } | null
     // A Strum / Arp node in the chain (held like any setting).
     perform: PerformData | null
+    // Voicing sequencers in the chain (Inversion, Spread, Bass), each with its lengths.
+    voicing: Partial<Record<VoicingParam, Stepped<VoicingData>>>
     // When a Chords sequencer follows another sequencer, that one says when chords
     // play: Notes also give each chord's root; Slices only the timing.
     rhythm: { steps: Cell[]; lens: Lens; roots: boolean } | null
@@ -512,6 +532,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
             ctx.mode,
             ctx.octave,
             ctx.perform,
+            ctx.voicing,
             ctx.rhythm?.roots ? ctx.rhythm : null
           )
         : ''
@@ -559,7 +580,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       stepLens.set(n.id, c.length)
     } else if (n.type === 'effect') c.mods += effectCode(n.data)
     else if (n.type === 'perform') c.perform = n.data
-    else if (n.type === 'duck') {
+    else if (n.type === 'voicing') {
+      c.voicing = { ...c.voicing, [n.data.param]: { data: n.data, lens: c.length } }
+      stepLens.set(n.id, c.length)
+    } else if (n.type === 'duck') {
       // Every note here ducks the Buses its duck output is wired to.
       const targets = edges
         .filter((e) => e.source === n.id && e.sourceHandle === 'duck')
@@ -710,6 +734,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     seqLens: null,
     picks: null,
     perform: null,
+    voicing: {},
     rhythm: null,
     mods: ''
   }
@@ -734,7 +759,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         let start: Ctx = { ...empty, seq: null, base: null }
         for (const p of [...side, ...voice]) start = apply(start, p)
         stepLens.set(node.id, start.length)
-        follow(node, { ...start, seq: node.data, seqLens: start.length }, new Set([node.id]))
+        // What is wired into the sequencer is part of its chain too (Mute, Solo, sounding).
+        const path = new Set([node.id, ...side.map((p) => p.id), ...voice.map((p) => p.id)])
+        follow(node, { ...start, seq: node.data, seqLens: start.length }, path)
       }
     }
 

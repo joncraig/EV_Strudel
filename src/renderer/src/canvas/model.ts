@@ -341,6 +341,33 @@ export const newPerform = (): PerformData => ({
 })
 
 export type PerformNode = Node<PerformData, 'perform'>
+
+// Voicing sequencers for chords (Jon: options are sequenced, never set and forget):
+// each steps through one choice; empty steps hold the last one.
+export type VoicingParam = 'inversion' | 'spread' | 'bass'
+export const VOICING_ROWS: Record<VoicingParam, string[]> = {
+  inversion: ['root', '1st', '2nd', '3rd'],
+  spread: ['close', 'open', 'wide'],
+  bass: ['off', 'on']
+}
+export const VOICING_LABEL: Record<VoicingParam, string> = {
+  inversion: 'Inversion',
+  spread: 'Spread',
+  bass: 'Bass'
+}
+export interface VoicingData extends Record<string, unknown> {
+  param: VoicingParam
+  // Index into VOICING_ROWS[param]; null = hold.
+  steps: Step[]
+  resolution: number
+  folded?: boolean
+}
+export const newVoicing = (param: VoicingParam): VoicingData => ({
+  param,
+  steps: [param === 'bass' ? 1 : 1],
+  resolution: STEP_RESOLUTION
+})
+export type VoicingNode = Node<VoicingData, 'voicing'>
 export type KeyNode = Node<KeyData, 'key'>
 export type OctaveNode = Node<OctaveData, 'octave'>
 export type ModeNode = Node<ModeData, 'mode'>
@@ -352,6 +379,7 @@ export type CanvasNode =
   | LfoNode
   | DuckNode
   | PerformNode
+  | VoicingNode
   | KeyNode
   | OctaveNode
   | ModeNode

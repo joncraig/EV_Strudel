@@ -1,6 +1,6 @@
 import { Edge, useReactFlow } from '@xyflow/react'
 import PianoRoll from './PianoRoll'
-import { SPREADS } from './chords'
+import { VOICING_LABEL } from './model'
 import { valueDrag } from '../drag'
 import { useNudge } from '../nudge'
 import {
@@ -100,6 +100,7 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
   const node = selected[0]
   const set = (patch: Record<string, unknown>): void => updateNodeData(node.id, patch)
 
+  const muteSolo = node.data as { muted?: boolean; solo?: boolean }
   let title = ''
   let body: React.ReactNode = null
   switch (node.type) {
@@ -129,30 +130,8 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       title = KIND[d.kind]
       body = (
         <>
-          <Toggle label="Mute" on={d.muted} onChange={(muted) => set({ muted })} />
           {d.kind === 'slice' && (
             <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
-          )}
-          {d.kind === 'chord' && (
-            <>
-              {[0, 1, 2, 3].map((k) => (
-                <Toggle
-                  key={k}
-                  label={k ? `inv ${k}` : 'root'}
-                  on={(d.inversion ?? 0) === k}
-                  onChange={() => set({ inversion: k })}
-                />
-              ))}
-              {SPREADS.map((sp) => (
-                <Toggle
-                  key={sp}
-                  label={sp}
-                  on={(d.spread ?? 'close') === sp}
-                  onChange={() => set({ spread: sp })}
-                />
-              ))}
-              <Toggle label="Bass" on={!!d.bass} onChange={(bass) => set({ bass })} />
-            </>
           )}
           <button className="ptoggle" onClick={() => set({ steps: d.steps.map(() => null) })}>
             Clear
@@ -218,8 +197,6 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       title = 'Bus'
       body = (
         <>
-          <Toggle label="Mute" on={!!d.muted} onChange={(muted) => set({ muted })} />
-          <Toggle label="Solo" on={!!d.solo} onChange={(solo) => set({ solo })} />
           <Slider
             label="volume"
             value={d.volume ?? 1}
@@ -236,6 +213,11 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
           />
         </>
       )
+      break
+    }
+    case 'voicing': {
+      title = `${VOICING_LABEL[node.data.param]} sequencer`
+      body = <Toggle label="Fold" on={!!node.data.folded} onChange={(folded) => set({ folded })} />
       break
     }
     case 'perform': {
@@ -381,7 +363,8 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     node.type === 'length' ||
     node.type === 'key' ||
     node.type === 'mode' ||
-    node.type === 'octave' ? (
+    node.type === 'octave' ||
+    node.type === 'voicing' ? (
       <PianoRoll node={node} nodes={nodes} edges={edges} onSteps={(steps) => set({ steps })} />
     ) : null
 
@@ -389,6 +372,11 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     <div className="panel">
       <div className="panel-top">
         <div className="ptitle">{title}</div>
+        {/* Mute and Solo: the same, in the same place, for every node. */}
+        <div className="pms">
+          <Toggle label="M" on={!!muteSolo.muted} onChange={(muted) => set({ muted })} />
+          <Toggle label="S" on={!!muteSolo.solo} onChange={(solo) => set({ solo })} />
+        </div>
         <div className="pbody">{body}</div>
       </div>
       {roll}

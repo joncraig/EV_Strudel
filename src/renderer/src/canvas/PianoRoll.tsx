@@ -3,6 +3,7 @@ import type { Edge } from '@xyflow/react'
 import StepGrid from './StepGrid'
 import { valueDrag } from '../drag'
 import { CHORD_TYPES } from './chords'
+import { VOICING_ROWS } from './model'
 import { useSounding, useStepLens } from './stepLens'
 import { packSounds } from './packSounds'
 import {
@@ -24,6 +25,7 @@ import {
   octaveLabel,
   OctaveData,
   OctaveNode,
+  type VoicingNode,
   DEFAULT_OCTAVE,
   MODES,
   TONICS,
@@ -42,7 +44,7 @@ import {
 // It edits the same steps as the node.
 
 interface Props {
-  node: SequencerNode | VelocityNode | LengthNode | KeyNode | ModeNode | OctaveNode
+  node: SequencerNode | VelocityNode | LengthNode | KeyNode | ModeNode | OctaveNode | VoicingNode
   nodes: CanvasNode[]
   edges: Edge[]
   onSteps: (steps: Cell[]) => void
@@ -96,6 +98,10 @@ function PianoRoll({ node, nodes, edges, onSteps }: Props): React.JSX.Element {
         node.data.folded && all2.some((v) => used2.has(v)) ? all2.filter((v) => used2.has(v)) : all2
       labels = rows.map((v) => `octave ${octaveLabel(v)}`)
     }
+  } else if (node.type === 'voicing') {
+    const names = VOICING_ROWS[node.data.param]
+    rows = names.map((_, i) => names.length - 1 - i)
+    labels = rows.map((v) => names[v])
   } else if (node.type === 'velocity' || node.type === 'length') {
     rows = Array.from({ length: VELOCITY_LEVELS }, (_, i) => VELOCITY_LEVELS - i)
     labels = rows.map((v) => (node.type === 'length' ? lengthLabel(v) : `${velocityDb(v)} dB`))

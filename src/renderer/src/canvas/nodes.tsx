@@ -1,7 +1,16 @@
 import { useEffect, useState } from 'react'
 import { useStepLens } from './stepLens'
 import { subscribeStep } from './playhead'
-import { Handle, NodeProps, Position, useReactFlow, useNodes, useEdges } from '@xyflow/react'
+import {
+  Handle,
+  NodeProps,
+  Position,
+  useReactFlow,
+  useNodes,
+  useEdges,
+  useNodeId,
+  useNodesData
+} from '@xyflow/react'
 import { CHORD_TYPES } from './chords'
 import { GROUP_TOGGLE_EVENT } from './groups'
 import { usePlayhead } from './playhead'
@@ -32,6 +41,9 @@ import {
   isBank,
   pieceCount,
   TONICS,
+  VOICING_LABEL,
+  VOICING_ROWS,
+  type VoicingNode as VoicingNodeT,
   heldValues,
   STEP_RESOLUTION,
   velocityDb,
@@ -102,6 +114,31 @@ const few = (items: string[], max = 4): string =>
 // Consecutive repeats once ("C C G" -> "C G").
 const runs = (items: string[]): string[] => items.filter((v, i) => i === 0 || v !== items[i - 1])
 
+// Mute and Solo, the same on every card (top right).
+function MuteSolo(): React.JSX.Element | null {
+  const id = useNodeId()
+  const node = useNodesData(id ?? '')
+  const { updateNodeData } = useReactFlow()
+  if (!id || !node) return null
+  const d = node.data as { muted?: boolean; solo?: boolean }
+  return (
+    <div className="bus-ms nodrag">
+      <button
+        className={d.muted ? 'on mute' : 'mute'}
+        onClick={() => updateNodeData(id, { muted: !d.muted })}
+      >
+        M
+      </button>
+      <button
+        className={d.solo ? 'on solo' : 'solo'}
+        onClick={() => updateNodeData(id, { solo: !d.solo })}
+      >
+        S
+      </button>
+    </div>
+  )
+}
+
 function Card({
   className,
   kind,
@@ -119,6 +156,7 @@ function Card({
   return (
     <div className={`node card ${className}`}>
       <span className="card-kind">{kind}</span>
+      <MuteSolo />
       <div className="card-big">{big || '–'}</div>
       {small && <div className="card-small">{small}</div>}
       {children}
@@ -134,8 +172,7 @@ const Ports = (): React.JSX.Element => (
   </>
 )
 
-export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
-  const { updateNodeData } = useReactFlow()
+export function MixNode({ data }: NodeProps<MixNodeT>): React.JSX.Element {
   const volume = data.volume ?? 1
   const db = volume > 0 ? `${(20 * Math.log10(volume)).toFixed(1)} dB` : '−∞'
   const pan = data.pan ?? 0
@@ -152,20 +189,6 @@ export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
             : `R ${Math.round(pan * 100)}`
       }
     >
-      <div className="bus-ms nodrag">
-        <button
-          className={data.muted ? 'on mute' : 'mute'}
-          onClick={() => updateNodeData(id, { muted: !data.muted })}
-        >
-          M
-        </button>
-        <button
-          className={data.solo ? 'on solo' : 'solo'}
-          onClick={() => updateNodeData(id, { solo: !data.solo })}
-        >
-          S
-        </button>
-      </div>
       <Ports />
       <ModInput param="volume" left={0.3} />
       <ModInput param="pan" left={0.7} />
@@ -376,6 +399,23 @@ function HarmonyNode({
       className={`harmony-node ${kind}-node`}
       kind={kind === 'key' ? 'Key' : kind === 'mode' ? 'Mode' : 'Octave'}
       big={live(step, name(held[step] ?? 0), values, kind === 'mode' ? 2 : 4)}
+    >
+      <Ports />
+    </Card>
+  )
+}
+
+// Inversion / Spread / Bass: steps through one voicing choice for the chords around it.
+export function VoicingNode({ id, data }: NodeProps<VoicingNodeT>): React.JSX.Element {
+  const rows = VOICING_ROWS[data.param]
+  const step = usePlayingStep(id, data.steps.length, data.resolution)
+  const held = heldValues(data.steps, 0)
+  const values = data.steps.filter((v): v is number => v !== null).map((v) => rows[v] ?? '?')
+  return (
+    <Card
+      className={`voicing-node ${data.param}-node`}
+      kind={VOICING_LABEL[data.param]}
+      big={live(step, rows[held[step] ?? 0] ?? '?', values)}
     >
       <Ports />
     </Card>

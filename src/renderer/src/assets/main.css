@@ -390,3 +390,9 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .roll-grip:hover { background: #8ab4f855; }
 .card.mix-node .card-big { padding-right: 52px; }
 .react-flow__node .sample-chip { font-size: 20px; padding: 10px 16px; border-radius: 10px; }
+/* While soloing, nodes that aren't heard fade back. */
+.react-flow__node.unheard { opacity: 0.25; }
+.card.voicing-node { --card: #7a3f68; }
+.card .bus-ms { position: absolute; top: 5px; right: 6px; }
+.card .card-big, .card .card-kind { padding-right: 52px; }
+.pms { display: flex; gap: 4px; margin-right: 12px; }

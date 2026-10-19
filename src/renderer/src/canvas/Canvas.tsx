@@ -25,6 +25,7 @@ import {
   LfoNode,
   DuckNode,
   PerformNode,
+  VoicingNode,
   MixNode,
   ModeNode,
   OctaveNode,
@@ -60,6 +61,8 @@ import {
   newLfo,
   newDuck,
   newPerform,
+  newVoicing,
+  type VoicingParam,
   MOD_PREFIX,
   newSequencer,
   newEffect,
@@ -94,10 +97,12 @@ const NODE_COLORS = {
   mix: '#777777',
   lfo: '#8a8a2a',
   duck: '#8a4a3a',
-  perform: '#4a5a9a'
+  perform: '#4a5a9a',
+  voicing: '#7a4a6a'
 }
 function kindColor(kind: string): string {
   if (kind.startsWith('fx:')) return NODE_COLORS.effect
+  if (kind.startsWith('voicing:')) return NODE_COLORS.voicing
   if (kind.startsWith('synth:')) return NODE_COLORS.sample
   if (kind === 'degree' || kind === 'slice' || kind === 'chord') return NODE_COLORS.sequencer
   return NODE_COLORS[kind as keyof typeof NODE_COLORS] ?? '#555'
@@ -113,6 +118,7 @@ const nodeTypes = {
   lfo: LfoNode,
   duck: DuckNode,
   perform: PerformNode,
+  voicing: VoicingNode,
   key: KeyNode,
   mode: ModeNode,
   octave: OctaveNode,
@@ -137,6 +143,7 @@ type NewKind =
   | 'lfo'
   | 'duck'
   | 'perform'
+  | `voicing:${VoicingParam}`
   | 'octave'
   | 'key'
   | 'mode'
@@ -269,6 +276,13 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
       return { id: nodeId('mix'), type: 'mix', position, data: { volume: 1, pan: 0 } }
     if (kind === 'lfo') return { id: nodeId('lfo'), type: 'lfo', position, data: newLfo() }
     if (kind === 'duck') return { id: nodeId('duck'), type: 'duck', position, data: newDuck() }
+    if (kind.startsWith('voicing:'))
+      return {
+        id: nodeId('voicing'),
+        type: 'voicing',
+        position,
+        data: newVoicing(kind.slice(8) as VoicingParam)
+      }
     if (kind === 'perform')
       return { id: nodeId('perform'), type: 'perform', position, data: newPerform() }
     if (kind === 'octave') return { id: nodeId('oct'), type: 'octave', position, data: newOctave() }
@@ -310,6 +324,11 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
     const lfo: [NewKind, string] = ['lfo', 'LFO']
     const duck: [NewKind, string] = ['duck', 'Duck (sidechain)']
     const perform: [NewKind, string] = ['perform', 'Strum / Arp']
+    const voicings: [NewKind, string][] = [
+      ['voicing:inversion', 'Inversion sequencer'],
+      ['voicing:spread', 'Spread sequencer'],
+      ['voicing:bass', 'Bass sequencer']
+    ]
     const key: [NewKind, string] = ['key', 'Key sequencer']
     const mode: [NewKind, string] = ['mode', 'Mode sequencer']
     const octave: [NewKind, string] = ['octave', 'Octave sequencer']
@@ -329,6 +348,7 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
         { title: 'Shape', kinds: [velocity, length, perform] },
         { title: 'Effects', kinds: effects },
         { title: 'Harmony', kinds: [key, mode, octave] },
+        { title: 'Voicing', kinds: voicings },
         { title: 'Sound', kinds: synths },
         { title: 'Route', kinds: [mix, duck] },
         { title: 'Modulate', kinds: [lfo] }
@@ -355,6 +375,7 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
           { title: 'Sound', kinds: synths },
           { title: 'Shape', kinds: [velocity, length, perform] },
           { title: 'Harmony', kinds: [key, mode, octave] },
+          { title: 'Voicing', kinds: voicings },
           { title: 'Effects', kinds: effects },
           { title: 'Route', kinds: [mix, duck] }
         ]
@@ -618,7 +639,8 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
     'effect',
     'mix',
     'duck',
-    'perform'
+    'perform',
+    'voicing'
   ])
   const insertRef = useRef<{ edgeId: string; el: Element } | null>(null)
 
@@ -774,15 +796,20 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
     [edges]
   )
   // Muted nodes dim, soloed ones get a ring.
+  const anySolo = nodes.some((n) => (n.data as { solo?: boolean }).solo)
   const shownNodes = useMemo(
     () =>
       nodes.map((n) => {
         const d = n.data as { muted?: boolean; solo?: boolean }
+        // While anything is soloed, what isn't heard dims.
+        const unheard = anySolo && n.type !== 'group' && !compiled.sounding.has(n.id)
         const className =
-          [d.muted && 'muted-node', d.solo && 'solo-node'].filter(Boolean).join(' ') || undefined
+          [d.muted && 'muted-node', d.solo && 'solo-node', unheard && 'unheard']
+            .filter(Boolean)
+            .join(' ') || undefined
         return className === n.className ? n : { ...n, className }
       }),
-    [nodes]
+    [nodes, compiled.sounding, anySolo]
   )
 
   return (
