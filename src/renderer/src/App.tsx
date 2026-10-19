@@ -1,16 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react'
 import { ReactFlowProvider } from '@xyflow/react'
-import { evalScope } from '@strudel/core'
-import { transpiler } from '@strudel/transpiler'
-import {
-  getAudioContext,
-  initAudio,
-  registerSynthSounds,
-  samples,
-  setAudioContext,
-  superdough,
-  webaudioRepl
-} from '@strudel/webaudio'
+import { getAudioContext, initAudio, samples, superdough } from '@strudel/webaudio'
+import { getEngine, type Engine } from './audio/engine'
 import { installFastReverb } from './audio/fastReverb'
 import { installNudgeKeys } from './nudge'
 import Library from './components/Library'
@@ -104,7 +95,7 @@ function readCurrent(): Current {
 
 const blank = (): Current => ({ file: null, title: 'Untitled', tags: '', savedCanvas: serialize(EMPTY) })
 
-type Repl = ReturnType<typeof webaudioRepl>
+type Repl = Engine['repl']
 
 function App(): React.JSX.Element {
   const [patches, setPatches] = useState<PatchSummary[]>([])
@@ -153,31 +144,15 @@ function App(): React.JSX.Element {
   }, [])
 
   // ---- Strudel engine (no editor: the canvas compiles to code) ----
+  // One engine per window (audio/engine.ts), so hot reloads reuse it; only the
+  // callbacks are swapped to this mount's state setters.
   useEffect(() => {
-    if (replRef.current) return
-    // "playback" latency gives the audio thread a bigger buffer, so a busy UI frame
-    // doesn't cause dropouts (heard as clicks). Strudel's default is "interactive"
-    // (~10ms), which crackled on the Surface while the playhead was drawing.
-    // 100ms render buffer. There's no live input, so latency is free to spend: the audio
-    // thread runs heavily loaded (a size-4 reverb is a 6s convolution), and a bigger
-    // buffer absorbs load peaks that overran Strudel's ~10ms default and dropped out.
-    // The scheduler looks 0.5s ahead too (patches/@strudel+core: latency 0.1 -> 0.5).
-    const audioContext = setAudioContext(new AudioContext({ latencyHint: 0.1 }))
-    replRef.current = webaudioRepl({
-      audioContext,
-      transpiler,
-      onEvalError: (e: Error) => setEvalError(e.message),
-      onToggle: (started: boolean) => setPlaying(started)
-    })
-    readyRef.current = Promise.all([
-      evalScope(
-        import('@strudel/core'),
-        import('@strudel/mini'),
-        import('@strudel/tonal'),
-        import('@strudel/webaudio')
-      ),
-      registerSynthSounds()
-    ])
+    const engine = getEngine()
+    replRef.current = engine.repl
+    readyRef.current = engine.ready
+    engine.handlers.onEvalError = (e: Error) => setEvalError(e.message)
+    engine.handlers.onToggle = (started: boolean) => setPlaying(started)
+    setPlaying(!!engine.repl.scheduler?.started)
   }, [])
 
   const playSound = (s: string, n: number): void => {
