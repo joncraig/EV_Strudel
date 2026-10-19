@@ -7,7 +7,7 @@
 // lengths drift against each other (polymeter).
 
 import type { Edge } from '@xyflow/react'
-import { DEFAULT_OCTAVE, EFFECTS, heldValues, loopSteps, velocityGain, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, TONICS } from './model'
+import { DEFAULT_OCTAVE, EFFECTS, heldValues, loopSteps, velocityGain, isBank, LENGTH_STEPS, MODES, pieceCount, STEP_RESOLUTION, SYNTHS, TONICS } from './model'
 import type { CanvasNode, EffectData, KeyData, LengthData, ModeData, OctaveData, SampleData, SequencerData, Step, VelocityData } from './model'
 
 const quote = (s: string): string => JSON.stringify(s)
@@ -87,7 +87,12 @@ function harmonyPattern(
 // sampler: Key = semitones above C, Octave = 12 semitones per octave away from 3. Speed
 // changes tempo too, so a loop moved up a tone also plays ~12% faster. Follows the Key
 // and Octave steps at their held lengths: "[1@16 1.1225@16]/2".
-function transposePattern(key: Stepped<KeyData> | null, octave: Stepped<OctaveData> | null): string | null {
+function transposePattern(
+  key: Stepped<KeyData> | null,
+  octave: Stepped<OctaveData> | null,
+  // Oscillators have no playback speed: give them the note (MIDI) instead.
+  asNote = false
+): string | null {
   if (!key && !octave) return null
   const keys = key?.data.steps.length ? perSixteenth(heldValues(key.data.steps, 0), key.lens) : [0]
   const octs = octave?.data.steps.length
@@ -97,11 +102,11 @@ function transposePattern(key: Stepped<KeyData> | null, octave: Stepped<OctaveDa
   const runs: [string, number][] = []
   for (let i = 0; i < length; i++) {
     const semis = keys[i % keys.length] + 12 * (octs[i % octs.length] - DEFAULT_OCTAVE)
-    const tk = String(+Math.pow(2, semis / 12).toFixed(4))
+    const tk = asNote ? String(48 + semis) : String(+Math.pow(2, semis / 12).toFixed(4))
     if (runs.length && runs[runs.length - 1][0] === tk) runs[runs.length - 1][1]++
     else runs.push([tk, 1])
   }
-  if (runs.length === 1) return runs[0][0] === '1' ? null : runs[0][0]
+  if (runs.length === 1) return !asNote && runs[0][0] === '1' ? null : runs[0][0]
   const body = runs.map(([tk, n]) => (n === 1 ? tk : `${tk}@${n}`)).join(' ')
   const bars = +(length / STEP_RESOLUTION).toFixed(6)
   return bars === 1 ? body : `[${body}]/${bars}`
@@ -110,6 +115,9 @@ function transposePattern(key: Stepped<KeyData> | null, octave: Stepped<OctaveDa
 // Notes code has a placeholder where the scale goes: Key and Mode are chain nodes,
 // so the scale is only known once the chain has been followed (see compile).
 const SCALE = '__SCALE__'
+
+// Built-in oscillators (no sample files): they take a note, not a slice or speed.
+const isOscillator = (sample: SampleData): boolean => SYNTHS.includes(sample.s) && sample.s !== 'piano'
 
 export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens = null): string | null {
   if (seq.steps.every((v) => v === null)) return null
@@ -129,7 +137,9 @@ export function sequencerCode(seq: SequencerData, sample: SampleData, lens: Lens
       const count = pieceCount(sample)
       const picks = stepped(steps(seq.steps, (v) => String(v % count)), lens, false)
       // A multi-file sound picks files; a single file is cut into equal slices.
-      code = isBank(sample)
+      code = isOscillator(sample)
+        ? `n("${picks}").s(${sound})`
+        : isBank(sample)
         ? `n("${picks}").s(${sound})`
         : `s(${sound}).n(${sample.n}).slice(${count}, "${picks}")`
       break
@@ -224,8 +234,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     // previous hit, so a loop longer than its step restarts instead of stacking. Notes
     // stay polyphonic. One cut group per playing chain.
     const cut = ctx.seq.kind === 'slice' ? `.cut(${++cutGroup})` : ''
-    const speed = ctx.seq.kind === 'slice' ? transposePattern(ctx.key, ctx.octave) : null
-    const pitch = speed ? `.speed("${speed}")` : ''
+    // Samples repitch by speed; oscillators (sine, saw...) play the note itself.
+    const osc = isOscillator(sample)
+    const shift = ctx.seq.kind === 'slice' ? transposePattern(ctx.key, ctx.octave, osc) : null
+    const pitch = shift ? (osc ? `.note("${shift}")` : `.speed("${shift}")`) : ''
     const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.octave, ctx.seq.octave ?? DEFAULT_OCTAVE)}")`
     return code.replace(SCALE, scale) + cut + pitch + ctx.mods
   }
