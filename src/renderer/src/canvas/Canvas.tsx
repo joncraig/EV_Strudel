@@ -173,7 +173,8 @@ type Menu =
   | { type: 'node'; x: number; y: number; nodeId: string }
 
 function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React.JSX.Element {
-  const { screenToFlowPosition } = useReactFlow()
+  const { screenToFlowPosition, flowToScreenPosition, getInternalNode, setCenter, getZoom } =
+    useReactFlow()
   const [showCode, setShowCode] = useState(false)
   const [panelOpen, setPanelOpen] = useState(() => {
     try {
@@ -267,9 +268,31 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
     [commit]
   )
 
+  // A new node comes in selected (the rest deselected), so after the layout moves it
+  // it's easy to find and the panel shows it; the view follows it if it's off screen.
+  const withNew = (node: CanvasNode): CanvasNode[] => [
+    ...nodes.map((n) => (n.selected ? ({ ...n, selected: false } as CanvasNode) : n)),
+    { ...node, selected: true } as CanvasNode
+  ]
+  const reveal = (id: string): void => {
+    setTimeout(() => {
+      const n = getInternalNode(id)
+      const pane = rootRef.current?.querySelector('.react-flow__pane')?.getBoundingClientRect()
+      if (!n || !pane) return
+      const p = n.internals.positionAbsolute
+      const w = n.measured.width ?? 150
+      const h = n.measured.height ?? 64
+      const tl = flowToScreenPosition(p)
+      const br = flowToScreenPosition({ x: p.x + w, y: p.y + h })
+      if (tl.x >= pane.left && tl.y >= pane.top && br.x <= pane.right && br.y <= pane.bottom) return
+      setCenter(p.x + w / 2, p.y + h / 2, { zoom: getZoom(), duration: 300 })
+    }, 120)
+  }
+
   const add = (node: CanvasNode, edge?: Edge): void => {
     // Inputs take several wires; a new one is added alongside.
-    onChange({ nodes: [...nodes, node], edges: edge ? [...edges, edge] : edges })
+    onChange({ nodes: withNew(node), edges: edge ? [...edges, edge] : edges })
+    reveal(node.id)
   }
 
   // Deleting dissolves: the chain is reconnected through the removed node.
@@ -423,6 +446,8 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
       items: g.kinds.map(([kind, label]) => ({
         label,
         color: kindColor(kind),
+        // Runs on a pick, not during render (the menu is built in render).
+        /* eslint-disable react-hooks/refs */
         onSelect: () => {
           const node = makeNode(kind, m.flow)
           const wire = m.wire ? edges.find((x) => x.id === m.wire) : undefined
@@ -435,8 +460,9 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
               sourceHandle: 'pattern',
               targetHandle: 'pattern'
             })
+            reveal(node.id)
             return onChange({
-              nodes: [...nodes, node],
+              nodes: withNew(node),
               edges: [
                 ...edges.filter((x) => x !== wire),
                 link(wire.source, node.id),
@@ -456,6 +482,7 @@ function Canvas({ state, onChange: onChangeProp, onSoundDropped }: Props): React
             targetHandle
           })
         }
+        /* eslint-enable react-hooks/refs */
       }))
     }))
   }
