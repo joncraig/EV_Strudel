@@ -492,3 +492,6 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 .clip-node .panel-top { flex-wrap: wrap; gap: 6px 10px; align-items: center; }
 .clip-node .ptitle { min-width: 0; padding-top: 0; flex: 1; white-space: nowrap; }
 .clip-node .pbody { flex-basis: 100%; gap: 8px 14px; }
+/* Tiles take their content's width (a grid's own width), scrolling only past the cap. */
+.clip-node { width: max-content; }
+.clip-node .piano-roll { width: max-content; max-width: 880px; }
