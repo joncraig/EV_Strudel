@@ -463,7 +463,16 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       ctx.seq.kind === 'chord'
         ? chordPattern(ctx.seq, ctx.seqLens, ctx.key, ctx.mode, ctx.octave, ctx.perform)
         : ''
-    return code.replace(SCALE, scale).replace(CHORDS, chords) + picks + cut + pitch + ctx.mods
+    // Sampled notes (piano...) would ring to the end of the file and pile up when
+    // played often; they hold for their step and fade out, like letting go of a key.
+    // A Length later in the chain sets its own clip (it comes after, so it wins).
+    const held =
+      ctx.seq.kind !== 'slice' && !osc && sample !== DEFAULT_NOTE_SOUND
+        ? '.clip(1).release(0.5)'
+        : ''
+    return (
+      code.replace(SCALE, scale).replace(CHORDS, chords) + picks + cut + pitch + held + ctx.mods
+    )
   }
 
   // Parameter nodes set values that hold until something later overrides them.
