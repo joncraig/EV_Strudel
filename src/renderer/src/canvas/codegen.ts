@@ -264,7 +264,10 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     'mode',
     'octave',
     'mix',
-    'duck'
+    'duck',
+    // A sequencer is a chain node too: wired after a chain, it takes over the
+    // triggering and everything set before it (sound, Length, Key ...) carries on.
+    'sequencer'
   ])
   // Each Bus is its own orbit (2, 3, ...; chains without one share orbit 1).
   const busOrbits = new Map(nodes.filter((n) => n.type === 'mix').map((m, i) => [m.id, i + 2]))
@@ -297,6 +300,9 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     length: Lens
     // Step lengths of the playing sequencer (notes are clipped relative to them).
     seqLens: Lens
+    // Which file/slice an earlier Slices sequencer picked, when a later sequencer
+    // took over the triggering (it holds, like every other setting).
+    picks: { steps: Step[]; lens: Lens } | null
     mods: string // appended controls: .velocity() .clip() .delay() ...
   }
 
@@ -321,7 +327,15 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     const shift = ctx.seq.kind === 'slice' ? transposePattern(ctx.key, ctx.octave, osc) : null
     const pitch = shift ? (osc ? `.note("${shift}")` : `.speed("${shift}")`) : ''
     const scale = `.scale("${harmonyPattern(ctx.key, ctx.mode, ctx.octave, ctx.seq.octave ?? DEFAULT_OCTAVE)}")`
-    return code.replace(SCALE, scale) + cut + pitch + ctx.mods
+    // Notes after a Slices sequencer play the files it picked (a multi-file sound).
+    const picks =
+      ctx.picks && ctx.seq.kind === 'degree' && isBank(sample)
+        ? `.n("${stepped(
+            heldValues(ctx.picks.steps, 0).map((v) => String(v % pieceCount(sample))),
+            ctx.picks.lens
+          )}")`
+        : ''
+    return code.replace(SCALE, scale) + picks + cut + pitch + ctx.mods
   }
 
   // Parameter nodes set values that hold until something later overrides them.
@@ -445,6 +459,20 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       return
     }
     for (const next of outs) {
+      if (next.type === 'sequencer') {
+        // A later sequencer takes over when and what plays; an earlier Slices'
+        // file choice holds. The Length in effect sets its step length.
+        if (next.data.muted) continue
+        stepLens.set(next.id, ctx.length)
+        const picks =
+          ctx.seq?.kind === 'slice' ? { steps: ctx.seq.steps, lens: ctx.seqLens } : ctx.picks
+        follow(
+          next,
+          { ...ctx, seq: next.data, seqLens: ctx.length, picks },
+          new Set(seen).add(next.id)
+        )
+        continue
+      }
       if (next.type === 'mix') {
         const code = finish(ctx)
         if (code) {
@@ -473,10 +501,19 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     octave: null,
     length: null,
     seqLens: null,
+    picks: null,
     mods: ''
   }
+  // Whether a sequencer is fed by another sequencer's chain (then that chain carries
+  // on through it, see follow, and it doesn't start one of its own).
+  const fedBySequencer = (id: string, seen = new Set<string>()): boolean =>
+    edges.some((e) => {
+      if (e.target !== id || e.sourceHandle !== 'pattern' || seen.has(e.source)) return false
+      seen.add(e.source)
+      return byId.get(e.source)?.type === 'sequencer' || fedBySequencer(e.source, seen)
+    })
   for (const node of nodes)
-    if (node.type === 'sequencer' && !node.data.muted) {
+    if (node.type === 'sequencer' && !node.data.muted && !fedBySequencer(node.id)) {
       // What's wired into a sequencer applies before it starts: a Length there sets its
       // step lengths (notes then fill their steps), not a note duration. Each branch
       // with a sound wired in is its own voice (see paramPaths).
