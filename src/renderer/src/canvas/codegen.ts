@@ -286,14 +286,43 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     }
     return [...before, n]
   }
+  // Every way through a parameter chain ending at id. Several wires into one input are
+  // parallel branches: each branch with a sound is its own voice and plays through the
+  // rest of the chain; branches without a sound are settings that apply to every voice.
+  const paramPaths = (id: string, seen: Set<string>): CanvasNode[][] | null => {
+    const n = byId.get(id)
+    if (!n || n.type === 'sequencer' || n.type === 'mix' || seen.has(id)) return null
+    const side: CanvasNode[] = []
+    const voices: CanvasNode[][] = []
+    for (const e of edges.filter((e) => e.target === id && e.sourceHandle === 'pattern')) {
+      const up = paramPaths(e.source, new Set(seen).add(id))
+      if (up === null) return null
+      for (const p of up) {
+        if (p.some((x) => x.type === 'sample')) voices.push(p)
+        else side.push(...p)
+      }
+    }
+    return voices.length ? voices.map((v) => [...side, ...v, n]) : [[...side, n]]
+  }
+
   // Apply the parameter chains wired into id (skipping the edge the flow arrived on).
-  const applySide = (ctx: Ctx, id: string, from: string | null): Ctx => {
+  // A chain that branches off this same flow upstream is a parallel branch, not a
+  // setting: it's followed on its own (see follow).
+  const applySide = (ctx: Ctx, id: string, from: string | null, flow: Set<string> = new Set()): Ctx => {
     let c = ctx
     for (const e of edges.filter((e) => e.target === id && e.sourceHandle === 'pattern' && e.source !== from)) {
+      if (flowReaches(e.source, flow)) continue
       const chain = paramChain(e.source, new Set([id]))
       if (chain) for (const p of chain) c = apply(c, p)
     }
     return c
+  }
+  // Whether id is, or is fed by, a node the flow already went through.
+  const flowReaches = (id: string, flow: Set<string>, seen = new Set<string>()): boolean => {
+    if (flow.has(id)) return true
+    if (seen.has(id)) return false
+    seen.add(id)
+    return edges.some((e) => e.target === id && e.sourceHandle === 'pattern' && flowReaches(e.source, flow, seen))
   }
 
   const lines: string[] = []
@@ -322,7 +351,7 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         continue
       }
       // Parameter chains wired into this node apply here, then the node itself.
-      let c = applySide(ctx, next.id, node.id)
+      let c = applySide(ctx, next.id, node.id, seen)
       c = apply(c, next)
       follow(next, c, new Set(seen).add(next.id))
     }
@@ -333,10 +362,18 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     if (node.type === 'sequencer' && !node.data.muted)
     {
       // What's wired into a sequencer applies before it starts: a Length there sets its
-      // step lengths (notes then fill their steps), not a note duration.
-      const start = applySide({ ...empty, seq: null, base: null }, node.id, null)
-      stepLens.set(node.id, start.length)
-      follow(node, { ...start, seq: node.data, seqLens: start.length }, new Set([node.id]))
+      // step lengths (notes then fill their steps), not a note duration. Each branch
+      // with a sound wired in is its own voice (see paramPaths).
+      const ins = edges.filter((e) => e.target === node.id && e.sourceHandle === 'pattern')
+      const paths = ins.map((e) => paramPaths(e.source, new Set([node.id])) ?? []).flat()
+      const side = paths.filter((p) => !p.some((x) => x.type === 'sample')).flat()
+      const voices = paths.filter((p) => p.some((x) => x.type === 'sample'))
+      for (const voice of voices.length ? voices : [[]]) {
+        let start: Ctx = { ...empty, seq: null, base: null }
+        for (const p of [...side, ...voice]) start = apply(start, p)
+        stepLens.set(node.id, start.length)
+        follow(node, { ...start, seq: node.data, seqLens: start.length }, new Set([node.id]))
+      }
     }
 
   // Chains with a sound but no Notes/Slices sequencer: almost every node steps, so the
@@ -347,14 +384,15 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const STEPPING = new Set(['key', 'mode', 'octave', 'velocity'])
   for (const end of nodes) {
     if (active.has(end.id) || patternOuts(end.id).length) continue
-    const chain = paramChain(end.id, new Set())
-    if (!chain) continue
+    for (const chain of paramPaths(end.id, new Set()) ?? []) clocked(end, chain)
+  }
+  function clocked(end: CanvasNode, chain: CanvasNode[]): void {
     const si = chain.findIndex((n) => n.type === 'sample')
-    if (si < 0) continue
+    if (si < 0) return
     const clock =
       chain.slice(si + 1).find((n) => STEPPING.has(n.type)) ??
       [...chain.slice(0, si)].reverse().find((n) => STEPPING.has(n.type))
-    if (!clock || !('steps' in clock.data)) continue
+    if (!clock || !('steps' in clock.data)) return
     // Walk the chain: parameters before the clock set what it steps at.
     let ctx: Ctx = { ...empty, seq: null, base: null }
     let clockLens: Lens = null
