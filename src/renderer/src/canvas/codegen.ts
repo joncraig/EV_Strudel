@@ -357,43 +357,29 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
     return [...before, n]
   }
   // Every way through a parameter chain ending at id. Several wires into one input are
-  // parallel branches: each branch with a sound is its own voice and plays through the
-  // rest of the chain; branches without a sound are settings that apply to every voice.
+  // parallel branches: each is its own voice and plays through the rest of the chain
+  // (an Octave -1 wired beside the chain adds the same notes an octave down).
   const paramPaths = (id: string, seen: Set<string>): CanvasNode[][] | null => {
     const n = byId.get(id)
     if (!n || n.type === 'sequencer' || n.type === 'mix' || seen.has(id)) return null
-    const side: CanvasNode[] = []
-    const voices: CanvasNode[][] = []
+    const paths: CanvasNode[][] = []
     for (const e of edges.filter((e) => e.target === id && e.sourceHandle === 'pattern')) {
       const up = paramPaths(e.source, new Set(seen).add(id))
       if (up === null) return null
-      for (const p of up) {
-        if (p.some((x) => x.type === 'sample')) voices.push(p)
-        else side.push(...p)
-      }
+      paths.push(...up)
     }
-    return voices.length ? voices.map((v) => [...side, ...v, n]) : [[...side, n]]
+    return paths.length ? paths.map((p) => [...p, n]) : [[n]]
   }
 
-  // Apply the parameter chains wired into id (skipping the edge the flow arrived on).
-  // A chain that branches off this same flow upstream is a parallel branch, not a
-  // setting: it's followed on its own (see follow).
-  const applySide = (
-    ctx: Ctx,
-    id: string,
-    from: string | null,
-    flow: Set<string> = new Set()
-  ): Ctx => {
-    let c = ctx
-    for (const e of edges.filter(
-      (e) => e.target === id && e.sourceHandle === 'pattern' && e.source !== from
-    )) {
-      if (flowReaches(e.source, flow)) continue
-      const chain = paramChain(e.source, new Set([id]))
-      if (chain) for (const p of chain) c = apply(c, p)
-    }
-    return c
-  }
+  // The parameter chains wired into id beside the flow (not the wire it arrived on,
+  // nor branches of the same flow, which are followed on their own).
+  const sideChains = (id: string, from: string, flow: Set<string>): CanvasNode[][] =>
+    edges
+      .filter((e) => e.target === id && e.sourceHandle === 'pattern' && e.source !== from)
+      .filter((e) => !flowReaches(e.source, flow))
+      .map((e) => paramChain(e.source, new Set([id])))
+      .filter((c): c is CanvasNode[] => !!c)
+
   // Whether id is, or is fed by, a node the flow already went through.
   const flowReaches = (id: string, flow: Set<string>, seen = new Set<string>()): boolean => {
     if (flow.has(id)) return true
@@ -444,10 +430,16 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
         }
         continue
       }
-      // Parameter chains wired into this node apply here, then the node itself.
-      let c = applySide(ctx, next.id, node.id, seen)
-      c = apply(c, next)
-      follow(next, c, new Set(seen).add(next.id))
+      // Other chains wired into the same input are parallel branches: the flow carries
+      // on as it is, and once more through each of them (each its own voice).
+      const voices: { ctx: Ctx; path: Set<string> }[] = [{ ctx, path: seen }]
+      for (const chain of sideChains(next.id, node.id, seen)) {
+        let c = ctx
+        for (const p of chain) c = apply(c, p)
+        voices.push({ ctx: c, path: new Set([...seen, ...chain.map((p) => p.id)]) })
+        chain.forEach((p) => active.add(p.id))
+      }
+      for (const v of voices) follow(next, apply(v.ctx, next), new Set(v.path).add(next.id))
     }
   }
 
