@@ -115,22 +115,8 @@ function NodeEditor({
     case 'sample': {
       const d = node.data
       title = d.label ?? d.s
-      body = (
-        <>
-          <div className="pinfo">
-            <div>
-              sound <b>{d.s}</b>
-              {d.pack && <> from {d.pack}</>}
-            </div>
-            <div>
-              {isBank(d)
-                ? `${pieceCount(d)} files to pick from`
-                : `cut into ${pieceCount(d)} slices`}
-              {d.n ? ` · file ${d.n}` : ''}
-            </div>
-          </div>
-        </>
-      )
+      // The name says it; a bank shows how many files it has.
+      body = isBank(d) ? <span className="plabel">{pieceCount(d)} files</span> : null
       break
     }
     case 'sequencer': {
@@ -194,7 +180,6 @@ function NodeEditor({
       body = (
         <>
           <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
-          <span className="plabel">Empty steps hold the last {node.type}.</span>
         </>
       )
       break

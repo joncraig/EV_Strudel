@@ -24,7 +24,16 @@ import { soloChanges } from '../canvas/solo'
 import { songGraph, type Channel, type Clip, type Song, compileSong } from './song'
 
 const PANEL_KEY = 'ev-strudel:panel'
-const NODE_W = 330 // a node's column in the clip editor
+const NODE_W = 330 // a typical node column in the clip editor (for drag reordering)
+
+// A node's tile fits what it shows: grids get room for their steps (row labels plus a
+// cell per step); everything else just its controls.
+const GRID_TYPES = new Set(['sequencer', 'velocity', 'length', 'key', 'mode', 'octave', 'voicing'])
+function tileWidth(n: CanvasNode): number | undefined {
+  if (!GRID_TYPES.has(n.type ?? '')) return undefined
+  const steps = (n.data.steps as unknown[] | undefined)?.length ?? 1
+  return Math.min(900, Math.max(240, 150 + steps * 30))
+}
 
 // Colours for channels, by position.
 const CHANNEL_COLORS = [
@@ -508,7 +517,7 @@ function Session({
                     <div
                       key={n.id}
                       className="clip-node"
-                      style={{ width: NODE_W, borderTopColor: kindColor(nodeKind(n)) }}
+                      style={{ width: tileWidth(n), borderTopColor: kindColor(nodeKind(n)) }}
                     >
                       <button
                         className="clip-add between"
