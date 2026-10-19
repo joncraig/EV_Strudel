@@ -188,8 +188,18 @@ export const EFFECTS = {
       { key: 'hpq', label: 'reso', min: 0, max: 20, value: 1 }
     ]
   },
-  crush: { label: 'Bitcrush', params: [{ key: 'crush', label: 'bits', min: 1, max: 16, value: 6 }] },
-  distort: { label: 'Distortion', params: [{ key: 'distort', label: 'drive', min: 0, max: 10, value: 2 }] },
+  crush: {
+    label: 'Bitcrush',
+    params: [{ key: 'crush', label: 'bits', min: 1, max: 16, value: 6 }]
+  },
+  distort: {
+    label: 'Distortion',
+    params: [
+      { key: 'distort', label: 'drive', min: 0, max: 10, value: 2 },
+      // Output level after the drive (distortion adds a lot of volume).
+      { key: 'distortvol', label: 'level', min: 0, max: 1, value: 0.5 }
+    ]
+  },
   phaser: {
     label: 'Phaser',
     params: [
@@ -197,7 +207,10 @@ export const EFFECTS = {
       { key: 'phaserdepth', label: 'depth', min: 0, max: 1, value: 0.5 }
     ]
   },
-  coarse: { label: 'Downsample', params: [{ key: 'coarse', label: 'amount', min: 1, max: 32, value: 4 }] },
+  coarse: {
+    label: 'Downsample',
+    params: [{ key: 'coarse', label: 'amount', min: 1, max: 32, value: 4 }]
+  },
   pan: { label: 'Pan', params: [{ key: 'pan', label: 'L–R', min: 0, max: 1, value: 0.5 }] }
 } satisfies Record<string, { label: string; params: EffectParam[] }>
 
@@ -246,7 +259,8 @@ export const LFO_SHAPES: { id: LfoShape; label: string }[] = [
 ]
 // One cycle of the wave, in bars.
 export const LFO_RATES = [1 / 16, 1 / 8, 1 / 4, 1 / 2, 1, 2, 4, 8, 16]
-export const lfoRateLabel = (bars: number): string => (bars >= 1 ? `${bars} bar${bars === 1 ? '' : 's'}` : `1/${Math.round(1 / bars)}`)
+export const lfoRateLabel = (bars: number): string =>
+  bars >= 1 ? `${bars} bar${bars === 1 ? '' : 's'}` : `1/${Math.round(1 / bars)}`
 
 export interface LfoData extends Record<string, unknown> {
   shape: LfoShape
@@ -262,14 +276,28 @@ export const newLfo = (): LfoData => ({ shape: 'sine', rate: 1, depth: 0.5, phas
 
 // Modulation inputs each node type has (handle id = MOD_PREFIX + param).
 export const MOD_PREFIX = 'mod:'
-export const MOD_TARGETS: Record<string, string[]> = { mix: ['volume', 'pan'], lfo: ['rate', 'depth'] }
+export const MOD_TARGETS: Record<string, string[]> = {
+  mix: ['volume', 'pan'],
+  lfo: ['rate', 'depth']
+}
 
 export type LfoNode = Node<LfoData, 'lfo'>
 export type KeyNode = Node<KeyData, 'key'>
 export type OctaveNode = Node<OctaveData, 'octave'>
 export type ModeNode = Node<ModeData, 'mode'>
 export type GroupNode = Node<GroupData, 'group'>
-export type CanvasNode = SampleNode | SequencerNode | MixNode | LfoNode | KeyNode | OctaveNode | ModeNode | VelocityNode | LengthNode | EffectNode | GroupNode
+export type CanvasNode =
+  | SampleNode
+  | SequencerNode
+  | MixNode
+  | LfoNode
+  | KeyNode
+  | OctaveNode
+  | ModeNode
+  | VelocityNode
+  | LengthNode
+  | EffectNode
+  | GroupNode
 
 export interface CanvasState {
   nodes: CanvasNode[]
@@ -352,7 +380,8 @@ export const SYNTHS = ['sawtooth', 'square', 'triangle', 'sine', 'piano', 'super
 export const SYNTH_PACKS: Record<string, string> = { piano: 'piano' }
 
 let counter = 0
-export const nodeId = (prefix: string): string => `${prefix}-${Date.now().toString(36)}-${counter++}`
+export const nodeId = (prefix: string): string =>
+  `${prefix}-${Date.now().toString(36)}-${counter++}`
 
 // A sound dragged or added from the Samples tab.
 
@@ -371,13 +400,19 @@ export interface DraggedSound {
 export function migrateCanvas(state: CanvasState): CanvasState {
   state = chainSamples(chainHarmony(splitLegacyModes(state)))
   // Wires are all drawn the same now (key/mode used to be animated).
-  state = { nodes: state.nodes, edges: state.edges.map((e) => (e.animated ? { ...e, animated: false } : e)) }
+  state = {
+    nodes: state.nodes,
+    edges: state.edges.map((e) => (e.animated ? { ...e, animated: false } : e))
+  }
   return {
     nodes: state.nodes.map((n) => {
       let node = (n.type as string) === 'volume' ? ({ ...n, type: 'velocity' } as CanvasNode) : n
       // Every step is a 1/16 for now (a note-length node may change that later). Older
       // canvases had steps squeezed into one bar; they become 1/16 steps, by design.
-      if ((node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length') && node.data.resolution !== STEP_RESOLUTION)
+      if (
+        (node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length') &&
+        node.data.resolution !== STEP_RESOLUTION
+      )
         node = { ...node, data: { ...node.data, resolution: STEP_RESOLUTION } } as CanvasNode
       // The gain fader is gone (Velocity sets level): a sequencer at 0 becomes muted,
       // otherwise its gain is dropped.
@@ -387,19 +422,40 @@ export function migrateCanvas(state: CanvasState): CanvasState {
       }
       // Rhythm sequencers are gone: a Slices sequencer with one row is the same thing.
       if (node.type === 'sequencer' && (node.data.kind as string) === 'trigger')
-        node = { ...node, data: { ...node.data, kind: 'slice', steps: node.data.steps.map((v) => (v === null ? null : 0)) } } as CanvasNode
+        node = {
+          ...node,
+          data: {
+            ...node.data,
+            kind: 'slice',
+            steps: node.data.steps.map((v) => (v === null ? null : 0))
+          }
+        } as CanvasNode
       // Octave steps were absolute (1..7, 3 = normal); now they're relative to 3.
       if (node.type === 'octave' && node.data.version !== 2)
         node = {
           ...node,
-          data: { ...node.data, version: 2, steps: node.data.steps.map((v) => (v === null ? null : v - DEFAULT_OCTAVE)) }
+          data: {
+            ...node.data,
+            version: 2,
+            steps: node.data.steps.map((v) => (v === null ? null : v - DEFAULT_OCTAVE))
+          }
         } as CanvasNode
       // Length table v1 was [1/4, 1/2, 1, 2, 3, 4, 6, 8] steps; map to the nearest v2 value.
       if (node.type === 'length' && node.data.version !== 2) {
         const V1 = [0.25, 0.5, 1, 2, 3, 4, 6, 8]
         const nearest = (steps: number): number =>
-          LENGTH_STEPS.reduce((best, s, i) => (Math.abs(s - steps) < Math.abs(LENGTH_STEPS[best] - steps) ? i : best), 0) + 1
-        node = { ...node, data: { ...node.data, version: 2, steps: node.data.steps.map((v) => nearest(V1[v - 1] ?? 1)) } } as CanvasNode
+          LENGTH_STEPS.reduce(
+            (best, s, i) => (Math.abs(s - steps) < Math.abs(LENGTH_STEPS[best] - steps) ? i : best),
+            0
+          ) + 1
+        node = {
+          ...node,
+          data: {
+            ...node.data,
+            version: 2,
+            steps: node.data.steps.map((v) => nearest(V1[v - 1] ?? 1))
+          }
+        } as CanvasNode
       }
       return node
     }),
@@ -430,9 +486,15 @@ const FLATS = ['C', 'Db', 'D', 'Eb', 'E', 'F', 'Gb', 'G', 'Ab', 'A', 'Bb', 'B']
 // "D3" for degree 1 of D dorian at octave 3, "E3" for degree 2, and so on (1-based).
 export function degreeName(degree: number, tonic: string, mode: string, octave: number): string {
   const steps = MODE_STEPS[mode] ?? MODE_STEPS.major
-  const tonicPc = Math.max(0, SHARPS.indexOf(tonic) >= 0 ? SHARPS.indexOf(tonic) : FLATS.indexOf(tonic))
+  const tonicPc = Math.max(
+    0,
+    SHARPS.indexOf(tonic) >= 0 ? SHARPS.indexOf(tonic) : FLATS.indexOf(tonic)
+  )
   const i = degree - 1
-  const semis = tonicPc + steps[((i % steps.length) + steps.length) % steps.length] + 12 * Math.floor(i / steps.length)
+  const semis =
+    tonicPc +
+    steps[((i % steps.length) + steps.length) % steps.length] +
+    12 * Math.floor(i / steps.length)
   const names = tonic.includes('b') || tonic === 'F' ? FLATS : SHARPS
   return `${names[((semis % 12) + 12) % 12]}${octave + Math.floor(semis / 12)}`
 }
@@ -456,13 +518,28 @@ function splitLegacyModes(state: CanvasState): CanvasState {
     legacy.steps.forEach((s, i) => {
       if (i * span >= length) return
       keySteps[i * span] = Math.max(0, (TONICS as readonly string[]).indexOf(s.tonic))
-      modeSteps[i * span] = Math.max(0, MODES.findIndex((m) => m.id === s.mode))
+      modeSteps[i * span] = Math.max(
+        0,
+        MODES.findIndex((m) => m.id === s.mode)
+      )
     })
     const keyId = `${n.id}-key`
-    nodes.push({ id: keyId, type: 'key', position: { x: n.position.x, y: n.position.y - 300 }, parentId: n.parentId, data: { steps: keySteps, resolution: STEP_RESOLUTION } } as CanvasNode)
+    nodes.push({
+      id: keyId,
+      type: 'key',
+      position: { x: n.position.x, y: n.position.y - 300 },
+      parentId: n.parentId,
+      data: { steps: keySteps, resolution: STEP_RESOLUTION }
+    } as CanvasNode)
     nodes.push({ ...n, data: { steps: modeSteps, resolution: STEP_RESOLUTION } } as CanvasNode)
     for (const e of state.edges.filter((e) => e.source === n.id && e.sourceHandle === 'mode'))
-      edges.push({ ...e, id: `${e.id}-key`, source: keyId, sourceHandle: 'key', targetHandle: 'key' })
+      edges.push({
+        ...e,
+        id: `${e.id}-key`,
+        source: keyId,
+        sourceHandle: 'key',
+        targetHandle: 'key'
+      })
   }
   return { nodes, edges }
 }
@@ -472,7 +549,9 @@ function splitLegacyModes(state: CanvasState): CanvasState {
 function chainHarmony(state: CanvasState): CanvasState {
   const byId = new Map(state.nodes.map((n) => [n.id, n]))
   const old = state.edges.filter(
-    (e) => (e.targetHandle === 'key' || e.targetHandle === 'mode') && byId.get(e.target)?.type === 'sequencer'
+    (e) =>
+      (e.targetHandle === 'key' || e.targetHandle === 'mode') &&
+      byId.get(e.target)?.type === 'sequencer'
   )
   if (!old.length) return state
   let edges = state.edges.filter((e) => !old.includes(e))
@@ -504,7 +583,12 @@ function chainHarmony(state: CanvasState): CanvasState {
 const patternEdges = (edges: Edge[]): Edge[] => edges.filter((e) => e.sourceHandle === 'pattern')
 
 // First node of a type after id along the chain (e.g. the Sample a sequencer plays).
-export function downstream(nodes: CanvasNode[], edges: Edge[], id: string, type: CanvasNode['type']): CanvasNode | undefined {
+export function downstream(
+  nodes: CanvasNode[],
+  edges: Edge[],
+  id: string,
+  type: CanvasNode['type']
+): CanvasNode | undefined {
   const pe = patternEdges(edges)
   const seen = new Set([id])
   let frontier = [id]
@@ -524,7 +608,12 @@ export function downstream(nodes: CanvasNode[], edges: Edge[], id: string, type:
 }
 
 // Nodes of a type before id along the chain (e.g. the sequencers feeding a Sample).
-export function upstream(nodes: CanvasNode[], edges: Edge[], id: string, type: CanvasNode['type']): CanvasNode[] {
+export function upstream(
+  nodes: CanvasNode[],
+  edges: Edge[],
+  id: string,
+  type: CanvasNode['type']
+): CanvasNode[] {
   const pe = patternEdges(edges)
   const seen = new Set([id])
   const found: CanvasNode[] = []
@@ -559,12 +648,22 @@ function chainSamples(state: CanvasState): CanvasState {
     if (!original) continue
     if (used.has(sampleId)) {
       sampleId = `${e.source}-${e.target}`
-      nodes.push({ ...original, id: sampleId, position: { x: original.position.x, y: original.position.y + 60 } })
+      nodes.push({
+        ...original,
+        id: sampleId,
+        position: { x: original.position.x, y: original.position.y + 60 }
+      })
     }
     used.add(sampleId)
     const outs = edges.filter((x) => x.source === e.target && x.sourceHandle === 'pattern')
     edges = edges.filter((x) => !outs.includes(x))
-    edges.push({ id: `e-${e.target}-${sampleId}-pattern`, source: e.target, target: sampleId, sourceHandle: 'pattern', targetHandle: 'pattern' })
+    edges.push({
+      id: `e-${e.target}-${sampleId}-pattern`,
+      source: e.target,
+      target: sampleId,
+      sourceHandle: 'pattern',
+      targetHandle: 'pattern'
+    })
     for (const o of outs) edges.push({ ...o, id: `${o.id}-via-${sampleId}`, source: sampleId })
   }
   return { nodes, edges }
@@ -572,7 +671,11 @@ function chainSamples(state: CanvasState): CanvasState {
 
 // The sound a sequencer plays, as compile() resolves it: a Sample in a parameter
 // chain wired into it comes first; otherwise the first Sample after it.
-export function sequencerSample(nodes: CanvasNode[], edges: Edge[], id: string): SampleData | undefined {
+export function sequencerSample(
+  nodes: CanvasNode[],
+  edges: Edge[],
+  id: string
+): SampleData | undefined {
   const pe = patternEdges(edges)
   const seen = new Set([id])
   let frontier = [id]
