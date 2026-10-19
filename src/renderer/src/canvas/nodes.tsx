@@ -17,6 +17,7 @@ import {
   MixNode as MixNodeT,
   BUS_MAX_VOLUME,
   LfoNode as LfoNodeT,
+  DuckNode as DuckNodeT,
   LFO_RATES,
   LFO_SHAPES,
   lfoRateLabel,
@@ -133,7 +134,59 @@ export function MixNode({ id, data }: NodeProps<MixNodeT>): React.JSX.Element {
       </div>
       <ModInput param="volume" left={0.3} />
       <ModInput param="pan" left={0.7} />
+      {/* Duck nodes wire in here: their notes dip this Bus. */}
+      <Handle
+        type="target"
+        position={Position.Bottom}
+        id="duck"
+        className="duck-handle"
+        style={{ left: '50%' }}
+      />
       <Handle type="source" position={Position.Right} id="pattern" />
+    </div>
+  )
+}
+
+// ---- Duck ----
+
+// Sidechain-style ducking: notes pass straight through, and each one dips the Buses
+// wired to the duck output (bottom).
+export function DuckNode({ id, data }: NodeProps<DuckNodeT>): React.JSX.Element {
+  const { updateNodeData } = useReactFlow()
+  const ms = (s: number): string => (s < 1 ? `${Math.round(s * 1000)} ms` : `${s.toFixed(2)} s`)
+  return (
+    <div className="node duck-node">
+      <Handle type="target" position={Position.Left} id="pattern" style={{ top: 40 }} />
+      <Handle type="source" position={Position.Right} id="pattern" style={{ top: 40 }} />
+      <Header title="Duck" />
+      <div className="node-body bus-body nodrag">
+        <ParamFader
+          label="depth"
+          value={data.depth}
+          min={0}
+          max={1}
+          onChange={(depth) => updateNodeData(id, { depth })}
+        />
+        <ParamFader
+          label="attack"
+          display={ms(data.attack)}
+          log
+          value={data.attack}
+          min={0.001}
+          max={0.5}
+          onChange={(attack) => updateNodeData(id, { attack })}
+        />
+        <ParamFader
+          label="release"
+          display={ms(data.release)}
+          log
+          value={data.release}
+          min={0.01}
+          max={2}
+          onChange={(release) => updateNodeData(id, { release })}
+        />
+      </div>
+      <Handle type="source" position={Position.Bottom} id="duck" className="duck-handle" />
     </div>
   )
 }
@@ -153,7 +206,9 @@ function wavePath(shape: string, w: number, h: number): string {
           : shape === 'sawtooth'
             ? 2 * ((t + 0.5) % 1) - 1
             : shape === 'square'
-              ? t < 0.5 ? 1 : -1
+              ? t < 0.5
+                ? 1
+                : -1
               : [0.6, -0.4, 0.9, -0.8, 0.2, -0.1][Math.floor(t * 5.999)]
     pts.push(`${(t * w).toFixed(1)},${((1 - v) * 0.5 * h).toFixed(1)}`)
   }
@@ -172,7 +227,11 @@ export function LfoNode({ id, data }: NodeProps<LfoNodeT>): React.JSX.Element {
       <div className="node-body">
         <div className="lfo-shapes nodrag">
           {LFO_SHAPES.map((sh) => (
-            <button key={sh.id} className={data.shape === sh.id ? 'on' : ''} onClick={() => update({ shape: sh.id })}>
+            <button
+              key={sh.id}
+              className={data.shape === sh.id ? 'on' : ''}
+              onClick={() => update({ shape: sh.id })}
+            >
               {sh.label}
             </button>
           ))}
@@ -185,13 +244,28 @@ export function LfoNode({ id, data }: NodeProps<LfoNodeT>): React.JSX.Element {
             −
           </button>
           <span>{lfoRateLabel(data.rate)}</span>
-          <button disabled={ri === LFO_RATES.length - 1} onClick={() => update({ rate: LFO_RATES[ri + 1] })}>
+          <button
+            disabled={ri === LFO_RATES.length - 1}
+            onClick={() => update({ rate: LFO_RATES[ri + 1] })}
+          >
             +
           </button>
         </div>
         <div className="bus-body nodrag">
-          <ParamFader label="depth" value={data.depth} min={0} max={1} onChange={(depth) => update({ depth })} />
-          <ParamFader label="phase" value={data.phase} min={0} max={1} onChange={(phase) => update({ phase })} />
+          <ParamFader
+            label="depth"
+            value={data.depth}
+            min={0}
+            max={1}
+            onChange={(depth) => update({ depth })}
+          />
+          <ParamFader
+            label="phase"
+            value={data.phase}
+            min={0}
+            max={1}
+            onChange={(phase) => update({ phase })}
+          />
         </div>
       </div>
       <ModInput param="rate" left={0.15} />
@@ -431,7 +505,11 @@ function HarmonyNode({
   const usedRows = allRows.filter((v) => used.has(v))
   const rows = data.folded && usedRows.length ? usedRows : allRows
   const labels = rows.map((v) =>
-    kind === 'key' ? TONICS[v] : kind === 'mode' ? MODES[v].label.replace(/ (.*)/, '') : octaveLabel(v)
+    kind === 'key'
+      ? TONICS[v]
+      : kind === 'mode'
+        ? MODES[v].label.replace(/ (.*)/, '')
+        : octaveLabel(v)
   )
   return (
     <div className={`node harmony-node ${kind}-node`}>

@@ -21,7 +21,6 @@ import {
 // Settings for the selected node, docked under the canvas. Edits go through
 // updateNodeData, so they land in undo like any other canvas change.
 
-
 const KIND: Record<SequencerKind, string> = {
   degree: 'Notes sequencer',
   slice: 'Slices sequencer'
@@ -72,9 +71,15 @@ function Slider({
   log?: boolean
   onChange: (v: number) => void
 }): React.JSX.Element {
-  const toT = (v: number): number => (log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min))
+  const toT = (v: number): number =>
+    log ? Math.log(v / min) / Math.log(max / min) : (v - min) / (max - min)
   const fromT = (p: number): number => (log ? min * Math.pow(max / min, p) : min + p * (max - min))
-  const shown = value >= 1000 ? `${(value / 1000).toFixed(1)}k` : value >= 100 ? value.toFixed(0) : value.toFixed(2)
+  const shown =
+    value >= 1000
+      ? `${(value / 1000).toFixed(1)}k`
+      : value >= 100
+        ? value.toFixed(0)
+        : value.toFixed(2)
   const t = Math.min(1, Math.max(0, toT(value)))
   const setT = (p: number): void => onChange(+fromT(Math.min(1, Math.max(0, p))).toFixed(3))
   // One notch = 1% of the travel.
@@ -100,7 +105,15 @@ function Slider({
   )
 }
 
-function Toggle({ label, on, onChange }: { label: string; on: boolean; onChange: (v: boolean) => void }): React.JSX.Element {
+function Toggle({
+  label,
+  on,
+  onChange
+}: {
+  label: string
+  on: boolean
+  onChange: (v: boolean) => void
+}): React.JSX.Element {
   return (
     <button className={`ptoggle ${on ? 'on' : ''}`} onClick={() => onChange(!on)}>
       {label}
@@ -117,7 +130,8 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
 
   const node = selected[0]
   const set = (patch: Record<string, unknown>): void => updateNodeData(node.id, patch)
-  const resize = <T,>(steps: T[], n: number, fill: T): T[] => Array.from({ length: n }, (_, i) => steps[i] ?? fill)
+  const resize = <T,>(steps: T[], n: number, fill: T): T[] =>
+    Array.from({ length: n }, (_, i) => steps[i] ?? fill)
 
   let title = ''
   let body: React.ReactNode = null
@@ -133,7 +147,9 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
               {d.pack && <> from {d.pack}</>}
             </div>
             <div>
-              {isBank(d) ? `${pieceCount(d)} files to pick from` : `cut into ${pieceCount(d)} slices`}
+              {isBank(d)
+                ? `${pieceCount(d)} files to pick from`
+                : `cut into ${pieceCount(d)} slices`}
               {d.n ? ` · file ${d.n}` : ''}
             </div>
           </div>
@@ -154,7 +170,9 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
             onChange={(n) => set({ steps: resize(d.steps, n, null) })}
           />
           <Toggle label="Mute" on={d.muted} onChange={(muted) => set({ muted })} />
-          {d.kind === 'slice' && <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />}
+          {d.kind === 'slice' && (
+            <Toggle label="Fold" on={!!d.folded} onChange={(folded) => set({ folded })} />
+          )}
           <button className="ptoggle" onClick={() => set({ steps: d.steps.map(() => null) })}>
             Clear
           </button>
@@ -173,7 +191,15 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
             value={d.steps.length}
             min={1}
             max={MAX_STEPS}
-            onChange={(n) => set({ steps: resize(d.steps, n, node.type === 'length' ? LENGTH_FULL_STEP : VELOCITY_LEVELS) })}
+            onChange={(n) =>
+              set({
+                steps: resize(
+                  d.steps,
+                  n,
+                  node.type === 'length' ? LENGTH_FULL_STEP : VELOCITY_LEVELS
+                )
+              })
+            }
           />
         </>
       )
@@ -204,7 +230,12 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
     case 'mode':
     case 'octave': {
       const d = node.data
-      title = node.type === 'key' ? 'Key sequencer' : node.type === 'mode' ? 'Mode sequencer' : 'Octave sequencer'
+      title =
+        node.type === 'key'
+          ? 'Key sequencer'
+          : node.type === 'mode'
+            ? 'Mode sequencer'
+            : 'Octave sequencer'
       body = (
         <>
           <Stepper
@@ -225,8 +256,52 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       title = 'Bus'
       body = (
         <>
-          <Slider label="volume" value={d.volume ?? 1} min={0} max={BUS_MAX_VOLUME} onChange={(volume) => set({ volume })} />
-          <Slider label="pan" value={d.pan ?? 0} min={-1} max={1} onChange={(pan) => set({ pan })} />
+          <Slider
+            label="volume"
+            value={d.volume ?? 1}
+            min={0}
+            max={BUS_MAX_VOLUME}
+            onChange={(volume) => set({ volume })}
+          />
+          <Slider
+            label="pan"
+            value={d.pan ?? 0}
+            min={-1}
+            max={1}
+            onChange={(pan) => set({ pan })}
+          />
+        </>
+      )
+      break
+    }
+    case 'duck': {
+      const d = node.data
+      title = 'Duck'
+      body = (
+        <>
+          <Slider
+            label="depth"
+            value={d.depth}
+            min={0}
+            max={1}
+            onChange={(depth) => set({ depth })}
+          />
+          <Slider
+            label="attack s"
+            value={d.attack}
+            min={0.001}
+            max={0.5}
+            log
+            onChange={(attack) => set({ attack })}
+          />
+          <Slider
+            label="release s"
+            value={d.release}
+            min={0.01}
+            max={2}
+            log
+            onChange={(release) => set({ release })}
+          />
         </>
       )
       break
@@ -238,7 +313,12 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       body = (
         <>
           {LFO_SHAPES.map((sh) => (
-            <Toggle key={sh.id} label={sh.label} on={d.shape === sh.id} onChange={() => set({ shape: sh.id })} />
+            <Toggle
+              key={sh.id}
+              label={sh.label}
+              on={d.shape === sh.id}
+              onChange={() => set({ shape: sh.id })}
+            />
           ))}
           <Stepper
             label="rate"
@@ -248,8 +328,20 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
             display={lfoRateLabel(d.rate)}
             onChange={(i) => set({ rate: LFO_RATES[i] })}
           />
-          <Slider label="depth" value={d.depth} min={0} max={1} onChange={(depth) => set({ depth })} />
-          <Slider label="phase" value={d.phase} min={0} max={1} onChange={(phase) => set({ phase })} />
+          <Slider
+            label="depth"
+            value={d.depth}
+            min={0}
+            max={1}
+            onChange={(depth) => set({ depth })}
+          />
+          <Slider
+            label="phase"
+            value={d.phase}
+            min={0}
+            max={1}
+            onChange={(phase) => set({ phase })}
+          />
         </>
       )
       break
@@ -260,7 +352,11 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
       body = (
         <div className="pfield">
           <span className="plabel">name</span>
-          <input className="pname" value={d.label} onChange={(e) => set({ label: e.target.value })} />
+          <input
+            className="pname"
+            value={d.label}
+            onChange={(e) => set({ label: e.target.value })}
+          />
         </div>
       )
       break
@@ -268,7 +364,12 @@ function Panel({ nodes, edges }: { nodes: CanvasNode[]; edges: Edge[] }): React.
   }
 
   const roll =
-    node.type === 'sequencer' || node.type === 'velocity' || node.type === 'length' || node.type === 'key' || node.type === 'mode' || node.type === 'octave' ? (
+    node.type === 'sequencer' ||
+    node.type === 'velocity' ||
+    node.type === 'length' ||
+    node.type === 'key' ||
+    node.type === 'mode' ||
+    node.type === 'octave' ? (
       <PianoRoll node={node} nodes={nodes} edges={edges} onSteps={(steps) => set({ steps })} />
     ) : null
 

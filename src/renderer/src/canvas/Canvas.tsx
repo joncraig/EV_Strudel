@@ -23,6 +23,7 @@ import {
   KeyNode,
   LengthNode,
   LfoNode,
+  DuckNode,
   MixNode,
   ModeNode,
   OctaveNode,
@@ -53,6 +54,7 @@ import {
   newMode,
   newOctave,
   newLfo,
+  newDuck,
   MOD_PREFIX,
   newSequencer,
   newEffect,
@@ -85,7 +87,8 @@ const NODE_COLORS = {
   octave: '#5a4a9a',
   sample: '#3a7a4a',
   mix: '#777777',
-  lfo: '#8a8a2a'
+  lfo: '#8a8a2a',
+  duck: '#8a4a3a'
 }
 function kindColor(kind: string): string {
   if (kind.startsWith('fx:')) return NODE_COLORS.effect
@@ -102,6 +105,7 @@ const nodeTypes = {
   sequencer: SequencerNode,
   mix: MixNode,
   lfo: LfoNode,
+  duck: DuckNode,
   key: KeyNode,
   mode: ModeNode,
   octave: OctaveNode,
@@ -115,13 +119,16 @@ const nodeTypes = {
 // modulation input (Bus Volume/Pan, LFO Rate/Depth).
 const isValidConnection: IsValidConnection = (c) =>
   c.source !== c.target &&
-  (c.sourceHandle === 'mod' ? !!c.targetHandle?.startsWith(MOD_PREFIX) : c.sourceHandle === c.targetHandle)
+  (c.sourceHandle === 'mod'
+    ? !!c.targetHandle?.startsWith(MOD_PREFIX)
+    : c.sourceHandle === c.targetHandle)
 
 // What the add menu can create: a sequencer kind, a mode node, or a synth sound.
 type NewKind =
   | SequencerKind
   | 'mix'
   | 'lfo'
+  | 'duck'
   | 'octave'
   | 'key'
   | 'mode'
@@ -190,7 +197,10 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
 
   const onNodesChange = useCallback(
     (changes: NodeChange<CanvasNode>[]) => {
-      const next = { nodes: applyNodeChanges(changes, stateRef.current.nodes), edges: stateRef.current.edges }
+      const next = {
+        nodes: applyNodeChanges(changes, stateRef.current.nodes),
+        edges: stateRef.current.edges
+      }
       // Group frames fit their contents, except mid-drag (moving the frame under a node
       // being dragged would fight the drag): they catch up when it's dropped.
       const dragging = changes.some((ch) => ch.type === 'position' && ch.dragging)
@@ -229,8 +239,10 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const closeMenu = useCallback(() => setMenu(null), [])
 
   const makeNode = (kind: NewKind, position: { x: number; y: number }): CanvasNode => {
-    if (kind === 'mix') return { id: nodeId('mix'), type: 'mix', position, data: { volume: 1, pan: 0 } }
+    if (kind === 'mix')
+      return { id: nodeId('mix'), type: 'mix', position, data: { volume: 1, pan: 0 } }
     if (kind === 'lfo') return { id: nodeId('lfo'), type: 'lfo', position, data: newLfo() }
+    if (kind === 'duck') return { id: nodeId('duck'), type: 'duck', position, data: newDuck() }
     if (kind === 'octave') return { id: nodeId('oct'), type: 'octave', position, data: newOctave() }
     if (kind === 'key') return { id: nodeId('key'), type: 'key', position, data: newKey() }
     if (kind === 'mode') return { id: nodeId('mode'), type: 'mode', position, data: newMode() }
@@ -267,6 +279,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
     ]
     const mix: [NewKind, string] = ['mix', 'Bus']
     const lfo: [NewKind, string] = ['lfo', 'LFO']
+    const duck: [NewKind, string] = ['duck', 'Duck (sidechain)']
     const key: [NewKind, string] = ['key', 'Key sequencer']
     const mode: [NewKind, string] = ['mode', 'Mode sequencer']
     const octave: [NewKind, string] = ['octave', 'Octave sequencer']
@@ -287,12 +300,21 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
         { title: 'Effects', kinds: effects },
         { title: 'Harmony', kinds: [key, mode, octave] },
         { title: 'Sound', kinds: synths },
-        { title: 'Route', kinds: [mix] },
+        { title: 'Route', kinds: [mix, duck] },
         { title: 'Modulate', kinds: [lfo] }
       ]
+    // A duck wire: from a Duck, a Bus to dip; into a Bus's duck input, a Duck.
+    else if (pending.handle === 'duck')
+      groups =
+        pending.handleType === 'source'
+          ? [{ title: 'Duck', kinds: [mix] }]
+          : [{ title: 'Ducked by', kinds: [duck] }]
     // A mod wire: from an LFO output, offer what it can drive; into a mod input, an LFO.
     else if (pending.handle.startsWith('mod'))
-      groups = pending.handleType === 'source' ? [{ title: 'Modulate', kinds: [mix, lfo] }] : [{ title: 'Modulate with', kinds: [lfo] }]
+      groups =
+        pending.handleType === 'source'
+          ? [{ title: 'Modulate', kinds: [mix, lfo] }]
+          : [{ title: 'Modulate with', kinds: [lfo] }]
     else if (pending.handleType === 'source')
       groups = {
         sound: [{ title: 'Play it with', kinds: sequencers }],
@@ -303,7 +325,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
           { title: 'Shape', kinds: [velocity, length] },
           { title: 'Harmony', kinds: [key, mode, octave] },
           { title: 'Effects', kinds: effects },
-          { title: 'Route', kinds: [mix] }
+          { title: 'Route', kinds: [mix, duck] }
         ]
       }[pending.handle]
     else
@@ -315,7 +337,7 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
           { title: 'Pattern from', kinds: sequencers },
           { title: 'Shape', kinds: [velocity, length] },
           { title: 'Harmony', kinds: [key, mode, octave] },
-          { title: 'Route', kinds: [mix] }
+          { title: 'Route', kinds: [mix, duck] }
         ]
       }[pending.handle]
 
@@ -557,7 +579,16 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   }
 
   // ---- Blender-style insert: drag a chain node over a pattern wire to splice it in ----
-  const CHAIN_TYPES = new Set(['sample', 'velocity', 'length', 'key', 'mode', 'effect', 'mix'])
+  const CHAIN_TYPES = new Set([
+    'sample',
+    'velocity',
+    'length',
+    'key',
+    'mode',
+    'effect',
+    'mix',
+    'duck'
+  ])
   const insertRef = useRef<{ edgeId: string; el: Element } | null>(null)
 
   const clearInsert = (): void => {
@@ -681,7 +712,12 @@ function Canvas({ state, onChange, onSoundDropped }: Props): React.JSX.Element {
   const compiled = useMemo(() => compile(nodes, edges), [nodes, edges])
   // Mod wires (LFO -> a modulation input) are drawn differently from pattern wires.
   const shownEdges = useMemo(
-    () => edges.map((e) => (e.sourceHandle === 'mod' && e.className !== 'mod-edge' ? { ...e, className: 'mod-edge' } : e)),
+    () =>
+      edges.map((e) =>
+        (e.sourceHandle === 'mod' || e.sourceHandle === 'duck') && e.className !== 'mod-edge'
+          ? { ...e, className: 'mod-edge' }
+          : e
+      ),
     [edges]
   )
   // Muted nodes dim, soloed ones get a ring.

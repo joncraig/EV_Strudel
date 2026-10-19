@@ -255,7 +255,19 @@ const DEFAULT_NOTE_SOUND: SampleData = { s: 'triangle', n: 0, slices: 8 }
 // inputs (and its delay/reverb are its own).
 export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const byId = new Map(nodes.map((n) => [n.id, n]))
-  const CHAIN = new Set(['sample', 'velocity', 'length', 'effect', 'key', 'mode', 'octave', 'mix'])
+  const CHAIN = new Set([
+    'sample',
+    'velocity',
+    'length',
+    'effect',
+    'key',
+    'mode',
+    'octave',
+    'mix',
+    'duck'
+  ])
+  // Each Bus is its own orbit (2, 3, ...; chains without one share orbit 1).
+  const busOrbits = new Map(nodes.filter((n) => n.type === 'mix').map((m, i) => [m.id, i + 2]))
   const patternOuts = (id: string): CanvasNode[] =>
     edges
       .filter((e) => e.source === id && e.sourceHandle === 'pattern')
@@ -338,6 +350,17 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
       c.length = lengthValues(n.data)
       stepLens.set(n.id, c.length)
     } else if (n.type === 'effect') c.mods += effectCode(n.data)
+    else if (n.type === 'duck') {
+      // Every note here ducks the Buses its duck output is wired to.
+      const targets = edges
+        .filter((e) => e.source === n.id && e.sourceHandle === 'duck')
+        .map((e) => busOrbits.get(e.target))
+        .filter((o): o is number => o !== undefined)
+      if (targets.length) {
+        const orbit = targets.length === 1 ? String(targets[0]) : `"${targets.join(':')}"`
+        c.mods += `.duckorbit(${orbit}).duckdepth(${n.data.depth}).duckonset(${n.data.attack}).duckattack(${n.data.release})`
+      }
+    }
     return c
   }
 
@@ -518,8 +541,6 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   // Mixes: once a Mix's inputs are known, it continues as one chain. A Mix that feeds
   // another Mix is done first, so keep going until nothing new arrives.
   const mixes = nodes.filter((n) => n.type === 'mix')
-  // Each Bus is its own orbit (2, 3, ...; chains without one share orbit 1).
-  const busOrbits = new Map(mixes.map((m, i) => [m.id, i + 2]))
   const done = new Set<string>()
   for (let pass = 0; pass < mixes.length; pass++)
     for (const mix of mixes) {
@@ -546,8 +567,11 @@ export function compile(nodes: CanvasNode[], edges: Edge[]): Compiled {
   const layers = heard.map((l) => l.layer)
   // Nodes on a chain that reaches the output (their grids flash as they play).
   // A chain through a Bus at volume 0 makes no sound, so it doesn't count.
-  const silent = (id: string): boolean => (byId.get(id)?.data as { volume?: number } | undefined)?.volume === 0
-  const sounding = new Set(heard.filter((l) => ![...l.path].some(silent)).flatMap((l) => [...l.path]))
+  const silent = (id: string): boolean =>
+    (byId.get(id)?.data as { volume?: number } | undefined)?.volume === 0
+  const sounding = new Set(
+    heard.filter((l) => ![...l.path].some(silent)).flatMap((l) => [...l.path])
+  )
   const code = lines.length ? `stack(\n  ${lines.join(',\n  ')}\n)` : 'silence'
   return { code, layers, active, stepLens, sounding, busOrbits }
 }

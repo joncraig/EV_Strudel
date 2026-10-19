@@ -3,8 +3,9 @@
 // only on new notes; these act on the audio straight away, even on held notes.
 //
 // Each Bus is a Strudel orbit (codegen's busOrbits). Superdough gives every orbit a
-// summing node -> output gain; a StereoPannerNode is put between them for Pan, and
-// the output gain is the Volume. An LFO is an oscillator -> depth gain -> one scale
+// summing node -> output gain; a StereoPannerNode (Pan) and a GainNode (Volume) are put
+// between them. The orbit's own output gain is left to Strudel's ducking (Duck node),
+// which ramps it down and back to 1 on each hit. An LFO is an oscillator -> depth gain -> one scale
 // gain per wire -> the target AudioParam, so it adds onto the target's own value at
 // audio rate. LFOs can target other LFOs' Rate (oscillator frequency) and Depth.
 
@@ -25,20 +26,21 @@ interface Clock {
   heardCycle: () => number
 }
 
-const panners = new WeakMap<Orbit, StereoPannerNode>()
+const stages = new WeakMap<Orbit, { pan: StereoPannerNode; volume: GainNode }>()
 
-// The orbit for a Bus, with its pan stage in place.
+// The orbit for a Bus, with its pan and volume stages in place.
 function busStage(orbit: number): { volume: AudioParam; pan: AudioParam } {
   const o = getSuperdoughAudioController().getOrbit(orbit, [0, 1]) as Orbit
-  let p = panners.get(o)
-  if (!p) {
-    p = new StereoPannerNode(o.output.context)
+  let st = stages.get(o)
+  if (!st) {
+    st = { pan: new StereoPannerNode(o.output.context), volume: new GainNode(o.output.context) }
     o.summingNode.disconnect()
-    o.summingNode.connect(p)
-    p.connect(o.output)
-    panners.set(o, p)
+    o.summingNode.connect(st.pan).connect(st.volume).connect(o.output)
+    // Earlier versions put the volume on the output gain itself.
+    o.output.gain.value = 1
+    stages.set(o, st)
   }
-  return { volume: o.output.gain, pan: p.pan }
+  return { volume: st.volume.gain, pan: st.pan.pan }
 }
 
 // Move a param smoothly (a jump would click).
@@ -63,7 +65,11 @@ function series(shape: Exclude<LfoShape, 'random'>): number[] {
 
 // A wave that starts `turns` (0..1) of the way through its cycle: an oscillator always
 // starts at phase 0, so the phase is rotated into the wave itself.
-function wave(ctx: BaseAudioContext, shape: Exclude<LfoShape, 'random'>, turns: number): PeriodicWave {
+function wave(
+  ctx: BaseAudioContext,
+  shape: Exclude<LfoShape, 'random'>,
+  turns: number
+): PeriodicWave {
   const b = series(shape)
   const real = new Float32Array(HARMONICS + 1)
   const imag = new Float32Array(HARMONICS + 1)
@@ -88,7 +94,7 @@ function startLfo(ctx: AudioContext, d: LfoData, clock: Clock): Lfo {
   const depth = new GainNode(ctx, { gain: d.depth })
   const t0 = ctx.currentTime + 0.02
   // Where the heard music is in this LFO's cycle at t0, plus its own phase.
-  const turns = (((clock.heardCycle() + 0.02 * clock.cps) / d.rate + d.phase) % 1 + 1) % 1
+  const turns = ((((clock.heardCycle() + 0.02 * clock.cps) / d.rate + d.phase) % 1) + 1) % 1
   if (d.shape !== 'random') {
     const osc = new OscillatorNode(ctx, { frequency: baseHz })
     osc.setPeriodicWave(wave(ctx, d.shape, turns))
@@ -135,9 +141,19 @@ function startLfo(ctx: AudioContext, d: LfoData, clock: Clock): Lfo {
 
 // ---- Applying the canvas ----
 
-let running: { key: string; stop: () => void; lfos: Map<string, Lfo>; wires: Map<string, GainNode> } | null = null
+let running: {
+  key: string
+  stop: () => void
+  lfos: Map<string, Lfo>
+  wires: Map<string, GainNode>
+} | null = null
 
-export function applyModulation(nodes: CanvasNode[], edges: Edge[], busOrbits: Map<string, number>, clock: Clock): void {
+export function applyModulation(
+  nodes: CanvasNode[],
+  edges: Edge[],
+  busOrbits: Map<string, number>,
+  clock: Clock
+): void {
   const ctx = getAudioContext() as AudioContext
   const byId = new Map(nodes.map((n) => [n.id, n]))
   const buses = new Map<string, { volume: AudioParam; pan: AudioParam; data: MixData }>()
@@ -161,7 +177,8 @@ export function applyModulation(nodes: CanvasNode[], edges: Edge[], busOrbits: M
     wires.map((e) => [e.id, e.source, e.target, e.targetHandle])
   ])
   if (running?.key === key) {
-    for (const n of lfoNodes) running.lfos.get(n.id)?.depth.gain.setTargetAtTime(n.data.depth, ctx.currentTime, 0.015)
+    for (const n of lfoNodes)
+      running.lfos.get(n.id)?.depth.gain.setTargetAtTime(n.data.depth, ctx.currentTime, 0.015)
     for (const e of wires) {
       const w = running.wires.get(e.id)
       const scale = wireScale(e, byId, buses, running.lfos)
@@ -197,8 +214,15 @@ export function applyModulation(nodes: CanvasNode[], edges: Edge[], busOrbits: M
 
 type Buses = Map<string, { volume: AudioParam; pan: AudioParam; data: MixData }>
 
-function modTarget(e: Edge, byId: Map<string, CanvasNode>, buses: Buses, lfos: Map<string, Lfo>): AudioParam | null {
-  const param = e.targetHandle?.startsWith(MOD_PREFIX) ? e.targetHandle.slice(MOD_PREFIX.length) : null
+function modTarget(
+  e: Edge,
+  byId: Map<string, CanvasNode>,
+  buses: Buses,
+  lfos: Map<string, Lfo>
+): AudioParam | null {
+  const param = e.targetHandle?.startsWith(MOD_PREFIX)
+    ? e.targetHandle.slice(MOD_PREFIX.length)
+    : null
   const t = byId.get(e.target)
   if (!param || !t) return null
   if (t.type === 'mix') {
@@ -214,7 +238,12 @@ function modTarget(e: Edge, byId: Map<string, CanvasNode>, buses: Buses, lfos: M
 
 // What depth 1 means on each target: the Bus's own volume (so it swings 0..2x), the
 // full pan, the target LFO's own rate (+-100%), or full depth.
-function wireScale(e: Edge, byId: Map<string, CanvasNode>, buses: Buses, lfos: Map<string, Lfo>): number | null {
+function wireScale(
+  e: Edge,
+  byId: Map<string, CanvasNode>,
+  buses: Buses,
+  lfos: Map<string, Lfo>
+): number | null {
   const param = e.targetHandle?.slice(MOD_PREFIX.length)
   const t = byId.get(e.target)
   if (!t) return null

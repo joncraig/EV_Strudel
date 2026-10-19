@@ -282,6 +282,22 @@ export const MOD_TARGETS: Record<string, string[]> = {
 }
 
 export type LfoNode = Node<LfoData, 'lfo'>
+
+// Sidechain-style ducking: a chain node that passes its notes through, and each note
+// dips the volume of every Bus its duck output is wired to (Strudel's duckorbit).
+// Times in seconds.
+export interface DuckData extends Record<string, unknown> {
+  // How far the Bus dips, 0..1 (1 = to silence).
+  depth: number
+  // Time to reach the dip.
+  attack: number
+  // Time to come back up.
+  release: number
+}
+
+export const newDuck = (): DuckData => ({ depth: 0.8, attack: 0.01, release: 0.25 })
+
+export type DuckNode = Node<DuckData, 'duck'>
 export type KeyNode = Node<KeyData, 'key'>
 export type OctaveNode = Node<OctaveData, 'octave'>
 export type ModeNode = Node<ModeData, 'mode'>
@@ -291,6 +307,7 @@ export type CanvasNode =
   | SequencerNode
   | MixNode
   | LfoNode
+  | DuckNode
   | KeyNode
   | OctaveNode
   | ModeNode

@@ -326,3 +326,7 @@ input, textarea { background: #181818; border: 1px solid #333; padding: 4px 8px;
 /* Modulation: yellow handles and dashed yellow wires, apart from pattern wires. */
 .react-flow__handle.mod-handle { background: #dd5; border-color: #8a8a2a; }
 .react-flow__edge.mod-edge path.react-flow__edge-path { stroke: #cc4; stroke-dasharray: 6 4; }
+/* Duck: brick red; its duck wire (bottom) goes to a Bus's duck input. */
+.duck-node .node-header { background: #3d221c; }
+.duck-node .fader-fill { background: linear-gradient(#e87, #8a4a3a); }
+.react-flow__handle.duck-handle { background: #e87; border-color: #8a4a3a; }
